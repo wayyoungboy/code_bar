@@ -34,14 +34,22 @@ cd code_bar
 ```bash
 ./build.sh
 ```
+脚本会自动询问是否创建 DMG 安装包，输入 `y` 即可生成 `CodeBar.dmg` 文件。
 
-3. 或使用 Xcode:
+3. 或直接创建 DMG（如果已构建 App）:
+```bash
+./create_dmg.sh
+```
+
+4. 或使用 Xcode:
 ```bash
 open CodeBar.xcodeproj
 # 然后 Product → Archive
 ```
 
-4. 将生成的 `CodeBar.app` 拖到 `/Applications/` 目录
+5. 安装:
+- **DMG 方式**: 双击打开 `CodeBar.dmg`，将 `CodeBar` 拖到 `Applications` 文件夹
+- **App 方式**: 将 `CodeBar.app` 拖到 `/Applications/` 目录
 
 ## 使用方法
 

@@ -85,3 +85,65 @@ else
       -derivedDataPath build
     exit 1
 fi
+
+# 询问是否创建 DMG
+echo "📦 是否创建 DMG 安装包？(y/n)"
+read -r response
+if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+    echo ""
+    echo "================================"
+    echo "   创建 DMG 安装包"
+    echo "================================"
+    echo ""
+
+    # 检查是否有 create_dmg.sh 脚本
+    if [ -f "./create_dmg.sh" ]; then
+        ./create_dmg.sh
+    else
+        echo -e "${YELLOW}警告：未找到 create_dmg.sh 脚本${NC}"
+        echo "将使用 hdiutil 创建基础 DMG..."
+        echo ""
+
+        # 使用 hdiutil 创建基础 DMG
+        APP_PATH="build/Build/Products/Release/CodeBar.app"
+        DMG_NAME="CodeBar.dmg"
+        VOLUME_NAME="CodeBar Installer"
+        TEMP_DIR=$(mktemp -d)
+
+        # 创建临时目录
+        DMG_DIR="$TEMP_DIR/dmg"
+        mkdir -p "$DMG_DIR"
+
+        # 复制 App
+        cp -R "$APP_PATH" "$DMG_DIR/"
+        ln -s /Applications "$DMG_DIR/Applications"
+
+        # 创建临时 DMG
+        TEMP_DMG="$TEMP_DIR/temp.dmg"
+        hdiutil create -size 50m \
+            -volname "$VOLUME_NAME" \
+            -fs "HFS+" \
+            -layout SPUD \
+            "$TEMP_DMG"
+
+        # 挂载
+        MOUNT_DIR="/Volumes/$VOLUME_NAME"
+        hdiutil detach "$MOUNT_DIR" 2>/dev/null || true
+        hdiutil attach "$TEMP_DMG" -readwrite -noverify -noautoopen -mountpoint "$MOUNT_DIR" >/dev/null 2>&1
+
+        # 复制文件
+        cp -R "$APP_PATH" "$MOUNT_DIR/"
+        ln -s /Applications "$MOUNT_DIR/Applications"
+
+        # 卸载并转换
+        hdiutil detach "$MOUNT_DIR" 2>/dev/null || true
+        sleep 2
+        hdiutil convert "$TEMP_DMG" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
+
+        # 清理
+        rm -rf "$TEMP_DIR"
+
+        echo ""
+        echo -e "${GREEN}✓ DMG 创建成功：$(pwd)/$DMG_NAME${NC}"
+    fi
+fi

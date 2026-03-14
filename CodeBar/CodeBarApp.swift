@@ -25,6 +25,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.action = #selector(togglePopover)
         statusItem?.button?.target = self
+        // 设置菜单栏图标为 SF Symbol
+        statusItem?.button?.image = NSImage(systemSymbolName: "menubar.dock.rectangle", accessibilityDescription: "CodeBar")
 
         // 设置初始标题
         updateStatusItemTitle()
@@ -54,7 +56,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func updateStatusItemTitle() {
         guard let tracker = tracker,
               let usage = tracker.currentUsage else {
-            statusItem?.button?.title = "Code Plan"
+            statusItem?.button?.title = "CodeBar"
             return
         }
 
@@ -69,10 +71,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .week:
                 statusItem?.button?.title = "\(formatUsage(usage.usedWeek, total: usage.totalWeek))"
             case nil:
-                statusItem?.button?.title = "Code Plan"
+                statusItem?.button?.title = "CodeBar"
             }
         } else if tracker.displayTypes.isEmpty {
-            statusItem?.button?.title = "Code Plan"
+            statusItem?.button?.title = "CodeBar"
         } else {
             // 多种类型，根据当前索引显示
             let safeIndex = tracker.currentDisplayIndex % tracker.displayTypes.count

@@ -64,6 +64,17 @@ struct MenuBarView: View {
                 }
                 .disabled(tracker.isLoading)
             }
+
+            Divider()
+
+            // 退出按钮
+            Button(action: quitApp) {
+                HStack {
+                    Image(systemName: "power")
+                    Text("退出 CodeBar")
+                }
+            }
+            .keyboardShortcut("q", modifiers: .command)
         }
         .padding(20)
         .frame(width: 320)
@@ -73,6 +84,12 @@ struct MenuBarView: View {
         .onAppear {
             hasLoadedOnce = true
         }
+    }
+
+    // MARK: - 辅助方法
+
+    private func quitApp() {
+        NSApplication.shared.terminate(nil)
     }
 
     // MARK: - 子视图
