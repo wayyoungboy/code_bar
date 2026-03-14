@@ -13,7 +13,7 @@
 
 ## 截图
 
-![CodeBar Screenshot](screenshots/preview.png)
+![CodeBar Screenshot](screenshots/image.png)
 
 ## 系统要求
 
