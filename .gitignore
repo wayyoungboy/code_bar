@@ -1,0 +1,41 @@
+# Xcode
+.DS_Store
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/
+*.xcscmblueprint
+*.xccheckout
+
+# Build products
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Development documentation
+dev_doc/
+
+# Carthage
+Carthage/Build/
+
+# CocoaPods
+Pods/
+*.xcworkspace
+!*.xcworkspace.xcworkspacedata
+!*.xcworkspace/xcshareddata/
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+Package.pins
+Package.resolved
+
+# CodeBar
+CodeBar/Config/
+*.swiftpm/
+
+# Temporary files
+*.tmp
+*.temp
