@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="bar-fill" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#a5f3fc"/>
+      <stop offset="100%" style="stop-color:#c4b5fd"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background (macOS style) -->
+  <rect x="40" y="40" width="944" height="944" rx="200" ry="200" fill="url(#bg)"/>
+
+  <!-- Left code bracket: < -->
+  <path d="M380 300 L220 512 L380 724" stroke="white" stroke-width="72" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Right code bracket: > -->
+  <path d="M644 300 L804 512 L644 724" stroke="white" stroke-width="72" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Center bar (usage bar) -->
+  <rect x="420" y="440" width="184" height="144" rx="36" ry="36" fill="url(#bar-fill)"/>
+
+  <!-- Small usage indicator dot -->
+  <circle cx="512" cy="512" r="18" fill="#6366f1"/>
+</svg>

@@ -17,6 +17,7 @@
 			A1000008 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* KeychainHelper.swift */; };
 			A1000009 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* Constants.swift */; };
 			A1000010 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* Logger.swift */; };
+			A1000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000012 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +31,7 @@
 			A2000009 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 			A2000010 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 			A2000011 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+			A2000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 			A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -64,6 +66,7 @@
 					A2000010 /* Constants.swift */,
 					A2000011 /* Logger.swift */,
 					A5000004 /* Providers */,
+					A2000012 /* Assets.xcassets */,
 					A2000006 /* Info.plist */,
 				);
 				path = CodeBar;
@@ -146,6 +149,7 @@
 				isa = PBXResourcesBuildPhase;
 				buildActionMask = 2147483647;
 				files = (
+					A1000011 /* Assets.xcassets in Resources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};

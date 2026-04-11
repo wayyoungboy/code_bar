@@ -1,17 +1,23 @@
 # CodeBar
 
-一个 macOS 菜单栏应用，用于实时监控阿里云百炼 Code Plan 的用量。
+一个 macOS 菜单栏应用，用于实时监控 AI Coding 平台的用量。
 
-其他平台的支持，就看我会不会买了，也可以提pr
+## 支持平台
+
+- **阿里云百炼** — 监控 Coding Plan 用量（账单周期、5 小时、周）
+- **ZenMux** — 监控 Flow 用量（月度、7 天、5 小时）
+
+想支持更多平台？欢迎提交 PR！
 
 ## 功能特性
 
-- 菜单栏实时显示 Code Plan 用量百分比
+- 菜单栏实时显示多平台用量百分比
 - 支持多个周期用量查看（账单周期、5 小时周期、周周期）
 - 低用量时发出提醒
+- 多平台自动轮播显示（每 5 秒切换）
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
-- 多选显示类型时每 5 秒滚动展示
-- 本地存储认证凭据
+- 每个平台可自定义展示类型
+- 本地 Keychain 存储认证凭据
 
 ## 截图
 
@@ -59,7 +65,7 @@ open CodeBar.xcodeproj
 
 1. 运行应用后，点击菜单栏的 "CodeBar" 图标
 2. 点击设置按钮（齿轮图标）
-3. 配置百炼凭据
+3. 配置您需要的平台凭据（百炼和/或 ZenMux）
 
 ### 获取百炼凭据
 
@@ -81,12 +87,34 @@ open CodeBar.xcodeproj
 6. **复制凭据**
    - 在请求头中复制 Cookie 和 sec_token
 
+### 获取 ZenMux API Key
+
+1. **登录 ZenMux**
+   - 访问 https://zenmux.ai 并登录
+
+2. **进入设置页面**
+   - 点击右上角的 Settings 图标
+
+3. **找到 API Keys 部分**
+   - 在设置页面中定位到 API Keys
+
+4. **复制 Management API Key**
+   - ⚠️ 必须使用 Management API Key，标准 API Key 不支持
+
 ### 配置凭据
+
+#### 阿里云百炼
 
 在设置界面中填入：
 - **Cookie**: 从浏览器复制的完整 Cookie 字符串
 - **Sec Token**: 从请求中复制的 sec_token 值
 - **区域**: 选择您的区域（如 cn-beijing、cn-hangzhou 等）
+
+#### ZenMux
+
+在设置界面中填入：
+- **Management API Key**: 从 ZenMux 设置页面复制的 Management API Key
+- ⚠️ 仅支持 Management API Key，标准 API Key 无效
 
 ## 项目结构
 
@@ -95,10 +123,13 @@ code_bar/
 ├── CodeBar/
 │   ├── CodeBarApp.swift          # 应用入口
 │   ├── MenuBarView.swift         # 菜单栏 UI 和设置界面
-│   ├── UsageTracker.swift        # 用量追踪器
+│   ├── SettingsWindow.swift      # 设置窗口（含帮助）
+│   ├── UsageTracker.swift        # 多平台用量追踪器
+│   ├── Constants.swift           # 应用常量配置
 │   └── Providers/
 │       ├── PlatformProvider.swift# 平台协议定义
-│       └── BailianProvider.swift # 百炼 API 提供者
+│       ├── BailianProvider.swift # 阿里云百炼 API 提供者
+│       └── ZenMuxProvider.swift  # ZenMux API 提供者
 ├── dev_doc/                       # 开发文档（未提交到仓库）
 └── README.md                      # 本文件
 ```
@@ -119,7 +150,7 @@ code_bar/
 
 ## 安全性
 
-- 所有凭据存储在 UserDefaults（本地）
+- 所有凭据存储在 Keychain（macOS 安全存储）
 - 不会上传或分享任何凭据信息
 - 仅用于本地 API 请求
 
@@ -133,4 +164,7 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 ## 致谢
 
-感谢阿里云百炼提供的 Code Plan 服务
+感谢以下平台提供的服务：
+
+- [阿里云百炼](https://bailian.console.aliyun.com/) — Code Plan 用量监控
+- [ZenMux](https://zenmux.ai) — AI Coding 平台
