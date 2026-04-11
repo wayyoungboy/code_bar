@@ -1,9 +1,19 @@
 import Foundation
 import Combine
 
+/// 显示类型
+enum UsageDisplayType: String, CaseIterable, Identifiable {
+    case billMonth = "账单月"
+    case fiveHour = "5小时"
+    case week = "周"
+
+    var id: String { rawValue }
+}
+
 /// 支持的 platform 类型
 enum PlatformType: String, CaseIterable, Identifiable {
     case bailian = "阿里云百炼"
+    case zenmux = "ZenMux"
 
     var id: String { rawValue }
 
@@ -11,69 +21,59 @@ enum PlatformType: String, CaseIterable, Identifiable {
         switch self {
         case .bailian:
             return "cloud.fill"
+        case .zenmux:
+            return "bolt.fill"
+        }
+    }
+
+    var shortName: String {
+        switch self {
+        case .bailian:
+            return "百炼"
+        case .zenmux:
+            return "ZenMux"
         }
     }
 }
 
 /// 多平台用量追踪器
+@MainActor
 class UsageTracker: ObservableObject {
+    static let shared = UsageTracker()
+
     @Published var platforms: [PlatformType: PlatformUsage] = [:]
-    @Published var selectedPlatform: PlatformType = .bailian
-    @Published var errorMessage: String?
+    @Published var errorMessages: [PlatformType: String] = [:]
     @Published var isLoading: Bool = false
-    @Published var isConfigured: Bool = false
     @Published var lastRefreshDate: Date = Date()
 
-    // 显示类型配置
-    @Published var displayTypes: [UsageDisplayType] = [.billMonth] {
+    // 每个平台的显示类型配置
+    @Published var displayTypes: [PlatformType: [UsageDisplayType]] = [.bailian: [.billMonth, .fiveHour, .week], .zenmux: [.billMonth, .fiveHour, .week]] {
         didSet {
             saveDisplayConfig()
-            resetRotationIndex()
         }
     }
-    @Published var currentDisplayIndex: Int = 0
 
-    enum UsageDisplayType: String, CaseIterable, Identifiable {
-        case billMonth = "账单月"
-        case fiveHour = "5 小时"
-        case week = "周"
-
-        var id: String { rawValue }
-    }
-
-    private var providers: [PlatformType: PlatformProvider] = [:]
+    var providers: [PlatformType: PlatformProvider] = [:]
     private var timer: Timer?
-    private var rotationTimer: Timer?
 
-    var currentUsage: PlatformUsage? {
-        platforms[selectedPlatform]
+    /// 获取所有已配置的平台
+    var configuredPlatforms: [PlatformType] {
+        PlatformType.allCases.filter { providers[$0]?.isConfigured == true }
     }
 
-    // 根据当前显示类型返回对应的用量数据
-    var currentDisplayUsage: (used: Int, total: Int, percent: Double, resetDate: Date, label: String)? {
-        guard let usage = currentUsage else { return nil }
-        guard !displayTypes.isEmpty else { return nil }
-
-        // 确保索引有效
-        let safeIndex = currentDisplayIndex % displayTypes.count
-        let displayType = displayTypes[safeIndex]
-
-        switch displayType {
-        case .billMonth:
-            return (usage.used, usage.total, usage.usagePercent, usage.resetDate, "账单月")
-        case .fiveHour:
-            return (usage.used5Hour, usage.total5Hour, usage.used5HourPercent, usage.resetDate5Hour, "5 小时")
-        case .week:
-            return (usage.usedWeek, usage.totalWeek, usage.usedWeekPercent, usage.resetDateWeek, "周")
-        }
+    /// 是否有任何平台已配置
+    var hasAnyConfig: Bool {
+        providers.values.contains { $0.isConfigured }
     }
 
-    var usagePercent: Double {
-        currentUsage?.usagePercent ?? 0
+    /// 是否有任何错误
+    var hasErrors: Bool {
+        !errorMessages.isEmpty
     }
 
-    var isLowUsage: Bool {
-        (currentUsage?.usagePercent ?? 0) > 80
+    /// 获取第一个错误消息（用于简单显示）
+    var firstErrorMessage: String? {
+        errorMessages.values.first
     }
 
     init() {
@@ -81,93 +81,173 @@ class UsageTracker: ObservableObject {
         loadDisplayConfig()
         loadFromStorage()
         setupTimer()
-        setupRotationTimer()
+    }
+
+    deinit {
+        timer?.invalidate()
     }
 
     // MARK: - 配置管理
 
     func loadConfig() {
-        // 加载百炼配置
+        // 尝试从 Keychain 加载配置
         if let config = loadBailianConfig() {
             providers[.bailian] = BailianProvider(config: config)
-            isConfigured = config.isValid
-        } else {
-            isConfigured = false
+            AppLogger.logConfigChange(platform: "百炼", action: "加载配置")
+        }
+
+        if let config = loadZenMuxConfig() {
+            providers[.zenmux] = ZenMuxProvider(config: config)
+            AppLogger.logConfigChange(platform: "ZenMux", action: "加载配置")
+        }
+
+        // 迁移旧的 UserDefaults 数据到 Keychain
+        migrateFromUserDefaults()
+    }
+
+    /// 迁移旧的 UserDefaults 数据到 Keychain（向后兼容）
+    private func migrateFromUserDefaults() {
+        // 迁移 Bailian 配置
+        if KeychainHelper.shared.exists(Constants.bailianConfigKey) == false {
+            if let data = UserDefaults.standard.data(forKey: Constants.legacyBailianConfigKey) {
+                try? KeychainHelper.shared.save(data, for: Constants.bailianConfigKey)
+                UserDefaults.standard.removeObject(forKey: Constants.legacyBailianConfigKey)
+                AppLogger.logConfigChange(platform: "百炼", action: "迁移到 Keychain")
+            }
+        }
+
+        // 迁移 ZenMux 配置
+        if KeychainHelper.shared.exists(Constants.zenmuxConfigKey) == false {
+            if let data = UserDefaults.standard.data(forKey: Constants.legacyZenmuxConfigKey) {
+                try? KeychainHelper.shared.save(data, for: Constants.zenmuxConfigKey)
+                UserDefaults.standard.removeObject(forKey: Constants.legacyZenmuxConfigKey)
+                AppLogger.logConfigChange(platform: "ZenMux", action: "迁移到 Keychain")
+            }
         }
     }
 
     func saveBailianConfig(cookies: String, secToken: String, region: String = "cn-beijing") {
         let config = BailianConfig(cookies: cookies, secToken: secToken, region: region)
         providers[.bailian] = BailianProvider(config: config)
-        isConfigured = config.isValid
 
-        // 保存到 UserDefaults
-        if let encoded = try? JSONEncoder().encode(config) {
-            UserDefaults.standard.set(encoded, forKey: "BailianConfig")
+        // 保存到 Keychain
+        do {
+            try KeychainHelper.shared.save(config, for: Constants.bailianConfigKey)
+            AppLogger.logConfigChange(platform: "百炼", action: "保存配置")
+        } catch {
+            AppLogger.logError(error)
         }
 
-        // 立即刷新用量
+        // 清除该平台的错误
+        errorMessages[.bailian] = nil
+
+        // 刷新用量
         refresh()
     }
 
     func loadBailianConfig() -> BailianConfig? {
-        guard let data = UserDefaults.standard.data(forKey: "BailianConfig") else {
-            return nil
+        return KeychainHelper.shared.readIfPresent(BailianConfig.self, for: Constants.bailianConfigKey)
+    }
+
+    func saveZenMuxConfig(apiKey: String) {
+        let config = ZenMuxConfig(apiKey: apiKey)
+        providers[.zenmux] = ZenMuxProvider(config: config)
+
+        // 保存到 Keychain
+        do {
+            try KeychainHelper.shared.save(config, for: Constants.zenmuxConfigKey)
+            AppLogger.logConfigChange(platform: "ZenMux", action: "保存配置")
+        } catch {
+            AppLogger.logError(error)
         }
-        return try? JSONDecoder().decode(BailianConfig.self, from: data)
+
+        // 清除该平台的错误
+        errorMessages[.zenmux] = nil
+
+        // 刷新用量
+        refresh()
+    }
+
+    func loadZenMuxConfig() -> ZenMuxConfig? {
+        return KeychainHelper.shared.readIfPresent(ZenMuxConfig.self, for: Constants.zenmuxConfigKey)
+    }
+
+    func clearConfig(for platform: PlatformType) {
+        switch platform {
+        case .bailian:
+            try? KeychainHelper.shared.delete(Constants.bailianConfigKey)
+            providers[.bailian] = nil
+            platforms[.bailian] = nil
+            errorMessages[.bailian] = nil
+            AppLogger.logConfigChange(platform: "百炼", action: "清除配置")
+        case .zenmux:
+            try? KeychainHelper.shared.delete(Constants.zenmuxConfigKey)
+            providers[.zenmux] = nil
+            platforms[.zenmux] = nil
+            errorMessages[.zenmux] = nil
+            AppLogger.logConfigChange(platform: "ZenMux", action: "清除配置")
+        }
     }
 
     // MARK: - 显示配置
 
     private func saveDisplayConfig() {
-        let types = displayTypes.map { $0.rawValue }
-        UserDefaults.standard.set(types, forKey: "UsageDisplayTypes")
+        let data = displayTypes.mapValues { types in
+            types.map { $0.rawValue }
+        }
+        UserDefaults.standard.set(data, forKey: Constants.displayTypesKey)
     }
 
     private func loadDisplayConfig() {
-        if let types = UserDefaults.standard.array(forKey: "UsageDisplayTypes") as? [String] {
-            displayTypes = types.compactMap { UsageDisplayType(rawValue: $0) }
-        }
-        if displayTypes.isEmpty {
-            displayTypes = [.billMonth]
+        if let data = UserDefaults.standard.dictionary(forKey: Constants.displayTypesKey) as? [String: [String]] {
+            for (platformRaw, typesRaw) in data {
+                if let platform = PlatformType.allCases.first(where: { $0.rawValue == platformRaw }) {
+                    let types = typesRaw.compactMap { UsageDisplayType(rawValue: $0) }
+                    if !types.isEmpty {
+                        displayTypes[platform] = types
+                    }
+                }
+            }
         }
     }
 
-    private func resetRotationIndex() {
-        currentDisplayIndex = 0
-    }
-
-    private func setupRotationTimer() {
-        // 每 5 秒滚动一次显示
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            // 只有在多种显示类型时才滚动
-            if self.displayTypes.count > 1 {
-                self.currentDisplayIndex = (self.currentDisplayIndex + 1) % self.displayTypes.count
+    func toggleDisplayType(_ type: UsageDisplayType, for platform: PlatformType) {
+        if var types = displayTypes[platform] {
+            if types.contains(type) {
+                types.removeAll { $0 == type }
+                if !types.isEmpty {
+                    displayTypes[platform] = types
+                }
+            } else {
+                types.append(type)
+                displayTypes[platform] = types
             }
         }
     }
 
     // MARK: - 刷新用量
 
-    @MainActor
     func refresh() async {
         guard !isLoading else { return }
         isLoading = true
-        errorMessage = nil
+        errorMessages = [:]
 
         defer {
             isLoading = false
         }
 
         for (platform, provider) in providers {
+            guard provider.isConfigured else { continue }
             do {
                 let usage = try await provider.fetchUsage()
                 platforms[platform] = usage
-            } catch let error as PlatformError {
-                errorMessage = error.errorDescription
+                AppLogger.logUsageUpdate(platform: platform.shortName, used: usage.used, total: usage.total)
+            } catch let err as PlatformError {
+                errorMessages[platform] = err.errorDescription
+                AppLogger.logError(err)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessages[platform] = error.localizedDescription
+                AppLogger.logError(error)
             }
         }
 
@@ -192,6 +272,7 @@ class UsageTracker: ObservableObject {
                 "unit": usage.unit,
                 "resetDate": usage.resetDate,
                 "planType": usage.planType,
+                "platformName": usage.platformName,
                 "used5Hour": usage.used5Hour,
                 "total5Hour": usage.total5Hour,
                 "resetDate5Hour": usage.resetDate5Hour,
@@ -200,11 +281,11 @@ class UsageTracker: ObservableObject {
                 "resetDateWeek": usage.resetDateWeek
             ]
         }
-        UserDefaults.standard.set(data, forKey: "PlatformUsage")
+        UserDefaults.standard.set(data, forKey: Constants.usageCacheKey)
     }
 
     private func loadFromStorage() {
-        guard let data = UserDefaults.standard.dictionary(forKey: "PlatformUsage") else {
+        guard let data = UserDefaults.standard.dictionary(forKey: Constants.usageCacheKey) else {
             return
         }
 
@@ -216,6 +297,7 @@ class UsageTracker: ObservableObject {
                   let unit = dict["unit"] as? String,
                   let resetDate = dict["resetDate"] as? Date,
                   let planType = dict["planType"] as? String,
+                  let platformNameValue = dict["platformName"] as? String,
                   let used5Hour = dict["used5Hour"] as? Int,
                   let total5Hour = dict["total5Hour"] as? Int,
                   let resetDate5Hour = dict["resetDate5Hour"] as? Date,
@@ -231,7 +313,7 @@ class UsageTracker: ObservableObject {
                 unit: unit,
                 resetDate: resetDate,
                 planType: planType,
-                platformName: platformName,
+                platformName: platformNameValue,
                 used5Hour: used5Hour,
                 total5Hour: total5Hour,
                 resetDate5Hour: resetDate5Hour,
@@ -248,8 +330,8 @@ class UsageTracker: ObservableObject {
 
     private func scheduleNextRefresh() {
         // 基础间隔 60 秒，加上 -5s 到 +5s 的随机浮动，避免触发风控
-        let baseInterval: TimeInterval = 60.0
-        let randomJitter = TimeInterval.random(in: -5.0...5.0)
+        let baseInterval: TimeInterval = Constants.refreshInterval
+        let randomJitter = TimeInterval.random(in: -Constants.jitterRange...Constants.jitterRange)
         let interval = baseInterval + randomJitter
 
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in

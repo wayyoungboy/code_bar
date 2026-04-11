@@ -6,9 +6,6 @@ struct BailianProvider: PlatformProvider {
     private let config: BailianConfig
     private let baseURL = "https://bailian-cs.console.aliyun.com"
 
-    // 存储上次的 feTraceId，用于保持会话一致性
-    private static var cachedTraceId: String?
-
     init(config: BailianConfig) {
         self.config = config
     }
@@ -37,22 +34,16 @@ struct BailianProvider: PlatformProvider {
         let body = buildRequestBody()
         request.httpBody = body.data(using: .utf8)
 
-        #if DEBUG
-        print("🌐 请求 URL: \(url)")
-        print("📦 请求体：\(body)")
-        #endif
+        // 使用安全的日志记录
+        AppLogger.logRequest(url: url.absoluteString, method: "POST")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
-        #if DEBUG
-        if let jsonString = String(data: data, encoding: .utf8) {
-            print("📥 响应：\(jsonString)")
-        }
-        #endif
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))
         }
+
+        AppLogger.logResponse(url: url.absoluteString, statusCode: httpResponse.statusCode)
 
         switch httpResponse.statusCode {
         case 200:
@@ -65,7 +56,7 @@ struct BailianProvider: PlatformProvider {
             throw PlatformError.unknown("HTTP \(httpResponse.statusCode)")
         }
 
-        // 先用 JSONSerialization 解析原始数据，便于调试
+        // 解析响应
         let rawJSON = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         // 检查响应 code
@@ -74,7 +65,7 @@ struct BailianProvider: PlatformProvider {
             throw PlatformError.unknown(message)
         }
 
-        // 手动解析嵌套结构 - 真实结构是：data.DataV2.data.data.codingPlanInstanceInfos
+        // 手动解析嵌套结构
         guard let dataDict = rawJSON?["data"] as? [String: Any],
               let dataV2 = dataDict["DataV2"] as? [String: Any],
               let dataV2Data = dataV2["data"] as? [String: Any],
@@ -82,11 +73,7 @@ struct BailianProvider: PlatformProvider {
               let instances = dataContent["codingPlanInstanceInfos"] as? [[String: Any]],
               let firstInstance = instances.first,
               let quotaInfo = firstInstance["codingPlanQuotaInfo"] as? [String: Any] else {
-            print("❌ 解析失败 - 原始响应：")
-            if let jsonData = try? JSONSerialization.data(withJSONObject: rawJSON ?? [:], options: .prettyPrinted),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                print(jsonString)
-            }
+            AppLogger.logParseError(message: "无用量数据 - 响应结构不匹配")
             throw PlatformError.unknown("无用量数据 - 响应结构不匹配")
         }
 
@@ -100,8 +87,7 @@ struct BailianProvider: PlatformProvider {
               let usedWeek = quotaInfo["perWeekUsedQuota"] as? Int,
               let totalWeek = quotaInfo["perWeekTotalQuota"] as? Int,
               let resetTimeWeekMs = quotaInfo["perWeekQuotaNextRefreshTime"] as? Int64 else {
-            print("❌ 用量数据提取失败 - quotaInfo:")
-            print(quotaInfo)
+            AppLogger.logParseError(message: "用量数据字段缺失")
             throw PlatformError.unknown("用量数据字段缺失")
         }
 
@@ -148,77 +134,13 @@ struct BailianProvider: PlatformProvider {
     }
 
     private func buildRequestBody() -> String {
-        // 使用或创建 traceId
-        if Self.cachedTraceId == nil {
-            Self.cachedTraceId = UUID().uuidString
-        }
+        // 每次请求生成新的 traceId
+        let traceId = UUID().uuidString
 
         let params = """
-        {"Api":"zeldaEasy.broadscope-bailian.codingPlan.queryCodingPlanInstanceInfoV2","V":"1.0","Data":{"queryCodingPlanInstanceInfoRequest":{"commodityCode":"sfm_codingplan_public_cn","onlyLatestOne":true},"cornerstoneParam":{"feTraceId":"\(Self.cachedTraceId ?? UUID().uuidString)","feURL":"\(buildReferer())","protocol":"V2","console":"ONE_CONSOLE","productCode":"p_efm","switchAgent":11603654,"switchUserType":3,"domain":"bailian.console.aliyun.com","consoleSite":"BAILIAN_ALIYUN","xsp_lang":"zh-CN","X-Anonymous-Id":"anonymous"}}}
+        {"Api":"zeldaEasy.broadscope-bailian.codingPlan.queryCodingPlanInstanceInfoV2","V":"1.0","Data":{"queryCodingPlanInstanceInfoRequest":{"commodityCode":"sfm_codingplan_public_cn","onlyLatestOne":true},"cornerstoneParam":{"feTraceId":"\(traceId)","feURL":"\(buildReferer())","protocol":"V2","console":"ONE_CONSOLE","productCode":"p_efm","switchAgent":11603654,"switchUserType":3,"domain":"bailian.console.aliyun.com","consoleSite":"BAILIAN_ALIYUN","xsp_lang":"zh-CN","X-Anonymous-Id":"anonymous"}}}
         """
 
         return "params=\(params.urlEncoded())&region=\(config.region)&sec_token=\(config.secToken)"
     }
-}
-
-// MARK: - 辅助扩展
-
-extension String {
-    func urlEncoded() -> String {
-        addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
-    }
-}
-
-extension URLRequest {
-    mutating func setValue(cookies: String) {
-        setValue(cookies, forHTTPHeaderField: "cookie")
-    }
-}
-
-// MARK: - API 响应模型
-
-struct BailianAPIResponse: Codable {
-    let code: String
-    let message: String?
-    let data: BailianResponseData?
-    let successResponse: Bool?
-}
-
-struct BailianResponseData: Codable {
-    let DataV2: DataV2Response?
-    let success: Bool?
-}
-
-struct DataV2Response: Codable {
-    let data: DataV2Data?
-    let ret: [String]?
-}
-
-struct DataV2Data: Codable {
-    let codingPlanInstanceInfos: [CodingPlanInfo]?
-    let userId: String?
-}
-
-struct CodingPlanInfo: Codable {
-    let codingPlanQuotaInfo: CodingPlanQuotaInfo?
-    let instanceId: String?
-    let instanceName: String?
-    let instanceType: String?
-    let remainingDays: Int?
-    let chargeType: String?
-    let status: String?
-}
-
-struct CodingPlanQuotaInfo: Codable {
-    let perBillMonthUsedQuota: Int       // 账单周期已用
-    let perBillMonthTotalQuota: Int      // 账单周期总额度
-    let perBillMonthQuotaNextRefreshTime: Int64  // 账单周期重置时间 (毫秒)
-
-    let per5HourUsedQuota: Int           // 5 小时周期已用
-    let per5HourTotalQuota: Int          // 5 小时周期总额度
-    let per5HourQuotaNextRefreshTime: Int64  // 5 小时周期重置时间 (毫秒)
-
-    let perWeekUsedQuota: Int            // 周周期已用
-    let perWeekTotalQuota: Int           // 周周期总额度
-    let perWeekQuotaNextRefreshTime: Int64  // 周周期重置时间 (毫秒)
 }

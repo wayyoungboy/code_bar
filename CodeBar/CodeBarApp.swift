@@ -8,24 +8,38 @@ struct CodeBarApp: App {
         Settings {
             EmptyView()
         }
+        .commands {
+            CommandMenu("操作") {
+                Button("刷新用量") {
+                    UsageTracker.shared.refresh()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+            }
+        }
     }
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     var popover: NSPopover?
-    var tracker: UsageTracker?
+    var settingsWindow: NSWindow?
     var rotationTimer: Timer?
+    private var currentPlatformIndex: Int = 0
+
+    nonisolated deinit {
+        Task { @MainActor in
+            rotationTimer?.invalidate()
+            rotationTimer = nil
+        }
+        NotificationCenter.default.removeObserver(self)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 创建追踪器
-        tracker = UsageTracker()
-
         // 创建状态栏图标
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.action = #selector(togglePopover)
         statusItem?.button?.target = self
-        // 设置菜单栏图标为 SF Symbol
         statusItem?.button?.image = NSImage(systemSymbolName: "menubar.dock.rectangle", accessibilityDescription: "CodeBar")
 
         // 设置初始标题
@@ -33,66 +47,83 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 创建弹窗视图
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 360, height: 300)
+        popover?.contentSize = NSSize(width: Constants.popoverWidth, height: 300)
         popover?.behavior = .transient
-        popover?.contentViewController = NSHostingController(rootView: MenuBarView(tracker: tracker!))
+        popover?.contentViewController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared))
 
         // 初始加载用量信息
-        refreshUsage()
+        UsageTracker.shared.refresh()
 
-        // 监听用量刷新通知
-        NotificationCenter.default.addObserver(self, selector: #selector(updateStatusItemTitle), name: NSApplication.didBecomeActiveNotification, object: nil)
+        // 监听显示设置窗口通知
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(showSettingsWindow(_:)),
+            name: .showSettings,
+            object: nil
+        )
 
-        // 设置滚动定时器 - 每 5 秒更新一次状态栏标题
+        // 设置滚动定时器 - 多平台时轮播
         setupRotationTimer()
     }
 
     private func setupRotationTimer() {
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: Constants.rotationInterval, repeats: true) { [weak self] _ in
+            self?.advancePlatform()
             self?.updateStatusItemTitle()
         }
     }
 
+    private func advancePlatform() {
+        let platforms = UsageTracker.shared.configuredPlatforms
+        guard platforms.count > 1 else { return }
+        currentPlatformIndex = (currentPlatformIndex + 1) % platforms.count
+    }
+
     @objc func updateStatusItemTitle() {
-        guard let tracker = tracker,
-              let usage = tracker.currentUsage else {
+        let tracker = UsageTracker.shared
+        let platforms = tracker.configuredPlatforms
+
+        guard !platforms.isEmpty else {
             statusItem?.button?.title = "CodeBar"
             return
         }
 
-        // 如果只选择了一种显示类型，直接显示
-        if tracker.displayTypes.count == 1 {
-            let type = tracker.displayTypes.first
-            switch type {
-            case .billMonth:
-                statusItem?.button?.title = "\(formatUsage(usage.used, total: usage.total))"
-            case .fiveHour:
-                statusItem?.button?.title = "\(formatUsage(usage.used5Hour, total: usage.total5Hour))"
-            case .week:
-                statusItem?.button?.title = "\(formatUsage(usage.usedWeek, total: usage.totalWeek))"
-            case nil:
-                statusItem?.button?.title = "CodeBar"
-            }
-        } else if tracker.displayTypes.isEmpty {
-            statusItem?.button?.title = "CodeBar"
+        // 单平台直接显示，多平台轮播
+        let platform: PlatformType
+        if platforms.count == 1 {
+            platform = platforms[0]
         } else {
-            // 多种类型，根据当前索引显示
-            let safeIndex = tracker.currentDisplayIndex % tracker.displayTypes.count
-            let type = tracker.displayTypes[safeIndex]
-            switch type {
-            case .billMonth:
-                statusItem?.button?.title = "\(formatUsage(usage.used, total: usage.total))"
-            case .fiveHour:
-                statusItem?.button?.title = "\(formatUsage(usage.used5Hour, total: usage.total5Hour))"
-            case .week:
-                statusItem?.button?.title = "\(formatUsage(usage.usedWeek, total: usage.totalWeek))"
-            }
+            let safeIndex = currentPlatformIndex % platforms.count
+            platform = platforms[safeIndex]
         }
+
+        guard let usage = tracker.platforms[platform] else {
+            statusItem?.button?.title = platform.shortName
+            return
+        }
+
+        let displayTypes = tracker.displayTypes[platform] ?? [.billMonth]
+
+        // 构建显示文本：平台名 + 各类型百分比
+        var parts: [String] = [platform.shortName]
+
+        for type in displayTypes {
+            let (percent, label) = getUsageInfo(usage: usage, displayType: type)
+            parts.append("\(label)\(String(format: "%.0f%%", percent))")
+        }
+
+        statusItem?.button?.title = parts.joined(separator: " ")
     }
 
-    private func formatUsage(_ used: Int, total: Int) -> String {
-        let percent = Double(used) / Double(total) * 100
-        return String(format: "百炼 %.0f%%", percent)
+    private func getUsageInfo(usage: PlatformUsage, displayType: UsageDisplayType) -> (Double, String) {
+        switch displayType {
+        case .billMonth:
+            return (usage.usagePercent, "账单月")
+        case .fiveHour:
+            return (usage.used5HourPercent, "5小时")
+        case .week:
+            return (usage.usedWeekPercent, "周")
+        }
     }
 
     @objc func togglePopover() {
@@ -104,11 +135,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func refreshUsage() {
-        tracker?.refresh()
+    @objc func showSettingsWindow(_ sender: Any?) {
+        popover?.performClose(nil)
+
+        if let window = settingsWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let settingsView = SettingsWindowView(tracker: UsageTracker.shared)
+        let hostingController = NSHostingController(rootView: settingsView)
+
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "CodeBar 设置"
+        window.styleMask = [.titled, .closable]
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+
+        settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
+extension AppDelegate: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {}
+}
+
 extension Notification.Name {
-    static let refreshUsage = Notification.Name("refreshUsage")
+    static let showSettings = Notification.Name("showSettings")
 }

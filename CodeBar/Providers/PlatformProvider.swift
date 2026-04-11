@@ -98,3 +98,31 @@ struct BailianConfig: PlatformConfig, Codable {
         case region = "bailian_region"
     }
 }
+
+/// ZenMux 平台配置
+struct ZenMuxConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .zenmux
+    var apiKey: String
+
+    var isValid: Bool {
+        !apiKey.isEmpty && apiKey.count >= 20  // 基本长度检查
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case apiKey = "zenmux_api_key"
+    }
+}
+
+// MARK: - 辅助扩展
+
+extension String {
+    func urlEncoded() -> String {
+        addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? self
+    }
+}
+
+extension URLRequest {
+    mutating func setValue(cookies: String) {
+        setValue(cookies, forHTTPHeaderField: "cookie")
+    }
+}
