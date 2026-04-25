@@ -1,15 +1,6 @@
 import Foundation
 import Combine
 
-/// 显示类型
-enum UsageDisplayType: String, CaseIterable, Identifiable {
-    case billMonth = "账单月"
-    case fiveHour = "5小时"
-    case week = "周"
-
-    var id: String { rawValue }
-}
-
 /// 支持的 platform 类型
 enum PlatformType: String, CaseIterable, Identifiable {
     case bailian = "阿里云百炼"
@@ -41,13 +32,27 @@ enum PlatformType: String, CaseIterable, Identifiable {
 class UsageTracker: ObservableObject {
     static let shared = UsageTracker()
 
-    @Published var platforms: [PlatformType: PlatformUsage] = [:]
+    @Published var platforms: [PlatformType: PlatformUsageData] = [:]
     @Published var errorMessages: [PlatformType: String] = [:]
     @Published var isLoading: Bool = false
     @Published var lastRefreshDate: Date = Date()
 
-    // 每个平台的显示类型配置
-    @Published var displayTypes: [PlatformType: [UsageDisplayType]] = [.bailian: [.billMonth, .fiveHour, .week], .zenmux: [.billMonth, .fiveHour, .week]] {
+    // 每个平台的启用状态
+    @Published var enabledPlatforms: [PlatformType: Bool] = [:] {
+        didSet {
+            saveEnabledConfig()
+        }
+    }
+
+    // 每个平台的重置时间显示配置（存储需要显示重置时间的 item key）
+    @Published var resetTimeKeys: [PlatformType: [String]] = [:] {
+        didSet {
+            saveResetTimeConfig()
+        }
+    }
+
+    // 每个平台的显示类型配置（存储 UsageItem 的 key）
+    @Published var displayTypes: [PlatformType: [String]] = [:] {
         didSet {
             saveDisplayConfig()
         }
@@ -56,14 +61,20 @@ class UsageTracker: ObservableObject {
     var providers: [PlatformType: PlatformProvider] = [:]
     private var timer: Timer?
 
-    /// 获取所有已配置的平台
-    var configuredPlatforms: [PlatformType] {
-        PlatformType.allCases.filter { providers[$0]?.isConfigured == true }
+    /// 平台是否启用（已配置且未关闭）
+    func isPlatformEnabled(_ platform: PlatformType) -> Bool {
+        guard providers[platform]?.isConfigured == true else { return false }
+        return enabledPlatforms[platform] ?? true
     }
 
-    /// 是否有任何平台已配置
+    /// 获取所有已启用的平台
+    var configuredPlatforms: [PlatformType] {
+        PlatformType.allCases.filter { isPlatformEnabled($0) }
+    }
+
+    /// 是否有任何平台已启用
     var hasAnyConfig: Bool {
-        providers.values.contains { $0.isConfigured }
+        PlatformType.allCases.contains { isPlatformEnabled($0) }
     }
 
     /// 是否有任何错误
@@ -78,6 +89,8 @@ class UsageTracker: ObservableObject {
 
     init() {
         loadConfig()
+        loadEnabledConfig()
+        loadResetTimeConfig()
         loadDisplayConfig()
         loadFromStorage()
         setupTimer()
@@ -90,137 +103,185 @@ class UsageTracker: ObservableObject {
     // MARK: - 配置管理
 
     func loadConfig() {
-        // 尝试从 Keychain 加载配置
-        if let config = loadBailianConfig() {
+        let allConfigs = loadAllConfigs()
+
+        if let data = allConfigs[PlatformType.bailian.rawValue],
+           let config = try? JSONDecoder().decode(BailianConfig.self, from: data) {
             providers[.bailian] = BailianProvider(config: config)
             AppLogger.logConfigChange(platform: "百炼", action: "加载配置")
         }
 
-        if let config = loadZenMuxConfig() {
+        if let data = allConfigs[PlatformType.zenmux.rawValue],
+           let config = try? JSONDecoder().decode(ZenMuxConfig.self, from: data) {
             providers[.zenmux] = ZenMuxProvider(config: config)
             AppLogger.logConfigChange(platform: "ZenMux", action: "加载配置")
         }
-
-        // 迁移旧的 UserDefaults 数据到 Keychain
-        migrateFromUserDefaults()
     }
 
-    /// 迁移旧的 UserDefaults 数据到 Keychain（向后兼容）
-    private func migrateFromUserDefaults() {
-        // 迁移 Bailian 配置
-        if KeychainHelper.shared.exists(Constants.bailianConfigKey) == false {
-            if let data = UserDefaults.standard.data(forKey: Constants.legacyBailianConfigKey) {
-                try? KeychainHelper.shared.save(data, for: Constants.bailianConfigKey)
-                UserDefaults.standard.removeObject(forKey: Constants.legacyBailianConfigKey)
-                AppLogger.logConfigChange(platform: "百炼", action: "迁移到 Keychain")
-            }
+    private func loadAllConfigs() -> [String: Data] {
+        guard let data = try? KeychainHelper.shared.read(for: Constants.platformConfigsKey),
+              let dict = try? JSONDecoder().decode([String: Data].self, from: data) else {
+            return [:]
         }
+        return dict
+    }
 
-        // 迁移 ZenMux 配置
-        if KeychainHelper.shared.exists(Constants.zenmuxConfigKey) == false {
-            if let data = UserDefaults.standard.data(forKey: Constants.legacyZenmuxConfigKey) {
-                try? KeychainHelper.shared.save(data, for: Constants.zenmuxConfigKey)
-                UserDefaults.standard.removeObject(forKey: Constants.legacyZenmuxConfigKey)
-                AppLogger.logConfigChange(platform: "ZenMux", action: "迁移到 Keychain")
-            }
+    private func saveAllConfigs(_ configs: [String: Data]) {
+        do {
+            let data = try JSONEncoder().encode(configs)
+            try KeychainHelper.shared.save(data, for: Constants.platformConfigsKey)
+        } catch {
+            AppLogger.logError(error)
+        }
+    }
+
+    private func savePlatformConfig<T: Codable>(_ config: T, for platform: PlatformType) {
+        var allConfigs = loadAllConfigs()
+        if let data = try? JSONEncoder().encode(config) {
+            allConfigs[platform.rawValue] = data
+            saveAllConfigs(allConfigs)
+        }
+    }
+
+    private func removePlatformConfig(for platform: PlatformType) {
+        var allConfigs = loadAllConfigs()
+        allConfigs.removeValue(forKey: platform.rawValue)
+        if allConfigs.isEmpty {
+            try? KeychainHelper.shared.delete(Constants.platformConfigsKey)
+        } else {
+            saveAllConfigs(allConfigs)
         }
     }
 
     func saveBailianConfig(cookies: String, secToken: String, region: String = "cn-beijing") {
         let config = BailianConfig(cookies: cookies, secToken: secToken, region: region)
         providers[.bailian] = BailianProvider(config: config)
-
-        // 保存到 Keychain
-        do {
-            try KeychainHelper.shared.save(config, for: Constants.bailianConfigKey)
-            AppLogger.logConfigChange(platform: "百炼", action: "保存配置")
-        } catch {
-            AppLogger.logError(error)
-        }
-
-        // 清除该平台的错误
+        savePlatformConfig(config, for: .bailian)
+        AppLogger.logConfigChange(platform: "百炼", action: "保存配置")
         errorMessages[.bailian] = nil
-
-        // 刷新用量
         refresh()
     }
 
     func loadBailianConfig() -> BailianConfig? {
-        return KeychainHelper.shared.readIfPresent(BailianConfig.self, for: Constants.bailianConfigKey)
+        guard let data = loadAllConfigs()[PlatformType.bailian.rawValue] else { return nil }
+        return try? JSONDecoder().decode(BailianConfig.self, from: data)
     }
 
     func saveZenMuxConfig(apiKey: String) {
         let config = ZenMuxConfig(apiKey: apiKey)
         providers[.zenmux] = ZenMuxProvider(config: config)
-
-        // 保存到 Keychain
-        do {
-            try KeychainHelper.shared.save(config, for: Constants.zenmuxConfigKey)
-            AppLogger.logConfigChange(platform: "ZenMux", action: "保存配置")
-        } catch {
-            AppLogger.logError(error)
-        }
-
-        // 清除该平台的错误
+        savePlatformConfig(config, for: .zenmux)
+        AppLogger.logConfigChange(platform: "ZenMux", action: "保存配置")
         errorMessages[.zenmux] = nil
-
-        // 刷新用量
         refresh()
     }
 
     func loadZenMuxConfig() -> ZenMuxConfig? {
-        return KeychainHelper.shared.readIfPresent(ZenMuxConfig.self, for: Constants.zenmuxConfigKey)
+        guard let data = loadAllConfigs()[PlatformType.zenmux.rawValue] else { return nil }
+        return try? JSONDecoder().decode(ZenMuxConfig.self, from: data)
     }
 
     func clearConfig(for platform: PlatformType) {
-        switch platform {
-        case .bailian:
-            try? KeychainHelper.shared.delete(Constants.bailianConfigKey)
-            providers[.bailian] = nil
-            platforms[.bailian] = nil
-            errorMessages[.bailian] = nil
-            AppLogger.logConfigChange(platform: "百炼", action: "清除配置")
-        case .zenmux:
-            try? KeychainHelper.shared.delete(Constants.zenmuxConfigKey)
-            providers[.zenmux] = nil
-            platforms[.zenmux] = nil
-            errorMessages[.zenmux] = nil
-            AppLogger.logConfigChange(platform: "ZenMux", action: "清除配置")
+        removePlatformConfig(for: platform)
+        providers[platform] = nil
+        platforms[platform] = nil
+        errorMessages[platform] = nil
+        AppLogger.logConfigChange(platform: platform.shortName, action: "清除配置")
+    }
+
+    // MARK: - 启用配置
+
+    private func saveEnabledConfig() {
+        var data: [String: Bool] = [:]
+        for (platform, enabled) in enabledPlatforms {
+            data[platform.rawValue] = enabled
+        }
+        UserDefaults.standard.set(data, forKey: Constants.enabledPlatformsKey)
+    }
+
+    private func loadEnabledConfig() {
+        if let data = UserDefaults.standard.dictionary(forKey: Constants.enabledPlatformsKey) as? [String: Bool] {
+            for (platformRaw, enabled) in data {
+                if let platform = PlatformType.allCases.first(where: { $0.rawValue == platformRaw }) {
+                    enabledPlatforms[platform] = enabled
+                }
+            }
         }
     }
 
     // MARK: - 显示配置
 
+    /// 获取平台的显示 key 列表，未配置时返回该平台所有 item key
+    func displayKeys(for platform: PlatformType) -> [String] {
+        if let keys = displayTypes[platform], !keys.isEmpty {
+            return keys
+        }
+        return platforms[platform]?.items.map(\.key) ?? []
+    }
+
     private func saveDisplayConfig() {
-        let data = displayTypes.mapValues { types in
-            types.map { $0.rawValue }
+        var data: [String: [String]] = [:]
+        for (platform, keys) in displayTypes {
+            data[platform.rawValue] = keys
         }
         UserDefaults.standard.set(data, forKey: Constants.displayTypesKey)
     }
 
     private func loadDisplayConfig() {
         if let data = UserDefaults.standard.dictionary(forKey: Constants.displayTypesKey) as? [String: [String]] {
-            for (platformRaw, typesRaw) in data {
+            for (platformRaw, keys) in data {
                 if let platform = PlatformType.allCases.first(where: { $0.rawValue == platformRaw }) {
-                    let types = typesRaw.compactMap { UsageDisplayType(rawValue: $0) }
-                    if !types.isEmpty {
-                        displayTypes[platform] = types
+                    if !keys.isEmpty {
+                        displayTypes[platform] = keys
                     }
                 }
             }
         }
     }
 
-    func toggleDisplayType(_ type: UsageDisplayType, for platform: PlatformType) {
-        if var types = displayTypes[platform] {
-            if types.contains(type) {
-                types.removeAll { $0 == type }
-                if !types.isEmpty {
-                    displayTypes[platform] = types
+    func toggleDisplayType(_ key: String, for platform: PlatformType) {
+        var keys = displayTypes[platform] ?? platforms[platform]?.items.map(\.key) ?? []
+        if keys.contains(key) {
+            keys.removeAll { $0 == key }
+        } else {
+            keys.append(key)
+        }
+        if keys.isEmpty {
+            keys = platforms[platform]?.items.map(\.key) ?? []
+        }
+        displayTypes[platform] = keys
+    }
+
+    // MARK: - 重置时间配置
+
+    func isResetTimeEnabled(_ key: String, for platform: PlatformType) -> Bool {
+        resetTimeKeys[platform]?.contains(key) == true
+    }
+
+    func toggleResetTime(_ key: String, for platform: PlatformType) {
+        var keys = resetTimeKeys[platform] ?? []
+        if keys.contains(key) {
+            keys.removeAll { $0 == key }
+        } else {
+            keys.append(key)
+        }
+        resetTimeKeys[platform] = keys
+    }
+
+    private func saveResetTimeConfig() {
+        var data: [String: [String]] = [:]
+        for (platform, keys) in resetTimeKeys {
+            data[platform.rawValue] = keys
+        }
+        UserDefaults.standard.set(data, forKey: Constants.resetTimeKeysKey)
+    }
+
+    private func loadResetTimeConfig() {
+        if let data = UserDefaults.standard.dictionary(forKey: Constants.resetTimeKeysKey) as? [String: [String]] {
+            for (platformRaw, keys) in data {
+                if let platform = PlatformType.allCases.first(where: { $0.rawValue == platformRaw }) {
+                    resetTimeKeys[platform] = keys
                 }
-            } else {
-                types.append(type)
-                displayTypes[platform] = types
             }
         }
     }
@@ -237,11 +298,12 @@ class UsageTracker: ObservableObject {
         }
 
         for (platform, provider) in providers {
-            guard provider.isConfigured else { continue }
+            guard isPlatformEnabled(platform) else { continue }
             do {
                 let usage = try await provider.fetchUsage()
                 platforms[platform] = usage
-                AppLogger.logUsageUpdate(platform: platform.shortName, used: usage.used, total: usage.total)
+                let firstItem = usage.items.first
+                AppLogger.logUsageUpdate(platform: platform.shortName, used: firstItem?.used ?? 0, total: firstItem?.total ?? 0)
             } catch let err as PlatformError {
                 errorMessages[platform] = err.errorDescription
                 AppLogger.logError(err)
@@ -266,19 +328,24 @@ class UsageTracker: ObservableObject {
     private func saveToStorage() {
         var data: [String: [String: Any]] = [:]
         for (platform, usage) in platforms {
+            let itemsArray = usage.items.map { item -> [String: Any] in
+                [
+                    "key": item.key,
+                    "label": item.label,
+                    "used": item.used,
+                    "total": item.total,
+                    "unit": item.unit,
+                    "resetDate": item.resetDate,
+                ]
+            }
+            let extraArray = usage.extraInfo.map { info -> [String: String] in
+                ["label": info.label, "value": info.value]
+            }
             data[platform.rawValue] = [
-                "used": usage.used,
-                "total": usage.total,
-                "unit": usage.unit,
-                "resetDate": usage.resetDate,
-                "planType": usage.planType,
                 "platformName": usage.platformName,
-                "used5Hour": usage.used5Hour,
-                "total5Hour": usage.total5Hour,
-                "resetDate5Hour": usage.resetDate5Hour,
-                "usedWeek": usage.usedWeek,
-                "totalWeek": usage.totalWeek,
-                "resetDateWeek": usage.resetDateWeek
+                "planType": usage.planType,
+                "items": itemsArray,
+                "extraInfo": extraArray,
             ]
         }
         UserDefaults.standard.set(data, forKey: Constants.usageCacheKey)
@@ -289,37 +356,40 @@ class UsageTracker: ObservableObject {
             return
         }
 
-        for (platformName, usageData) in data {
-            guard let platform = PlatformType.allCases.first(where: { $0.rawValue == platformName }),
+        for (platformRaw, usageData) in data {
+            guard let platform = PlatformType.allCases.first(where: { $0.rawValue == platformRaw }),
                   let dict = usageData as? [String: Any],
-                  let used = dict["used"] as? Int,
-                  let total = dict["total"] as? Int,
-                  let unit = dict["unit"] as? String,
-                  let resetDate = dict["resetDate"] as? Date,
+                  let platformName = dict["platformName"] as? String,
                   let planType = dict["planType"] as? String,
-                  let platformNameValue = dict["platformName"] as? String,
-                  let used5Hour = dict["used5Hour"] as? Int,
-                  let total5Hour = dict["total5Hour"] as? Int,
-                  let resetDate5Hour = dict["resetDate5Hour"] as? Date,
-                  let usedWeek = dict["usedWeek"] as? Int,
-                  let totalWeek = dict["totalWeek"] as? Int,
-                  let resetDateWeek = dict["resetDateWeek"] as? Date else {
+                  let itemsArray = dict["items"] as? [[String: Any]] else {
                 continue
             }
 
-            platforms[platform] = PlatformUsage(
-                used: used,
-                total: total,
-                unit: unit,
-                resetDate: resetDate,
+            let items = itemsArray.compactMap { itemDict -> UsageItem? in
+                guard let key = itemDict["key"] as? String,
+                      let label = itemDict["label"] as? String,
+                      let used = itemDict["used"] as? Int,
+                      let total = itemDict["total"] as? Int,
+                      let unit = itemDict["unit"] as? String,
+                      let resetDate = itemDict["resetDate"] as? Date else {
+                    return nil
+                }
+                return UsageItem(key: key, label: label, used: used, total: total, unit: unit, resetDate: resetDate)
+            }
+
+            var extraInfo: [(label: String, value: String)] = []
+            if let extraArray = dict["extraInfo"] as? [[String: String]] {
+                extraInfo = extraArray.compactMap { d in
+                    guard let label = d["label"], let value = d["value"] else { return nil }
+                    return (label: label, value: value)
+                }
+            }
+
+            platforms[platform] = PlatformUsageData(
+                platformName: platformName,
                 planType: planType,
-                platformName: platformNameValue,
-                used5Hour: used5Hour,
-                total5Hour: total5Hour,
-                resetDate5Hour: resetDate5Hour,
-                usedWeek: usedWeek,
-                totalWeek: totalWeek,
-                resetDateWeek: resetDateWeek
+                items: items,
+                extraInfo: extraInfo
             )
         }
     }

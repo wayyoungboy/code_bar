@@ -16,17 +16,14 @@ struct MenuBarView: View {
 
             // 用量显示 - 显示所有已配置的平台
             if tracker.hasAnyConfig {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ForEach(PlatformType.allCases) { platform in
-                            if let provider = tracker.providers[platform], provider.isConfigured,
-                               let usage = tracker.platforms[platform] {
-                                platformUsageCard(platform: platform, usage: usage, error: tracker.errorMessages[platform])
-                            }
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(PlatformType.allCases) { platform in
+                        if let provider = tracker.providers[platform], provider.isConfigured,
+                           let usage = tracker.platforms[platform] {
+                            platformUsageCard(platform: platform, usage: usage, error: tracker.errorMessages[platform])
                         }
                     }
                 }
-                .frame(maxHeight: Constants.popoverMaxHeight)
             } else if !hasLoadedOnce {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -104,8 +101,9 @@ struct MenuBarView: View {
     // MARK: - 平台用量卡片
 
     @ViewBuilder
-    private func platformUsageCard(platform: PlatformType, usage: PlatformUsage, error: String?) -> some View {
-        let displayTypes = tracker.displayTypes[platform] ?? [.billMonth, .fiveHour, .week]
+    private func platformUsageCard(platform: PlatformType, usage: PlatformUsageData, error: String?) -> some View {
+        let activeKeys = tracker.displayKeys(for: platform)
+        let visibleItems = usage.items.filter { activeKeys.contains($0.key) }
 
         VStack(alignment: .leading, spacing: 10) {
             // 平台名称
@@ -122,37 +120,35 @@ struct MenuBarView: View {
             }
 
             // 根据配置显示对应的用量
-            ForEach(displayTypes, id: \.self) { type in
-                switch type {
-                case .billMonth:
-                    usageRow(
-                        label: "账单月",
-                        used: usage.used,
-                        total: usage.total,
-                        unit: usage.unit,
-                        percent: usage.usagePercent
-                    )
-                case .fiveHour:
-                    usageRow(
-                        label: "5小时",
-                        used: usage.used5Hour,
-                        total: usage.total5Hour,
-                        unit: usage.unit,
-                        percent: usage.used5HourPercent
-                    )
-                case .week:
-                    usageRow(
-                        label: "周",
-                        used: usage.usedWeek,
-                        total: usage.totalWeek,
-                        unit: usage.unit,
-                        percent: usage.usedWeekPercent
-                    )
+            ForEach(visibleItems, id: \.key) { item in
+                usageRow(
+                    label: item.label,
+                    used: item.used,
+                    total: item.total,
+                    unit: item.unit,
+                    percent: item.percent,
+                    resetDate: item.resetDate
+                )
+            }
+
+            // 额外信息
+            if !usage.extraInfo.isEmpty {
+                Divider()
+                ForEach(Array(usage.extraInfo.enumerated()), id: \.offset) { _, info in
+                    HStack {
+                        Text(info.label)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(info.value)
+                            .font(.system(size: 10))
+                            .fontWeight(.medium)
+                    }
                 }
             }
 
             // 低用量警告
-            if usage.usagePercent > 80 {
+            if visibleItems.contains(where: { $0.percent > 80 }) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.yellow)
@@ -181,7 +177,7 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder
-    private func usageRow(label: String, used: Int, total: Int, unit: String, percent: Double) -> some View {
+    private func usageRow(label: String, used: Int, total: Int, unit: String, percent: Double, resetDate: Date? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(label)
@@ -203,6 +199,16 @@ struct MenuBarView: View {
                 }
             }
             .frame(height: 6)
+
+            if let resetDate = resetDate {
+                HStack {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 9))
+                    Text("\(resetDate, style: .relative)后重置")
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(.secondary)
+            }
         }
     }
 

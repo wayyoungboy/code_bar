@@ -39,14 +39,13 @@ struct SettingsWindowView: View {
                             .font(.headline)
                         Spacer()
                         if tracker.providers[.bailian]?.isConfigured == true {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("已配置")
-                                .font(.caption)
-                                .foregroundColor(.green)
+                            Toggle("启用", isOn: Binding(
+                                get: { tracker.isPlatformEnabled(.bailian) },
+                                set: { tracker.enabledPlatforms[.bailian] = $0 }
+                            ))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
                         } else {
-                            Image(systemName: "circle")
-                                .foregroundColor(.gray)
                             Text("未配置")
                                 .font(.caption)
                                 .foregroundColor(.gray)
@@ -76,14 +75,13 @@ struct SettingsWindowView: View {
                             .font(.headline)
                         Spacer()
                         if tracker.providers[.zenmux]?.isConfigured == true {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("已配置")
-                                .font(.caption)
-                                .foregroundColor(.green)
+                            Toggle("启用", isOn: Binding(
+                                get: { tracker.isPlatformEnabled(.zenmux) },
+                                set: { tracker.enabledPlatforms[.zenmux] = $0 }
+                            ))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
                         } else {
-                            Image(systemName: "circle")
-                                .foregroundColor(.gray)
                             Text("未配置")
                                 .font(.caption)
                                 .foregroundColor(.gray)
@@ -103,7 +101,6 @@ struct SettingsWindowView: View {
                 .background(Color.purple.opacity(0.06))
                 .cornerRadius(10)
 
-                // 提示
                 if tracker.configuredPlatforms.count > 1 {
                     HStack {
                         Image(systemName: "arrow.left.arrow.right")
@@ -142,23 +139,45 @@ struct SettingsWindowView: View {
     // MARK: - 显示类型选择
     @ViewBuilder
     private func displayTypeSelection(for platform: PlatformType) -> some View {
+        let items = tracker.platforms[platform]?.items ?? []
+
         VStack(alignment: .leading, spacing: 8) {
             Text("展示内容")
                 .font(.subheadline)
                 .fontWeight(.medium)
 
-            HStack(spacing: 12) {
-                ForEach(UsageDisplayType.allCases) { type in
-                    Toggle(isOn: Binding(
-                        get: { tracker.displayTypes[platform]?.contains(type) ?? false },
-                        set: { _ in
-                            tracker.toggleDisplayType(type, for: platform)
+            if items.isEmpty {
+                Text("暂无数据，请先刷新")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                HStack(spacing: 12) {
+                    ForEach(items, id: \.key) { item in
+                        Toggle(isOn: Binding(
+                            get: { tracker.displayKeys(for: platform).contains(item.key) },
+                            set: { _ in
+                                tracker.toggleDisplayType(item.key, for: platform)
+                            }
+                        )) {
+                            Text(item.label)
+                                .font(.caption)
                         }
-                    )) {
-                        Text(type.rawValue)
-                            .font(.caption)
+                        .toggleStyle(.checkbox)
                     }
-                    .toggleStyle(.checkbox)
+                }
+                HStack(spacing: 12) {
+                    ForEach(items, id: \.key) { item in
+                        Toggle(isOn: Binding(
+                            get: { tracker.isResetTimeEnabled(item.key, for: platform) },
+                            set: { _ in
+                                tracker.toggleResetTime(item.key, for: platform)
+                            }
+                        )) {
+                            Text("\(item.label)重置")
+                                .font(.caption)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
                 }
             }
         }
@@ -305,11 +324,26 @@ struct HelpWindowView: View {
 
     private var zenMuxHelpSteps: some View {
         Group {
-            HelpStepView(number: 1, title: "登录 ZenMux", description: "访问 https://zenmux.ai 并使用您的账号登录", icon: "person.circle")
-            HelpStepView(number: 2, title: "进入 Settings", description: "点击右上角的 Settings 进入设置页面", icon: "gear")
-            HelpStepView(number: 3, title: "找到 API Keys", description: "在设置页面中找到 API Keys 部分", icon: "key")
+            HelpStepView(number: 1, title: "打开管理页面", description: "点击下方链接跳转到 ZenMux 平台管理页面", icon: "link")
+            Button(action: {
+                if let url = URL(string: "https://zenmux.ai/platform/management") {
+                    NSWorkspace.shared.open(url)
+                }
+            }) {
+                HStack {
+                    Image(systemName: "arrow.up.right.square")
+                    Text("https://zenmux.ai/platform/management")
+                        .underline()
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.accentColor)
+            .padding(.leading, 48)
+            HelpStepView(number: 2, title: "登录账号", description: "使用您的 ZenMux 账号登录", icon: "person.circle")
+            HelpStepView(number: 3, title: "找到 API Keys", description: "在管理页面中找到 API Keys 部分", icon: "key")
             HelpStepView(number: 4, title: "复制 Management Key", description: "复制 Management API Key（不是标准 API Key）", icon: "doc.on.clipboard")
-            HelpStepView(number: 5, title: "重要提示", description: "⚠️ 必须使用 Management API Key，标准 API Key 不支持此功能", icon: "exclamationmark.triangle")
+            HelpStepView(number: 5, title: "重要提示", description: "必须使用 Management API Key，标准 API Key 不支持此功能", icon: "exclamationmark.triangle")
         }
     }
 }

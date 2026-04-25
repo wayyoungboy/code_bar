@@ -4,24 +4,27 @@
 
 ## 支持平台
 
-- **阿里云百炼** — 监控 Coding Plan 用量（账单周期、5 小时、周）
-- **ZenMux** — 监控 Flow 用量（月度、7 天、5 小时）
+- **阿里云百炼** — 监控 Coding Plan 用量（账单月、5 小时、周）
+- **ZenMux** — 监控 Flow 用量（5 小时、7 天），含订阅详情和费用信息
 
 想支持更多平台？欢迎提交 PR！
 
 ## 功能特性
 
 - 菜单栏实时显示多平台用量百分比
-- 支持多个周期用量查看（账单周期、5 小时周期、周周期）
+- 弹窗自适应大小，完整展示各平台详细信息
+- 每个配额周期可独立选择是否展示在菜单栏
+- 每个配额周期可独立选择是否展示剩余重置时间
+- 每个平台可独立启用/禁用
+- ZenMux 展示完整订阅信息（套餐、费用、单价、到期时间等）
 - 低用量时发出提醒
 - 多平台自动轮播显示（每 5 秒切换）
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
-- 每个平台可自定义展示类型
-- 本地 Keychain 存储认证凭据
+- 统一 Keychain 存储，启动仅需一次授权
 
 ## 截图
 
-![CodeBar Screenshot](screenshots/image.png)
+![CodeBar Screenshot](screenshots/image3.png)
 
 ## 系统要求
 
@@ -66,6 +69,7 @@ open CodeBar.xcodeproj
 1. 运行应用后，点击菜单栏的 "CodeBar" 图标
 2. 点击设置按钮（齿轮图标）
 3. 配置您需要的平台凭据（百炼和/或 ZenMux）
+4. 勾选需要在菜单栏展示的配额周期和重置时间
 
 ### 获取百炼凭据
 
@@ -90,16 +94,13 @@ open CodeBar.xcodeproj
 ### 获取 ZenMux API Key
 
 1. **登录 ZenMux**
-   - 访问 https://zenmux.ai 并登录
+   - 访问 [ZenMux 管理页面](https://zenmux.ai/platform/management) 并登录
 
-2. **进入设置页面**
-   - 点击右上角的 Settings 图标
+2. **找到 API Keys 部分**
+   - 在管理页面中定位到 API Keys
 
-3. **找到 API Keys 部分**
-   - 在设置页面中定位到 API Keys
-
-4. **复制 Management API Key**
-   - ⚠️ 必须使用 Management API Key，标准 API Key 不支持
+3. **复制 Management API Key**
+   - 必须使用 Management API Key，标准 API Key 不支持
 
 ### 配置凭据
 
@@ -113,24 +114,25 @@ open CodeBar.xcodeproj
 #### ZenMux
 
 在设置界面中填入：
-- **Management API Key**: 从 ZenMux 设置页面复制的 Management API Key
-- ⚠️ 仅支持 Management API Key，标准 API Key 无效
+- **Management API Key**: 从 ZenMux 管理页面复制的 Management API Key
+- 仅支持 Management API Key，标准 API Key 无效
 
 ## 项目结构
 
 ```
 code_bar/
 ├── CodeBar/
-│   ├── CodeBarApp.swift          # 应用入口
-│   ├── MenuBarView.swift         # 菜单栏 UI 和设置界面
-│   ├── SettingsWindow.swift      # 设置窗口（含帮助）
-│   ├── UsageTracker.swift        # 多平台用量追踪器
+│   ├── CodeBarApp.swift          # 应用入口、菜单栏和弹窗管理
+│   ├── MenuBarView.swift         # 弹窗 UI（用量卡片、进度条、额外信息）
+│   ├── SettingsWindow.swift      # 设置窗口（凭据配置、展示选项、帮助）
+│   ├── UsageTracker.swift        # 多平台用量追踪器（配置、刷新、存储）
 │   ├── Constants.swift           # 应用常量配置
+│   ├── KeychainHelper.swift      # Keychain 安全存储封装
+│   ├── AppLogger.swift           # 日志工具
 │   └── Providers/
-│       ├── PlatformProvider.swift# 平台协议定义
-│       ├── BailianProvider.swift # 阿里云百炼 API 提供者
-│       └── ZenMuxProvider.swift  # ZenMux API 提供者
-├── dev_doc/                       # 开发文档（未提交到仓库）
+│       ├── PlatformProvider.swift # 平台协议和数据模型（UsageItem、PlatformUsageData）
+│       ├── BailianProvider.swift  # 阿里云百炼 API 提供者
+│       └── ZenMuxProvider.swift   # ZenMux API 提供者
 └── README.md                      # 本文件
 ```
 
@@ -139,8 +141,11 @@ code_bar/
 ### 添加新平台
 
 1. 在 `PlatformType` 枚举中添加新平台
-2. 创建新的 Provider 实现 `PlatformProvider` 协议
+2. 创建新的 Provider 实现 `PlatformProvider` 协议，返回 `PlatformUsageData`
 3. 在 `UsageTracker` 中注册新的 Provider
+4. 在 `SettingsWindow` 中添加配置表单
+
+每个 Provider 可自由定义自己的配额项（`UsageItem`）和额外信息（`extraInfo`），UI 会动态渲染。
 
 ### 调试
 
@@ -150,7 +155,7 @@ code_bar/
 
 ## 安全性
 
-- 所有凭据存储在 Keychain（macOS 安全存储）
+- 所有平台凭据统一存储在单个 Keychain 条目中，启动仅需一次授权
 - 不会上传或分享任何凭据信息
 - 仅用于本地 API 请求
 

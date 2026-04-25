@@ -18,10 +18,7 @@ struct Constants {
 
     // MARK: - UI 尺寸
     /// 弹出窗口宽度
-    static let popoverWidth: CGFloat = 360
-
-    /// 弹出窗口内容最大高度
-    static let popoverMaxHeight: CGFloat = 450
+    static let popoverWidth: CGFloat = 420
 
     /// 设置窗口宽度
     static let settingsWindowWidth: CGFloat = 520
@@ -36,17 +33,8 @@ struct Constants {
     static let helpWindowHeight: CGFloat = 400
 
     // MARK: - Keychain 键名
-    /// Bailian 配置存储键
-    static let bailianConfigKey = "BailianConfig"
-
-    /// ZenMux 配置存储键
-    static let zenmuxConfigKey = "ZenMuxConfig"
-
-    /// 旧版 UserDefaults Bailian 键（用于迁移）
-    static let legacyBailianConfigKey = "BailianConfig"
-
-    /// 旧版 UserDefaults ZenMux 键（用于迁移）
-    static let legacyZenmuxConfigKey = "ZenMuxConfig"
+    /// 统一平台配置存储键（所有平台共用一个条目）
+    static let platformConfigsKey = "PlatformConfigs"
 
     // MARK: - 其他键名
     /// 用量数据缓存键
@@ -54,4 +42,10 @@ struct Constants {
 
     /// 显示类型配置键
     static let displayTypesKey = "PlatformDisplayTypes"
+
+    /// 平台启用状态键
+    static let enabledPlatformsKey = "PlatformEnabled"
+
+    /// 重置时间显示配置键
+    static let resetTimeKeysKey = "PlatformResetTimeKeys"
 }

@@ -14,7 +14,7 @@ struct ZenMuxProvider: PlatformProvider {
         config.isValid
     }
 
-    func fetchUsage() async throws -> PlatformUsage {
+    func fetchUsage() async throws -> PlatformUsageData {
         guard let url = URL(string: "\(baseURL)/subscription/detail") else {
             throw PlatformError.unknown("无效的 URL")
         }
@@ -58,78 +58,64 @@ struct ZenMuxProvider: PlatformProvider {
         // 解析配额信息
         guard let quota5Hour = responseData["quota_5_hour"] as? [String: Any],
               let quota7Day = responseData["quota_7_day"] as? [String: Any],
-              let quotaMonthly = responseData["quota_monthly"] as? [String: Any],
               let planInfo = responseData["plan"] as? [String: Any] else {
             AppLogger.logParseError(message: "配额数据缺失")
             throw PlatformError.unknown("配额数据缺失")
         }
 
-        // 提取月度配额
-        let totalMonthly = quotaMonthly["max_flows"] as? Int ?? 0
-        let usedMonthlyRaw = quotaMonthly["used_flows"] as? Double ?? 0
-
-        // 提取 5 小时配额
-        let used5HourRaw = quota5Hour["used_flows"] as? Double ?? 0
+        // 5 小时配额
         let total5Hour = quota5Hour["max_flows"] as? Int ?? 0
+        let used5Hour = Int(quota5Hour["used_flows"] as? Double ?? 0)
         let reset5HourStr = quota5Hour["resets_at"] as? String ?? ""
-
-        // 提取 7 天配额
-        let used7DayRaw = quota7Day["used_flows"] as? Double ?? 0
-        let total7Day = quota7Day["max_flows"] as? Int ?? 0
-        let reset7DayStr = quota7Day["resets_at"] as? String ?? ""
-
-        // API 返回的 usage_percentage
-        let usage5HourPercent = quota5Hour["usage_percentage"] as? Double ?? 0
-        let usage7DayPercent = quota7Day["usage_percentage"] as? Double ?? 0
-
-        // 计算已用量
-        let used5Hour: Int
-        if used5HourRaw > 0 {
-            used5Hour = Int(used5HourRaw)
-        } else if usage5HourPercent > 0, total5Hour > 0 {
-            used5Hour = Int(Double(total5Hour) * usage5HourPercent)
-        } else {
-            used5Hour = 0
-        }
-
-        let used7Day: Int
-        if used7DayRaw > 0 {
-            used7Day = Int(used7DayRaw)
-        } else if usage7DayPercent > 0, total7Day > 0 {
-            used7Day = Int(Double(total7Day) * usage7DayPercent)
-        } else {
-            used7Day = 0
-        }
-
-        // 月度已用
-        let usedMonthly: Int
-        if usedMonthlyRaw > 0 {
-            usedMonthly = Int(usedMonthlyRaw)
-        } else {
-            usedMonthly = used7Day
-        }
-
-        // 解析时间
-        let resetDate = Date().addingTimeInterval(30 * 24 * 3600)
         let resetDate5Hour = parseISODate(reset5HourStr) ?? Date().addingTimeInterval(5 * 3600)
+
+        // 7 天配额
+        let total7Day = quota7Day["max_flows"] as? Int ?? 0
+        let used7Day = Int(quota7Day["used_flows"] as? Double ?? 0)
+        let reset7DayStr = quota7Day["resets_at"] as? String ?? ""
         let resetDate7Day = parseISODate(reset7DayStr) ?? Date().addingTimeInterval(7 * 24 * 3600)
 
-        // 计划类型
         let planType = planInfo["tier"] as? String ?? "Unknown"
+        let planAmount = planInfo["amount_usd"] as? Double ?? 0
+        let planInterval = planInfo["interval"] as? String ?? ""
+        let expiresAtStr = planInfo["expires_at"] as? String ?? ""
 
-        return PlatformUsage(
-            used: usedMonthly,
-            total: totalMonthly,
-            unit: "flows",
-            resetDate: resetDate,
-            planType: planType.capitalized,
+        let accountStatus = responseData["account_status"] as? String ?? ""
+        let baseUsdPerFlow = responseData["base_usd_per_flow"] as? Double ?? 0
+        let effectiveUsdPerFlow = responseData["effective_usd_per_flow"] as? Double ?? 0
+
+        let used5HourUsd = quota5Hour["used_value_usd"] as? Double ?? 0
+        let max5HourUsd = quota5Hour["max_value_usd"] as? Double ?? 0
+        let used7DayUsd = quota7Day["used_value_usd"] as? Double ?? 0
+        let max7DayUsd = quota7Day["max_value_usd"] as? Double ?? 0
+
+        let monthlyMaxFlows = (responseData["quota_monthly"] as? [String: Any])?["max_flows"] as? Int ?? 0
+        let monthlyMaxUsd = (responseData["quota_monthly"] as? [String: Any])?["max_value_usd"] as? Double ?? 0
+
+        var extra: [(label: String, value: String)] = []
+        extra.append((label: "账户状态", value: accountStatus))
+        extra.append((label: "套餐", value: "\(planType.capitalized) $\(String(format: "%.0f", planAmount))/\(planInterval)"))
+        if let expiresAt = parseISODate(expiresAtStr) {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            extra.append((label: "到期时间", value: fmt.string(from: expiresAt)))
+        }
+        extra.append((label: "单价", value: "$\(String(format: "%.4f", effectiveUsdPerFlow))/flow"))
+        if baseUsdPerFlow != effectiveUsdPerFlow {
+            extra.append((label: "原价", value: "$\(String(format: "%.4f", baseUsdPerFlow))/flow"))
+        }
+        extra.append((label: "5小时费用", value: "$\(String(format: "%.2f", used5HourUsd)) / $\(String(format: "%.2f", max5HourUsd))"))
+        extra.append((label: "7天费用", value: "$\(String(format: "%.2f", used7DayUsd)) / $\(String(format: "%.2f", max7DayUsd))"))
+        extra.append((label: "月配额", value: "\(monthlyMaxFlows) flows ($\(String(format: "%.2f", monthlyMaxUsd)))"))
+
+        return PlatformUsageData(
             platformName: platformName,
-            used5Hour: used5Hour,
-            total5Hour: total5Hour,
-            resetDate5Hour: resetDate5Hour,
-            usedWeek: used7Day,
-            totalWeek: total7Day,
-            resetDateWeek: resetDate7Day
+            planType: planType.capitalized,
+            items: [
+                UsageItem(key: "5hour", label: "5小时", used: used5Hour, total: total5Hour, unit: "flows", resetDate: resetDate5Hour),
+                UsageItem(key: "7day", label: "7天", used: used7Day, total: total7Day, unit: "flows", resetDate: resetDate7Day),
+            ],
+            extraInfo: extra
         )
     }
 

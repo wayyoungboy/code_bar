@@ -14,7 +14,7 @@ struct BailianProvider: PlatformProvider {
         config.isValid
     }
 
-    func fetchUsage() async throws -> PlatformUsage {
+    func fetchUsage() async throws -> PlatformUsageData {
         guard let url = URL(string: buildURL()) else {
             throw PlatformError.unknown("无效的 URL")
         }
@@ -102,19 +102,14 @@ struct BailianProvider: PlatformProvider {
             ? Date(timeIntervalSince1970: TimeInterval(resetTimeWeekMs / 1000))
             : Date().addingTimeInterval(7 * 24 * 3600)
 
-        return PlatformUsage(
-            used: used,
-            total: total,
-            unit: "tokens",
-            resetDate: resetTime,
-            planType: planType,
+        return PlatformUsageData(
             platformName: platformName,
-            used5Hour: used5Hour,
-            total5Hour: total5Hour,
-            resetDate5Hour: resetTime5Hour,
-            usedWeek: usedWeek,
-            totalWeek: totalWeek,
-            resetDateWeek: resetTimeWeek
+            planType: planType,
+            items: [
+                UsageItem(key: "billMonth", label: "账单月", used: used, total: total, unit: "tokens", resetDate: resetTime),
+                UsageItem(key: "5hour", label: "5小时", used: used5Hour, total: total5Hour, unit: "tokens", resetDate: resetTime5Hour),
+                UsageItem(key: "week", label: "周", used: usedWeek, total: totalWeek, unit: "tokens", resetDate: resetTimeWeek),
+            ]
         )
     }
 

@@ -47,9 +47,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 创建弹窗视图
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: Constants.popoverWidth, height: 300)
         popover?.behavior = .transient
-        popover?.contentViewController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared))
+        let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared))
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover?.contentViewController = hostingController
 
         // 初始加载用量信息
         UsageTracker.shared.refresh()
@@ -102,28 +103,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let displayTypes = tracker.displayTypes[platform] ?? [.billMonth]
+        let activeKeys = tracker.displayKeys(for: platform)
+        let visibleItems = usage.items.filter { activeKeys.contains($0.key) }
 
-        // 构建显示文本：平台名 + 各类型百分比
         var parts: [String] = [platform.shortName]
-
-        for type in displayTypes {
-            let (percent, label) = getUsageInfo(usage: usage, displayType: type)
-            parts.append("\(label)\(String(format: "%.0f%%", percent))")
+        for item in visibleItems {
+            var text = "\(item.label)\(String(format: "%.0f%%", item.percent))"
+            if tracker.isResetTimeEnabled(item.key, for: platform) {
+                let remaining = item.resetDate.timeIntervalSinceNow
+                if remaining > 0 {
+                    let hours = Int(remaining) / 3600
+                    let minutes = (Int(remaining) % 3600) / 60
+                    if hours > 0 {
+                        text += "(\(hours)h\(minutes)m)"
+                    } else {
+                        text += "(\(minutes)m)"
+                    }
+                }
+            }
+            parts.append(text)
         }
 
         statusItem?.button?.title = parts.joined(separator: " ")
-    }
-
-    private func getUsageInfo(usage: PlatformUsage, displayType: UsageDisplayType) -> (Double, String) {
-        switch displayType {
-        case .billMonth:
-            return (usage.usagePercent, "账单月")
-        case .fiveHour:
-            return (usage.used5HourPercent, "5小时")
-        case .week:
-            return (usage.usedWeekPercent, "周")
-        }
     }
 
     @objc func togglePopover() {

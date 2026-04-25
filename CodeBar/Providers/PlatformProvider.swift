@@ -24,43 +24,27 @@ enum PlatformError: LocalizedError {
     }
 }
 
-/// 平台用量数据
-struct PlatformUsage {
+/// 单个配额条目
+struct UsageItem {
+    let key: String
+    let label: String
     let used: Int
     let total: Int
     let unit: String
     let resetDate: Date
-    let planType: String
-    let platformName: String
 
-    // 5 小时周期用量
-    let used5Hour: Int
-    let total5Hour: Int
-    let resetDate5Hour: Date
-
-    // 周周期用量
-    let usedWeek: Int
-    let totalWeek: Int
-    let resetDateWeek: Date
-
-    var remaining: Int {
-        return total - used
-    }
-
-    var usagePercent: Double {
+    var percent: Double {
         guard total > 0 else { return 0 }
         return Double(used) / Double(total) * 100
     }
+}
 
-    var used5HourPercent: Double {
-        guard total5Hour > 0 else { return 0 }
-        return Double(used5Hour) / Double(total5Hour) * 100
-    }
-
-    var usedWeekPercent: Double {
-        guard totalWeek > 0 else { return 0 }
-        return Double(usedWeek) / Double(totalWeek) * 100
-    }
+/// 平台用量数据
+struct PlatformUsageData {
+    let platformName: String
+    let planType: String
+    let items: [UsageItem]
+    var extraInfo: [(label: String, value: String)] = []
 }
 
 /// 平台提供者协议
@@ -69,7 +53,7 @@ protocol PlatformProvider {
     var isConfigured: Bool { get }
 
     /// 获取用量信息
-    func fetchUsage() async throws -> PlatformUsage
+    func fetchUsage() async throws -> PlatformUsageData
 
     /// 验证配置是否有效
     func validateConfig() async throws -> Bool
