@@ -48,12 +48,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 创建弹窗视图
         popover = NSPopover()
         popover?.behavior = .transient
-        let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared))
+        let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
         hostingController.sizingOptions = [.preferredContentSize]
         popover?.contentViewController = hostingController
 
         // 初始加载用量信息
         UsageTracker.shared.refresh()
+
+        // 检查更新
+        Task { @MainActor in
+            await UpdateChecker.shared.checkForUpdate()
+        }
 
         // 监听显示设置窗口通知
         NotificationCenter.default.addObserver(

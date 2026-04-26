@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject var tracker: UsageTracker
+    @ObservedObject var updateChecker: UpdateChecker
     @State private var hasLoadedOnce = false
 
     var body: some View {
@@ -47,6 +48,25 @@ struct MenuBarView: View {
                         }
                     }
                 }
+            }
+
+            // 更新提示
+            if updateChecker.hasUpdate, let version = updateChecker.latestVersion {
+                HStack {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .foregroundColor(.orange)
+                    Text("新版本 \(version) 可用")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    Spacer()
+                    Button("前往更新") {
+                        updateChecker.openUpdatePage()
+                    }
+                    .font(.caption)
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(6)
             }
 
             Divider()
@@ -251,5 +271,5 @@ struct MenuBarView: View {
 }
 
 #Preview {
-    MenuBarView(tracker: UsageTracker.shared)
+    MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared)
 }
