@@ -27,11 +27,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var rotationTimer: Timer?
     private var currentPlatformIndex: Int = 0
 
-    nonisolated deinit {
-        Task { @MainActor in
-            rotationTimer?.invalidate()
-            rotationTimer = nil
-        }
+    deinit {
+        rotationTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
