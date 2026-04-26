@@ -62,6 +62,16 @@ open CodeBar.xcodeproj
 - **DMG 方式**: 双击打开 `CodeBar.dmg`，将 `CodeBar` 拖到 `Applications` 文件夹
 - **App 方式**: 将 `CodeBar.app` 拖到 `/Applications/` 目录
 
+### 从 Release 下载
+
+1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`
+2. 双击打开 DMG，将 CodeBar 拖到 Applications
+3. 首次打开如提示"已损坏"或"无法验证开发者"，在终端执行：
+```bash
+xattr -cr /Applications/CodeBar.app
+```
+这是因为应用未经 Apple 公证（notarization），属于正常现象。
+
 ## 使用方法
 
 ### 首次配置
