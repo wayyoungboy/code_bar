@@ -48,4 +48,14 @@ struct Constants {
 
     /// 重置时间显示配置键
     static let resetTimeKeysKey = "PlatformResetTimeKeys"
+
+    // MARK: - 通知
+    /// ZenMux 5 小时额度刷新通知缓存键
+    static let zenmuxNotice5Hour = "code_bar_zenmux_notice_time_5_hour"
+
+    /// ZenMux 7 天额度刷新通知缓存键
+    static let zenmuxNotice7Day = "code_bar_zenmux_notice_time_7_day"
+
+    /// ZenMux 通知功能启用状态键
+    static let zenmuxNoticeEnabledKey = "code_bar_zenmux_notice_enabled"
 }

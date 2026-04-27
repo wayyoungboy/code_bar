@@ -96,6 +96,12 @@ struct SettingsWindowView: View {
                         Divider()
                         displayTypeSelection(for: .zenmux)
                     }
+
+                    // 通知设置
+                    if tracker.providers[.zenmux]?.isConfigured == true {
+                        Divider()
+                        notificationSettingsView
+                    }
                 }
                 .padding(16)
                 .background(Color.purple.opacity(0.06))
@@ -133,6 +139,7 @@ struct SettingsWindowView: View {
             if let config = tracker.loadZenMuxConfig() {
                 zenMuxApiKey = config.apiKey
             }
+            tracker.checkNotificationPermission()
         }
     }
 
@@ -179,6 +186,51 @@ struct SettingsWindowView: View {
                         .toggleStyle(.checkbox)
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - 通知设置
+
+    private var notificationSettingsView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "bell.badge")
+                    .foregroundColor(.orange)
+                Text("额度刷新通知")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { tracker.isZenMuxNoticeEnabled },
+                    set: { tracker.isZenMuxNoticeEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+            }
+
+            HStack(spacing: 8) {
+                Image(systemName: tracker.notificationPermissionGranted ? "checkmark.shield.fill" : "xmark.shield.fill")
+                    .foregroundColor(tracker.notificationPermissionGranted ? .green : .red)
+                    .font(.caption)
+                Text(tracker.notificationPermissionGranted ? "通知权限已授权" : "通知权限未授权")
+                    .font(.caption)
+                    .foregroundColor(tracker.notificationPermissionGranted ? .green : .red)
+
+                if !tracker.notificationPermissionGranted {
+                    Button("请求权限") {
+                        tracker.requestNotificationPermission()
+                    }
+                    .font(.caption)
+                }
+
+                Spacer()
+
+                Button("发送测试通知") {
+                    tracker.sendTestNotice()
+                }
+                .font(.caption)
+                .disabled(!tracker.notificationPermissionGranted)
             }
         }
     }

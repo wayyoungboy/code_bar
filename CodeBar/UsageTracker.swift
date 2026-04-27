@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UserNotifications
 
 /// 支持的 platform 类型
 enum PlatformType: String, CaseIterable, Identifiable {
@@ -32,10 +33,21 @@ enum PlatformType: String, CaseIterable, Identifiable {
 class UsageTracker: ObservableObject {
     static let shared = UsageTracker()
 
+    private class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+        func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                    willPresent notification: UNNotification,
+                                    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+            completionHandler([.banner, .sound])
+        }
+    }
+
+    private let notificationDelegate = NotificationDelegate()
+
     @Published var platforms: [PlatformType: PlatformUsageData] = [:]
     @Published var errorMessages: [PlatformType: String] = [:]
     @Published var isLoading: Bool = false
     @Published var lastRefreshDate: Date = Date()
+    @Published var notificationPermissionGranted: Bool = false
 
     // 每个平台的启用状态
     @Published var enabledPlatforms: [PlatformType: Bool] = [:] {
@@ -87,7 +99,14 @@ class UsageTracker: ObservableObject {
         errorMessages.values.first
     }
 
+    /// ZenMux 通知功能是否启用
+    var isZenMuxNoticeEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: Constants.zenmuxNoticeEnabledKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: Constants.zenmuxNoticeEnabledKey) }
+    }
+
     init() {
+        UNUserNotificationCenter.current().delegate = notificationDelegate
         loadConfig()
         loadEnabledConfig()
         loadResetTimeConfig()
@@ -302,6 +321,9 @@ class UsageTracker: ObservableObject {
             do {
                 let usage = try await provider.fetchUsage()
                 platforms[platform] = usage
+                if platform == .zenmux && isZenMuxNoticeEnabled {
+                    checkZenMuxRefreshNotices(usage: usage)
+                }
                 let firstItem = usage.items.first
                 AppLogger.logUsageUpdate(platform: platform.shortName, used: firstItem?.used ?? 0, total: firstItem?.total ?? 0)
             } catch let err as PlatformError {
@@ -391,6 +413,103 @@ class UsageTracker: ObservableObject {
                 items: items,
                 extraInfo: extraInfo
             )
+        }
+    }
+
+    // MARK: - 通知
+
+    func checkNotificationPermission() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.notificationPermissionGranted = settings.authorizationStatus == .authorized
+            }
+        }
+    }
+
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            DispatchQueue.main.async {
+                self.notificationPermissionGranted = granted
+                if let error {
+                    AppLogger.logError(error)
+                }
+            }
+        }
+    }
+
+    func sendTestNotice() {
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
+            var authorized = settings.authorizationStatus == .authorized
+
+            if !authorized {
+                let granted = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+                authorized = granted == true
+                notificationPermissionGranted = authorized
+            }
+
+            guard authorized else {
+                AppLogger.general.info("通知权限未授权，无法发送测试通知")
+                return
+            }
+
+            sendNotice(title: "CodeBar 测试通知", body: "如果你看到这条消息，说明通知功能正常工作")
+        }
+    }
+
+    private func sendNotice(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                AppLogger.general.error("发送通知失败: \(error.localizedDescription)")
+            } else {
+                AppLogger.general.info("通知已发送: \(title)")
+            }
+        }
+    }
+
+    private func checkZenMuxRefreshNotices(usage: PlatformUsageData) {
+        for item in usage.items {
+            guard let cacheKey = noticeCacheKey(for: item.key) else { continue }
+            let newResetDate = item.resetDate
+
+            if let data = UserDefaults.standard.object(forKey: cacheKey) as? Date {
+                let oldResetDate = data
+                if abs(oldResetDate.timeIntervalSinceReferenceDate - newResetDate.timeIntervalSinceReferenceDate) < 1 {
+                    continue
+                }
+            }
+
+            let formatter = DateComponentsFormatter()
+            formatter.allowedUnits = [.hour, .minute]
+            formatter.unitsStyle = .abbreviated
+            let remaining = formatter.string(from: Date(), to: newResetDate) ?? ""
+
+            sendNotice(
+                title: "\(usage.platformName) 额度已刷新",
+                body: "\(item.label) 已重置，下次刷新在 \(remaining) 后"
+            )
+
+            UserDefaults.standard.set(newResetDate, forKey: cacheKey)
+        }
+    }
+
+    private func noticeCacheKey(for itemKey: String) -> String? {
+        switch itemKey {
+        case "5hour": return Constants.zenmuxNotice5Hour
+        case "7day": return Constants.zenmuxNotice7Day
+        default: return nil
         }
     }
 

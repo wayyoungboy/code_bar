@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct CodeBarApp: App {
@@ -48,6 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
         hostingController.sizingOptions = [.preferredContentSize]
         popover?.contentViewController = hostingController
+
+        // 请求通知权限
+        UsageTracker.shared.requestNotificationPermission()
 
         // 初始加载用量信息
         UsageTracker.shared.refresh()
