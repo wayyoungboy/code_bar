@@ -67,11 +67,12 @@ open CodeBar.xcodeproj
 
 1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`
 2. 双击打开 DMG，将 CodeBar 拖到 Applications
-3. 首次打开如提示"已损坏"或"无法验证开发者"，在终端执行：
-```bash
-xattr -cr /Applications/CodeBar.app
-```
-这是因为应用未经 Apple 公证（notarization），属于正常现象。
+3. 首次打开时 macOS 可能提示"无法验证开发者"或"已损坏"，这是因为 DMG 未经 Apple 公证，属于正常现象。解决方法：
+   - **方法一（推荐）**：打开「系统设置 → 隐私与安全性」，拉到最下方，点击「仍要打开」
+   - **方法二**：在终端执行以下命令移除隔离属性：
+   ```bash
+   xattr -cr /Applications/CodeBar.app
+   ```
 
 ## 使用方法
 
