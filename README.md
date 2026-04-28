@@ -18,6 +18,7 @@
 - 每个平台可独立启用/禁用
 - ZenMux 展示完整订阅信息（套餐、费用、单价、到期时间等）
 - 低用量时发出提醒
+- ZenMux 额度刷新通知（5 小时 / 7 天周期自动提醒）
 - 多平台自动轮播显示（每 5 秒切换）
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
 - 统一 Keychain 存储，启动仅需一次授权
@@ -112,6 +113,17 @@ xattr -cr /Applications/CodeBar.app
 3. **复制 Management API Key**
    - 必须使用 Management API Key，标准 API Key 不支持
 
+### ZenMux 额度刷新通知
+
+当 ZenMux 的 5 小时或 7 天额度周期刷新时，自动发送 macOS 系统通知。
+
+- **首次运行**或**额度周期切换时**触发通知
+- 同一周期内不会重复提醒
+- 在设置界面的 ZenMux 区域可开关通知功能
+- 支持"发送测试通知"按钮验证通知是否正常
+
+**首次使用**需要在 macOS 系统弹出的权限请求中点击"允许"。如已拒绝，可在设置中点击"请求权限"重新申请。
+
 ### 配置凭据
 
 #### 阿里云百炼
@@ -135,7 +147,7 @@ code_bar/
 │   ├── CodeBarApp.swift          # 应用入口、菜单栏和弹窗管理
 │   ├── MenuBarView.swift         # 弹窗 UI（用量卡片、进度条、额外信息）
 │   ├── SettingsWindow.swift      # 设置窗口（凭据配置、展示选项、帮助）
-│   ├── UsageTracker.swift        # 多平台用量追踪器（配置、刷新、存储）
+│   ├── UsageTracker.swift        # 多平台用量追踪器（配置、刷新、存储、通知）
 │   ├── Constants.swift           # 应用常量配置
 │   ├── KeychainHelper.swift      # Keychain 安全存储封装
 │   ├── AppLogger.swift           # 日志工具
