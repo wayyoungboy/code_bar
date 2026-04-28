@@ -123,6 +123,8 @@ open CodeBar.xcodeproj
 - 在设置界面的 ZenMux 区域可开关通知功能
 - 支持"发送测试通知"按钮验证通知是否正常
 
+![ZenMux 额度刷新通知](screenshots/image4.png)
+
 **首次使用**需要在 macOS 系统弹出的权限请求中点击"允许"。如已拒绝，可在设置中点击"请求权限"重新申请。
 
 ### 配置凭据

@@ -484,23 +484,27 @@ class UsageTracker: ObservableObject {
             guard let cacheKey = noticeCacheKey(for: item.key) else { continue }
             let newResetDate = item.resetDate
 
-            if let data = UserDefaults.standard.object(forKey: cacheKey) as? Date {
-                let oldResetDate = data
-                if abs(oldResetDate.timeIntervalSinceReferenceDate - newResetDate.timeIntervalSinceReferenceDate) < 1 {
-                    continue
-                }
+            // resetDate 变化超过 1 小时才算真正进入新周期
+            let isSignificantChange: Bool
+            if let oldResetDate = UserDefaults.standard.object(forKey: cacheKey) as? Date {
+                isSignificantChange = abs(oldResetDate.timeIntervalSince(newResetDate)) >= 3600
+            } else {
+                isSignificantChange = true
             }
 
-            let formatter = DateComponentsFormatter()
-            formatter.allowedUnits = [.hour, .minute]
-            formatter.unitsStyle = .abbreviated
-            let remaining = formatter.string(from: Date(), to: newResetDate) ?? ""
+            if isSignificantChange {
+                let formatter = DateComponentsFormatter()
+                formatter.allowedUnits = [.hour, .minute]
+                formatter.unitsStyle = .abbreviated
+                let remaining = formatter.string(from: Date(), to: newResetDate) ?? ""
 
-            sendNotice(
-                title: "\(usage.platformName) 额度已刷新",
-                body: "\(item.label) 已重置，下次刷新在 \(remaining) 后"
-            )
+                sendNotice(
+                    title: "\(usage.platformName) 额度已刷新",
+                    body: "\(item.label) 已重置，下次刷新在 \(remaining) 后"
+                )
+            }
 
+            // 缓存始终更新，保持最新状态
             UserDefaults.standard.set(newResetDate, forKey: cacheKey)
         }
     }
