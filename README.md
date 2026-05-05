@@ -6,6 +6,21 @@
 
 - **阿里云百炼** — 监控 Coding Plan 用量（账单月、5 小时、周）
 - **ZenMux** — 监控 Flow 用量（5 小时、7 天），含订阅详情和费用信息
+- **Claude Code** — GitHub OAuth 认证，Token 用量统计
+- **Cursor** — API Key 认证，Usage 统计
+- **GitHub Copilot** — Token 认证，Chat & PR 用量
+- **Windsurf** — Token 认证，Super Agent 用量
+- **Gemini CLI** — Google OAuth 认证，用量统计
+- **Codex** — GitHub OAuth 认证，Usage 统计
+- **Kimi Power** — Token 认证，用量统计
+- **OpenCode** — Token 认证，用量统计
+- **Z.ai** — Token 认证，用量统计
+- **Antigravity** — Token 认证，用量统计
+- **AMP** — Token 认证，用量统计
+- **MiniMax** — Token 认证，用量统计
+- **Perplexity** — Token 认证，用量统计
+- **Kiro** — AWS SSO 认证，用量统计
+- **JetBrains** — Token 认证，AI Assistant 用量
 
 想支持更多平台？欢迎提交 PR！
 
