@@ -101,6 +101,20 @@ final class KeychainHelper {
     func readIfPresent<T: Codable>(_ type: T.Type, for key: String) -> T? {
         try? read(type, for: key)
     }
+
+    /// 读取外部应用的 Keychain 条目（按 service 名查找）
+    static func readExternalItem(service: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
 }
 
 /// Keychain 错误类型

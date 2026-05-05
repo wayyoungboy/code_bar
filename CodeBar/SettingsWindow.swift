@@ -1,27 +1,25 @@
 import SwiftUI
 
-/// 独立的设置窗口
 struct SettingsWindowView: View {
     @ObservedObject var tracker: UsageTracker
     @State private var showBailianHelp = false
     @State private var showZenMuxHelp = false
 
-    // 百炼配置
+    // Bailian config
     @State private var cookies = ""
     @State private var secToken = ""
     @State private var region = "cn-beijing"
 
-    // ZenMux 配置
+    // ZenMux config
     @State private var zenMuxApiKey = ""
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // 说明
                 HStack {
                     Image(systemName: "info.circle")
                         .foregroundColor(.blue)
-                    Text("配置平台凭据，选择要展示的用量类型")
+                    Text("手动配置平台凭据，或自动检测已安装的 AI 工具")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -29,83 +27,75 @@ struct SettingsWindowView: View {
                 .background(Color.blue.opacity(0.08))
                 .cornerRadius(8)
 
-                // 百炼配置
-                VStack(alignment: .leading, spacing: 12) {
-                    // 标题和状态
-                    HStack {
-                        Image(systemName: "cloud.fill")
-                            .foregroundColor(.blue)
-                        Text("阿里云百炼")
-                            .font(.headline)
-                        Spacer()
-                        if tracker.providers[.bailian]?.isConfigured == true {
-                            Toggle("启用", isOn: Binding(
-                                get: { tracker.isPlatformEnabled(.bailian) },
-                                set: { tracker.enabledPlatforms[.bailian] = $0 }
-                            ))
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                        } else {
-                            Text("未配置")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
-                    }
-
-                    // 凭据配置
+                // Bailian config
+                manualConfigSection(
+                    platform: .bailian,
+                    icon: "cloud.fill",
+                    color: .blue
+                ) {
                     bailianConfigForm
-
-                    // 显示类型选择
-                    if tracker.providers[.bailian]?.isConfigured == true {
-                        Divider()
-                        displayTypeSelection(for: .bailian)
-                    }
                 }
-                .padding(16)
-                .background(Color.blue.opacity(0.06))
-                .cornerRadius(10)
 
-                // ZenMux 配置
-                VStack(alignment: .leading, spacing: 12) {
-                    // 标题和状态
+                // ZenMux config
+                manualConfigSection(
+                    platform: .zenmux,
+                    icon: "bolt.fill",
+                    color: .purple
+                ) {
+                    zenMuxConfigForm
+                }
+
+                // ZenMux notification settings
+                if tracker.providers[.zenmux]?.isConfigured == true {
+                    notificationSettingsView
+                        .padding(16)
+                        .background(Color.purple.opacity(0.06))
+                        .cornerRadius(10)
+                }
+
+                // 版本更新提醒
+                HStack {
+                    Image(systemName: "arrow.up.circle")
+                        .foregroundColor(.orange)
+                    Text("版本更新提醒")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { UpdateChecker.shared.isEnabled },
+                        set: { UpdateChecker.shared.isEnabled = $0 }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                }
+                .padding(12)
+                .background(Color.orange.opacity(0.06))
+                .cornerRadius(8)
+
+                // Auto-detect section header
+                VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Image(systemName: "bolt.fill")
-                            .foregroundColor(.purple)
-                        Text("ZenMux")
+                        Image(systemName: "magnifyingglass.circle.fill")
+                            .foregroundColor(.green)
+                        Text("自动检测的工具")
                             .font(.headline)
                         Spacer()
-                        if tracker.providers[.zenmux]?.isConfigured == true {
-                            Toggle("启用", isOn: Binding(
-                                get: { tracker.isPlatformEnabled(.zenmux) },
-                                set: { tracker.enabledPlatforms[.zenmux] = $0 }
-                            ))
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                        } else {
-                            Text("未配置")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                        Button("重新扫描") {
+                            tracker.rescanAutoDetectProviders()
                         }
+                        .font(.caption)
                     }
 
-                    // 凭据配置
-                    zenMuxConfigForm
-
-                    // 显示类型选择
-                    if tracker.providers[.zenmux]?.isConfigured == true {
-                        Divider()
-                        displayTypeSelection(for: .zenmux)
-                    }
-
-                    // 通知设置
-                    if tracker.providers[.zenmux]?.isConfigured == true {
-                        Divider()
-                        notificationSettingsView
-                    }
+                    Text("CodeBar 会自动从本地文件和环境变量中检测已安装的 AI 工具凭据")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-                .padding(16)
-                .background(Color.purple.opacity(0.06))
-                .cornerRadius(10)
+
+                // Auto-detect providers
+                let autoDetectTypes = PlatformType.allCases.filter(\.isAutoDetect)
+                ForEach(autoDetectTypes) { platform in
+                    autoDetectRow(for: platform)
+                }
 
                 if tracker.configuredPlatforms.count > 1 {
                     HStack {
@@ -122,7 +112,6 @@ struct SettingsWindowView: View {
             }
             .padding(20)
         }
-        .frame(width: Constants.settingsWindowWidth, height: Constants.settingsWindowHeight)
         .sheet(isPresented: $showBailianHelp) {
             HelpWindowView(platform: .bailian)
         }
@@ -130,7 +119,6 @@ struct SettingsWindowView: View {
             HelpWindowView(platform: .zenmux)
         }
         .onAppear {
-            // 加载已保存的配置
             if let config = tracker.loadBailianConfig() {
                 cookies = config.cookies
                 secToken = config.secToken
@@ -143,28 +131,104 @@ struct SettingsWindowView: View {
         }
     }
 
-    // MARK: - 显示类型选择
+    // MARK: - Manual config section
+
+    @ViewBuilder
+    private func manualConfigSection<Content: View>(
+        platform: PlatformType,
+        icon: String,
+        color: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                Text(platform.rawValue)
+                    .font(.headline)
+                Spacer()
+                if tracker.providers[platform]?.isConfigured == true {
+                    Toggle("启用", isOn: Binding(
+                        get: { tracker.isPlatformEnabled(platform) },
+                        set: { tracker.enabledPlatforms[platform] = $0 }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                } else {
+                    Text("未配置")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+
+            content()
+
+            if tracker.providers[platform]?.isConfigured == true {
+                Divider()
+                displayTypeSelection(for: platform)
+            }
+        }
+        .padding(16)
+        .background(color.opacity(0.06))
+        .cornerRadius(10)
+    }
+
+    // MARK: - Auto-detect provider row
+
+    @ViewBuilder
+    private func autoDetectRow(for platform: PlatformType) -> some View {
+        let isDetected = tracker.providers[platform]?.isConfigured == true
+        let color = isDetected ? Color.green : Color.gray
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: platform.icon)
+                    .foregroundColor(isDetected ? .primary : .secondary)
+                Text(platform.rawValue)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Spacer()
+
+                if isDetected {
+                    Toggle("", isOn: Binding(
+                        get: { tracker.isPlatformEnabled(platform) },
+                        set: { tracker.enabledPlatforms[platform] = $0 }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                } else {
+                    Text("未检测到")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+            }
+
+            if isDetected {
+                displayTypeSelection(for: platform)
+            }
+        }
+        .padding(12)
+        .background(color.opacity(0.06))
+        .cornerRadius(8)
+    }
+
+    // MARK: - Display type selection
+
     @ViewBuilder
     private func displayTypeSelection(for platform: PlatformType) -> some View {
         let items = tracker.platforms[platform]?.items ?? []
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("展示内容")
-                .font(.subheadline)
-                .fontWeight(.medium)
-
-            if items.isEmpty {
-                Text("暂无数据，请先刷新")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } else {
+            if !items.isEmpty {
                 HStack(spacing: 12) {
                     ForEach(items, id: \.key) { item in
                         Toggle(isOn: Binding(
                             get: { tracker.displayKeys(for: platform).contains(item.key) },
-                            set: { _ in
-                                tracker.toggleDisplayType(item.key, for: platform)
-                            }
+                            set: { _ in tracker.toggleDisplayType(item.key, for: platform) }
                         )) {
                             Text(item.label)
                                 .font(.caption)
@@ -176,9 +240,7 @@ struct SettingsWindowView: View {
                     ForEach(items, id: \.key) { item in
                         Toggle(isOn: Binding(
                             get: { tracker.isResetTimeEnabled(item.key, for: platform) },
-                            set: { _ in
-                                tracker.toggleResetTime(item.key, for: platform)
-                            }
+                            set: { _ in tracker.toggleResetTime(item.key, for: platform) }
                         )) {
                             Text("\(item.label)重置")
                                 .font(.caption)
@@ -190,7 +252,7 @@ struct SettingsWindowView: View {
         }
     }
 
-    // MARK: - 通知设置
+    // MARK: - Notification settings
 
     private var notificationSettingsView: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -235,10 +297,10 @@ struct SettingsWindowView: View {
         }
     }
 
-    // MARK: - 百炼配置表单
+    // MARK: - Bailian config form
+
     private var bailianConfigForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Cookie 输入
             VStack(alignment: .leading, spacing: 4) {
                 Text("Cookie")
                     .font(.subheadline)
@@ -251,7 +313,6 @@ struct SettingsWindowView: View {
                     .cornerRadius(6)
             }
 
-            // Sec Token 和区域
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Sec Token")
@@ -261,7 +322,6 @@ struct SettingsWindowView: View {
                         .textFieldStyle(.roundedBorder)
                 }
 
-                // 区域选择
                 VStack(alignment: .leading, spacing: 4) {
                     Text("区域")
                         .font(.subheadline)
@@ -277,15 +337,12 @@ struct SettingsWindowView: View {
                 }
             }
 
-            // 操作按钮
             HStack {
                 Button(action: { showBailianHelp = true }) {
                     Image(systemName: "questionmark.circle")
                     Text("帮助")
                 }
-
                 Spacer()
-
                 Button("保存") {
                     tracker.saveBailianConfig(cookies: cookies, secToken: secToken, region: region)
                 }
@@ -294,10 +351,10 @@ struct SettingsWindowView: View {
         }
     }
 
-    // MARK: - ZenMux 配置表单
+    // MARK: - ZenMux config form
+
     private var zenMuxConfigForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // API Key 输入
             VStack(alignment: .leading, spacing: 4) {
                 Text("Management API Key")
                     .font(.subheadline)
@@ -306,19 +363,16 @@ struct SettingsWindowView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            Text("⚠️ 仅支持 Management API Key，标准 API Key 无效")
+            Text("仅支持 Management API Key，标准 API Key 无效")
                 .font(.caption)
                 .foregroundColor(.orange)
 
-            // 操作按钮
             HStack {
                 Button(action: { showZenMuxHelp = true }) {
                     Image(systemName: "questionmark.circle")
                     Text("帮助")
                 }
-
                 Spacer()
-
                 Button("保存") {
                     tracker.saveZenMuxConfig(apiKey: zenMuxApiKey)
                 }
@@ -328,7 +382,8 @@ struct SettingsWindowView: View {
     }
 }
 
-/// 帮助窗口视图
+// MARK: - Help Window
+
 struct HelpWindowView: View {
     @Environment(\.dismiss) var dismiss
     let platform: PlatformType

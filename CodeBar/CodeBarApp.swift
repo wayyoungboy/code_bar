@@ -27,9 +27,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var rotationTimer: Timer?
     private var currentPlatformIndex: Int = 0
+    private var eventMonitor: Any?
 
     deinit {
         rotationTimer?.invalidate()
+        if let monitor = eventMonitor { NSEvent.removeMonitor(monitor) }
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -136,9 +138,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func togglePopover() {
         guard let button = statusItem?.button, let popover = popover else { return }
         if popover.isShown {
-            popover.performClose(nil)
+            closePopover()
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.closePopover()
+            }
+        }
+    }
+
+    private func closePopover() {
+        popover?.performClose(nil)
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
         }
     }
 
@@ -152,13 +165,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let settingsView = SettingsWindowView(tracker: UsageTracker.shared)
-        let hostingController = NSHostingController(rootView: settingsView)
+        let hostingView = NSHostingView(rootView: settingsView)
+        hostingView.frame = NSRect(x: 0, y: 0, width: Constants.settingsWindowWidth, height: Constants.settingsWindowHeight)
 
-        let window = NSWindow(contentViewController: hostingController)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: Constants.settingsWindowWidth, height: Constants.settingsWindowHeight),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
         window.title = "CodeBar 设置"
-        window.styleMask = [.titled, .closable]
+        window.contentView = hostingView
         window.center()
         window.isReleasedWhenClosed = false
+        window.level = .floating
         window.delegate = self
 
         settingsWindow = window
@@ -168,7 +188,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {}
+    func windowWillClose(_ notification: Notification) {
+        settingsWindow = nil
+    }
 }
 
 extension Notification.Name {

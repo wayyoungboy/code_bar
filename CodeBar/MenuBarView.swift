@@ -19,7 +19,7 @@ struct MenuBarView: View {
             if tracker.hasAnyConfig {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(PlatformType.allCases) { platform in
-                        if let provider = tracker.providers[platform], provider.isConfigured,
+                        if tracker.isPlatformEnabled(platform),
                            let usage = tracker.platforms[platform] {
                             platformUsageCard(platform: platform, usage: usage, error: tracker.errorMessages[platform])
                         }
@@ -51,7 +51,7 @@ struct MenuBarView: View {
             }
 
             // 更新提示
-            if updateChecker.hasUpdate, let version = updateChecker.latestVersion {
+            if updateChecker.isEnabled, updateChecker.hasUpdate, let version = updateChecker.latestVersion {
                 HStack {
                     Image(systemName: "arrow.up.circle.fill")
                         .foregroundColor(.orange)
@@ -129,7 +129,7 @@ struct MenuBarView: View {
             // 平台名称
             HStack {
                 Image(systemName: platform.icon)
-                    .foregroundColor(platform == .bailian ? .blue : .purple)
+                    .foregroundColor(Color(hex: platform.brandColor))
                 Text(usage.platformName)
                     .font(.subheadline)
                     .fontWeight(.semibold)
@@ -192,7 +192,7 @@ struct MenuBarView: View {
             }
         }
         .padding(12)
-        .background(Color(platform == .bailian ? NSColor.blue : NSColor.purple).opacity(0.08))
+        .background(Color(hex: platform.brandColor).opacity(0.12))
         .cornerRadius(8)
     }
 

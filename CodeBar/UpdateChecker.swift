@@ -9,6 +9,15 @@ class UpdateChecker: ObservableObject {
     @Published var updateURL: URL?
     @Published var hasUpdate = false
 
+    var isEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: Constants.updateCheckEnabledKey) as? Bool ?? true }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Constants.updateCheckEnabledKey)
+            if !newValue { hasUpdate = false }
+            objectWillChange.send()
+        }
+    }
+
     private let repoAPI = "https://api.github.com/repos/wayyoungboy/code_bar/releases/latest"
     private var timer: Timer?
 
@@ -29,6 +38,7 @@ class UpdateChecker: ObservableObject {
     }
 
     func checkForUpdate() async {
+        guard isEnabled else { return }
         guard let url = URL(string: repoAPI) else { return }
 
         var request = URLRequest(url: url)

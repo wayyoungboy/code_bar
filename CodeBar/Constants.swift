@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// 应用配置常量
 struct Constants {
@@ -58,4 +59,22 @@ struct Constants {
 
     /// ZenMux 通知功能启用状态键
     static let zenmuxNoticeEnabledKey = "code_bar_zenmux_notice_enabled"
+
+    /// 版本更新提醒启用状态键
+    static let updateCheckEnabledKey = "code_bar_update_check_enabled"
+}
+
+extension Color {
+    init(hex: String) {
+        let stripped = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        var rgbValue: UInt64 = 0
+        guard stripped.count == 6, Scanner(string: stripped).scanHexInt64(&rgbValue) else {
+            self.init(red: 0.5, green: 0.5, blue: 0.5)
+            return
+        }
+        let r = Double((rgbValue & 0xFF0000) >> 16) / 255.0
+        let g = Double((rgbValue & 0x00FF00) >> 8) / 255.0
+        let b = Double(rgbValue & 0x0000FF) / 255.0
+        self.init(red: r, green: g, blue: b)
+    }
 }

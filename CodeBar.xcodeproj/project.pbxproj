@@ -19,6 +19,23 @@
 			A1000010 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* Logger.swift */; };
 			A1000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000012 /* Assets.xcassets */; };
 			A1000012 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* UpdateChecker.swift */; };
+			A1000021 /* SQLiteHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000022 /* SQLiteHelper.swift */; };
+			A1000022 /* OAuthHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000023 /* OAuthHelper.swift */; };
+			A1000023 /* ClaudeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000024 /* ClaudeProvider.swift */; };
+			A1000024 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000025 /* CodexProvider.swift */; };
+			A1000025 /* CursorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000026 /* CursorProvider.swift */; };
+			A1000026 /* CopilotProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000027 /* CopilotProvider.swift */; };
+			A1000027 /* WindsurfProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000028 /* WindsurfProvider.swift */; };
+			A1000028 /* GeminiCliProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000029 /* GeminiCliProvider.swift */; };
+			A1000029 /* AmpProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000030 /* AmpProvider.swift */; };
+			A1000030 /* KimiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000031 /* KimiProvider.swift */; };
+			A1000031 /* KiroProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000032 /* KiroProvider.swift */; };
+			A1000032 /* MiniMaxProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000033 /* MiniMaxProvider.swift */; };
+			A1000033 /* ZaiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000034 /* ZaiProvider.swift */; };
+			A1000034 /* JetBrainsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000035 /* JetBrainsProvider.swift */; };
+			A1000035 /* PerplexityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000036 /* PerplexityProvider.swift */; };
+			A1000036 /* AntigravityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000037 /* AntigravityProvider.swift */; };
+			A1000037 /* OpenCodeProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000038 /* OpenCodeProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +52,23 @@
 			A2000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 			A2000013 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 			A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+			A2000022 /* SQLiteHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SQLiteHelper.swift; sourceTree = "<group>"; };
+			A2000023 /* OAuthHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthHelper.swift; sourceTree = "<group>"; };
+			A2000024 /* ClaudeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeProvider.swift; sourceTree = "<group>"; };
+			A2000025 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
+			A2000026 /* CursorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorProvider.swift; sourceTree = "<group>"; };
+			A2000027 /* CopilotProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopilotProvider.swift; sourceTree = "<group>"; };
+			A2000028 /* WindsurfProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindsurfProvider.swift; sourceTree = "<group>"; };
+			A2000029 /* GeminiCliProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiCliProvider.swift; sourceTree = "<group>"; };
+			A2000030 /* AmpProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmpProvider.swift; sourceTree = "<group>"; };
+			A2000031 /* KimiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KimiProvider.swift; sourceTree = "<group>"; };
+			A2000032 /* KiroProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KiroProvider.swift; sourceTree = "<group>"; };
+			A2000033 /* MiniMaxProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniMaxProvider.swift; sourceTree = "<group>"; };
+			A2000034 /* ZaiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZaiProvider.swift; sourceTree = "<group>"; };
+			A2000035 /* JetBrainsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JetBrainsProvider.swift; sourceTree = "<group>"; };
+			A2000036 /* PerplexityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerplexityProvider.swift; sourceTree = "<group>"; };
+			A2000037 /* AntigravityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityProvider.swift; sourceTree = "<group>"; };
+			A2000038 /* OpenCodeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeProvider.swift; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -68,6 +102,7 @@
 					A2000010 /* Constants.swift */,
 					A2000011 /* Logger.swift */,
 					A2000013 /* UpdateChecker.swift */,
+					A5000005 /* Helpers */,
 					A5000004 /* Providers */,
 					A2000012 /* Assets.xcassets */,
 					A2000006 /* Info.plist */,
@@ -89,8 +124,32 @@
 					A2000004 /* PlatformProvider.swift */,
 					A2000005 /* BailianProvider.swift */,
 					A2000007 /* ZenMuxProvider.swift */,
+					A2000024 /* ClaudeProvider.swift */,
+					A2000025 /* CodexProvider.swift */,
+					A2000026 /* CursorProvider.swift */,
+					A2000027 /* CopilotProvider.swift */,
+					A2000028 /* WindsurfProvider.swift */,
+					A2000029 /* GeminiCliProvider.swift */,
+					A2000030 /* AmpProvider.swift */,
+					A2000031 /* KimiProvider.swift */,
+					A2000032 /* KiroProvider.swift */,
+					A2000033 /* MiniMaxProvider.swift */,
+					A2000034 /* ZaiProvider.swift */,
+					A2000035 /* JetBrainsProvider.swift */,
+					A2000036 /* PerplexityProvider.swift */,
+					A2000037 /* AntigravityProvider.swift */,
+					A2000038 /* OpenCodeProvider.swift */,
 				);
 				path = Providers;
+				sourceTree = "<group>";
+			};
+			A5000005 /* Helpers */ = {
+				isa = PBXGroup;
+				children = (
+					A2000022 /* SQLiteHelper.swift */,
+					A2000023 /* OAuthHelper.swift */,
+				);
+				path = Helpers;
 				sourceTree = "<group>";
 			};
 /* End PBXGroup section */
@@ -174,6 +233,23 @@
 					A1000009 /* Constants.swift in Sources */,
 					A1000010 /* Logger.swift in Sources */,
 					A1000012 /* UpdateChecker.swift in Sources */,
+					A1000021 /* SQLiteHelper.swift in Sources */,
+					A1000022 /* OAuthHelper.swift in Sources */,
+					A1000023 /* ClaudeProvider.swift in Sources */,
+					A1000024 /* CodexProvider.swift in Sources */,
+					A1000025 /* CursorProvider.swift in Sources */,
+					A1000026 /* CopilotProvider.swift in Sources */,
+					A1000027 /* WindsurfProvider.swift in Sources */,
+					A1000028 /* GeminiCliProvider.swift in Sources */,
+					A1000029 /* AmpProvider.swift in Sources */,
+					A1000030 /* KimiProvider.swift in Sources */,
+					A1000031 /* KiroProvider.swift in Sources */,
+					A1000032 /* MiniMaxProvider.swift in Sources */,
+					A1000033 /* ZaiProvider.swift in Sources */,
+					A1000034 /* JetBrainsProvider.swift in Sources */,
+					A1000035 /* PerplexityProvider.swift in Sources */,
+					A1000036 /* AntigravityProvider.swift in Sources */,
+					A1000037 /* OpenCodeProvider.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
