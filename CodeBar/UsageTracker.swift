@@ -6,21 +6,7 @@ import UserNotifications
 enum PlatformType: String, CaseIterable, Identifiable, Codable {
     case bailian = "阿里云百炼"
     case zenmux = "ZenMux"
-    case claude = "Claude"
-    case codex = "Codex"
-    case cursor = "Cursor"
-    case copilot = "Copilot"
-    case windsurf = "Windsurf"
-    case gemini = "Gemini"
-    case amp = "Amp"
-    case kimi = "Kimi"
-    case kiro = "Kiro"
-    case minimax = "MiniMax"
-    case zai = "Z.ai"
-    case jetbrains = "JetBrains AI"
-    case perplexity = "Perplexity"
-    case antigravity = "Antigravity"
-    case opencode = "OpenCode"
+    case mimo = "小米 MiMo"
 
     var id: String { rawValue }
 
@@ -28,21 +14,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .bailian: return "cloud.fill"
         case .zenmux: return "bolt.fill"
-        case .claude: return "bubble.left.fill"
-        case .codex: return "terminal.fill"
-        case .cursor: return "cursorarrow.rays"
-        case .copilot: return "person.2.fill"
-        case .windsurf: return "wind"
-        case .gemini: return "sparkles"
-        case .amp: return "bolt.horizontal.fill"
-        case .kimi: return "moon.fill"
-        case .kiro: return "shippingbox.fill"
-        case .minimax: return "chart.bar.fill"
-        case .zai: return "brain.head.profile"
-        case .jetbrains: return "hammer.fill"
-        case .perplexity: return "magnifyingglass"
-        case .antigravity: return "arrow.up.circle.fill"
-        case .opencode: return "chevron.left.forwardslash.chevron.right"
+        case .mimo: return "m.circle.fill"
         }
     }
 
@@ -50,21 +22,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .bailian: return "百炼"
         case .zenmux: return "ZenMux"
-        case .claude: return "Claude"
-        case .codex: return "Codex"
-        case .cursor: return "Cursor"
-        case .copilot: return "Copilot"
-        case .windsurf: return "Windsurf"
-        case .gemini: return "Gemini"
-        case .amp: return "Amp"
-        case .kimi: return "Kimi"
-        case .kiro: return "Kiro"
-        case .minimax: return "MiniMax"
-        case .zai: return "Z.ai"
-        case .jetbrains: return "JetBrains"
-        case .perplexity: return "Perplexity"
-        case .antigravity: return "Antigravity"
-        case .opencode: return "OpenCode"
+        case .mimo: return "MiMo"
         }
     }
 
@@ -72,30 +30,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .bailian: return "#0070FF"
         case .zenmux: return "#8B5CF6"
-        case .claude: return "#DE7356"
-        case .codex: return "#74AA9C"
-        case .cursor: return "#000000"
-        case .copilot: return "#A855F7"
-        case .windsurf: return "#111111"
-        case .gemini: return "#4285F4"
-        case .amp: return "#F34E3F"
-        case .kimi: return "#000000"
-        case .kiro: return "#C09CFF"
-        case .minimax: return "#F5433C"
-        case .zai: return "#2D2D2D"
-        case .jetbrains: return "#7D5FE6"
-        case .perplexity: return "#20808D"
-        case .antigravity: return "#4285F4"
-        case .opencode: return "#000000"
-        }
-    }
-
-    var isAutoDetect: Bool {
-        switch self {
-        case .bailian, .zenmux:
-            return false
-        default:
-            return true
+        case .mimo: return "#FF6900"
         }
     }
 }
@@ -208,12 +143,10 @@ class UsageTracker: ObservableObject {
             AppLogger.logConfigChange(platform: "ZenMux", action: "加载配置")
         }
 
-        for platform in PlatformType.allCases where platform.isAutoDetect {
-            let provider = Self.makeAutoDetectProvider(for: platform)
-            if provider.isConfigured {
-                providers[platform] = provider
-                AppLogger.logConfigChange(platform: platform.shortName, action: "自动检测")
-            }
+        if let data = allConfigs[PlatformType.mimo.rawValue],
+           let config = try? JSONDecoder().decode(MimoConfig.self, from: data) {
+            providers[.mimo] = MimoProvider(config: config)
+            AppLogger.logConfigChange(platform: "MiMo", action: "加载配置")
         }
     }
 
@@ -280,40 +213,18 @@ class UsageTracker: ObservableObject {
         return try? JSONDecoder().decode(ZenMuxConfig.self, from: data)
     }
 
-    // MARK: - 重新扫描自动检测提供者
-
-    func rescanAutoDetectProviders() {
-        for platform in PlatformType.allCases where platform.isAutoDetect {
-            let provider = Self.makeAutoDetectProvider(for: platform)
-            if provider.isConfigured {
-                providers[platform] = provider
-            } else {
-                providers[platform] = nil
-                platforms[platform] = nil
-            }
-        }
+    func saveMimoConfig(serviceToken: String, userId: String) {
+        let config = MimoConfig(serviceToken: serviceToken, userId: userId)
+        providers[.mimo] = MimoProvider(config: config)
+        savePlatformConfig(config, for: .mimo)
+        AppLogger.logConfigChange(platform: "MiMo", action: "保存配置")
+        errorMessages[.mimo] = nil
         refresh()
     }
 
-    static func makeAutoDetectProvider(for platform: PlatformType) -> PlatformProvider {
-        switch platform {
-        case .claude: return ClaudeProvider()
-        case .codex: return CodexProvider()
-        case .cursor: return CursorProvider()
-        case .copilot: return CopilotProvider()
-        case .windsurf: return WindsurfProvider()
-        case .gemini: return GeminiCliProvider()
-        case .amp: return AmpProvider()
-        case .kimi: return KimiProvider()
-        case .kiro: return KiroProvider()
-        case .minimax: return MiniMaxProvider()
-        case .zai: return ZaiProvider()
-        case .jetbrains: return JetBrainsProvider()
-        case .perplexity: return PerplexityProvider()
-        case .antigravity: return AntigravityProvider()
-        case .opencode: return OpenCodeProvider()
-        case .bailian, .zenmux: fatalError("\(platform) is not auto-detect")
-        }
+    func loadMimoConfig() -> MimoConfig? {
+        guard let data = loadAllConfigs()[PlatformType.mimo.rawValue] else { return nil }
+        return try? JSONDecoder().decode(MimoConfig.self, from: data)
     }
 
     func clearConfig(for platform: PlatformType) {

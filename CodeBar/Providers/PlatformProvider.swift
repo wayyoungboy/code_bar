@@ -97,6 +97,22 @@ struct ZenMuxConfig: PlatformConfig, Codable {
     }
 }
 
+/// 小米 MiMo 平台配置
+struct MimoConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .mimo
+    var serviceToken: String
+    var userId: String
+
+    var isValid: Bool {
+        !serviceToken.isEmpty && !userId.isEmpty
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case serviceToken = "mimo_service_token"
+        case userId = "mimo_user_id"
+    }
+}
+
 // MARK: - 辅助扩展
 
 extension String {

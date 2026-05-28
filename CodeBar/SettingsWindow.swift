@@ -4,6 +4,7 @@ struct SettingsWindowView: View {
     @ObservedObject var tracker: UsageTracker
     @State private var showBailianHelp = false
     @State private var showZenMuxHelp = false
+    @State private var showMimoHelp = false
 
     // Bailian config
     @State private var cookies = ""
@@ -13,13 +14,17 @@ struct SettingsWindowView: View {
     // ZenMux config
     @State private var zenMuxApiKey = ""
 
+    // Mimo config
+    @State private var mimoServiceToken = ""
+    @State private var mimoUserId = ""
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack {
                     Image(systemName: "info.circle")
                         .foregroundColor(.blue)
-                    Text("手动配置平台凭据，或自动检测已安装的 AI 工具")
+                    Text("手动配置平台凭据以查看 AI 编程工具用量")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -43,6 +48,15 @@ struct SettingsWindowView: View {
                     color: .purple
                 ) {
                     zenMuxConfigForm
+                }
+
+                // Mimo config
+                manualConfigSection(
+                    platform: .mimo,
+                    icon: "m.circle.fill",
+                    color: .orange
+                ) {
+                    mimoConfigForm
                 }
 
                 // ZenMux notification settings
@@ -72,31 +86,6 @@ struct SettingsWindowView: View {
                 .background(Color.orange.opacity(0.06))
                 .cornerRadius(8)
 
-                // Auto-detect section header
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "magnifyingglass.circle.fill")
-                            .foregroundColor(.green)
-                        Text("自动检测的工具")
-                            .font(.headline)
-                        Spacer()
-                        Button("重新扫描") {
-                            tracker.rescanAutoDetectProviders()
-                        }
-                        .font(.caption)
-                    }
-
-                    Text("CodeBar 会自动从本地文件和环境变量中检测已安装的 AI 工具凭据")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                // Auto-detect providers
-                let autoDetectTypes = PlatformType.allCases.filter(\.isAutoDetect)
-                ForEach(autoDetectTypes) { platform in
-                    autoDetectRow(for: platform)
-                }
-
                 if tracker.configuredPlatforms.count > 1 {
                     HStack {
                         Image(systemName: "arrow.left.arrow.right")
@@ -118,6 +107,9 @@ struct SettingsWindowView: View {
         .sheet(isPresented: $showZenMuxHelp) {
             HelpWindowView(platform: .zenmux)
         }
+        .sheet(isPresented: $showMimoHelp) {
+            HelpWindowView(platform: .mimo)
+        }
         .onAppear {
             if let config = tracker.loadBailianConfig() {
                 cookies = config.cookies
@@ -126,6 +118,10 @@ struct SettingsWindowView: View {
             }
             if let config = tracker.loadZenMuxConfig() {
                 zenMuxApiKey = config.apiKey
+            }
+            if let config = tracker.loadMimoConfig() {
+                mimoServiceToken = config.serviceToken
+                mimoUserId = config.userId
             }
             tracker.checkNotificationPermission()
         }
@@ -171,49 +167,6 @@ struct SettingsWindowView: View {
         .padding(16)
         .background(color.opacity(0.06))
         .cornerRadius(10)
-    }
-
-    // MARK: - Auto-detect provider row
-
-    @ViewBuilder
-    private func autoDetectRow(for platform: PlatformType) -> some View {
-        let isDetected = tracker.providers[platform]?.isConfigured == true
-        let color = isDetected ? Color.green : Color.gray
-
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: platform.icon)
-                    .foregroundColor(isDetected ? .primary : .secondary)
-                Text(platform.rawValue)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Spacer()
-
-                if isDetected {
-                    Toggle("", isOn: Binding(
-                        get: { tracker.isPlatformEnabled(platform) },
-                        set: { tracker.enabledPlatforms[platform] = $0 }
-                    ))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                        .font(.caption)
-                } else {
-                    Text("未检测到")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
-            }
-
-            if isDetected {
-                displayTypeSelection(for: platform)
-            }
-        }
-        .padding(12)
-        .background(color.opacity(0.06))
-        .cornerRadius(8)
     }
 
     // MARK: - Display type selection
@@ -380,6 +333,40 @@ struct SettingsWindowView: View {
             }
         }
     }
+
+    // MARK: - Mimo config form
+
+    private var mimoConfigForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Service Token")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                SecureField("请输入 api-platform_serviceToken", text: $mimoServiceToken)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("User ID")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextField("请输入 userId", text: $mimoUserId)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack {
+                Button(action: { showMimoHelp = true }) {
+                    Image(systemName: "questionmark.circle")
+                    Text("帮助")
+                }
+                Spacer()
+                Button("保存") {
+                    tracker.saveMimoConfig(serviceToken: mimoServiceToken, userId: mimoUserId)
+                }
+                .disabled(mimoServiceToken.isEmpty || mimoUserId.isEmpty)
+            }
+        }
+    }
 }
 
 // MARK: - Help Window
@@ -390,7 +377,7 @@ struct HelpWindowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(platform == .bailian ? "获取百炼凭据帮助" : "获取 ZenMux API Key 帮助")
+            Text(helpTitle)
                 .font(.title2)
                 .fontWeight(.bold)
 
@@ -398,10 +385,13 @@ struct HelpWindowView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if platform == .bailian {
+                    switch platform {
+                    case .bailian:
                         bailianHelpSteps
-                    } else {
+                    case .zenmux:
                         zenMuxHelpSteps
+                    case .mimo:
+                        mimoHelpSteps
                     }
                 }
             }
@@ -416,6 +406,14 @@ struct HelpWindowView: View {
         }
         .padding(30)
         .frame(width: Constants.helpWindowWidth, height: Constants.helpWindowHeight)
+    }
+
+    private var helpTitle: String {
+        switch platform {
+        case .bailian: return "获取百炼凭据帮助"
+        case .zenmux: return "获取 ZenMux API Key 帮助"
+        case .mimo: return "获取小米 MiMo 凭据帮助"
+        }
     }
 
     private var bailianHelpSteps: some View {
@@ -451,6 +449,16 @@ struct HelpWindowView: View {
             HelpStepView(number: 3, title: "找到 API Keys", description: "在管理页面中找到 API Keys 部分", icon: "key")
             HelpStepView(number: 4, title: "复制 Management Key", description: "复制 Management API Key（不是标准 API Key）", icon: "doc.on.clipboard")
             HelpStepView(number: 5, title: "重要提示", description: "必须使用 Management API Key，标准 API Key 不支持此功能", icon: "exclamationmark.triangle")
+        }
+    }
+
+    private var mimoHelpSteps: some View {
+        Group {
+            HelpStepView(number: 1, title: "打开 MiMo 平台", description: "访问 https://platform.xiaomimimo.com/ 并使用小米账号登录", icon: "person.circle")
+            HelpStepView(number: 2, title: "打开开发者工具", description: "在浏览器中按 F12 或右键点击页面选择「检查」", icon: "gear")
+            HelpStepView(number: 3, title: "切换到 Application 标签", description: "在开发者工具中点击 Application（应用）标签", icon: "network")
+            HelpStepView(number: 4, title: "找到 Cookies", description: "在左侧 Cookies 中找到 https://platform.xiaomimimo.com", icon: "doc")
+            HelpStepView(number: 5, title: "复制凭据", description: "复制 api-platform_serviceToken 和 userId 的值", icon: "doc.on.clipboard")
         }
     }
 }

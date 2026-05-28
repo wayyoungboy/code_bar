@@ -6,21 +6,7 @@
 
 - **阿里云百炼** — 监控 Coding Plan 用量（账单月、5 小时、周）
 - **ZenMux** — 监控 Flow 用量（5 小时、7 天），含订阅详情和费用信息
-- **Claude Code** — GitHub OAuth 认证，Token 用量统计
-- **Cursor** — API Key 认证，Usage 统计
-- **GitHub Copilot** — Token 认证，Chat & PR 用量
-- **Windsurf** — Token 认证，Super Agent 用量
-- **Gemini CLI** — Google OAuth 认证，用量统计
-- **Codex** — GitHub OAuth 认证，Usage 统计
-- **Kimi Power** — Token 认证，用量统计
-- **OpenCode** — Token 认证，用量统计
-- **Z.ai** — Token 认证，用量统计
-- **Antigravity** — Token 认证，用量统计
-- **AMP** — Token 认证，用量统计
-- **MiniMax** — Token 认证，用量统计
-- **Perplexity** — Token 认证，用量统计
-- **Kiro** — AWS SSO 认证，用量统计
-- **JetBrains** — Token 认证，AI Assistant 用量
+- **小米 MiMo** — 监控 Token 用量（月用量、总用量）
 
 想支持更多平台？欢迎提交 PR！
 
@@ -37,6 +23,7 @@
 - 多平台自动轮播显示（每 5 秒切换）
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
 - 统一 Keychain 存储，启动仅需一次授权
+- 支持阿里云百炼、ZenMux、小米 MiMo 三大平台
 
 ## 截图
 
@@ -95,7 +82,7 @@ open CodeBar.xcodeproj
 
 1. 运行应用后，点击菜单栏的 "CodeBar" 图标
 2. 点击设置按钮（齿轮图标）
-3. 配置您需要的平台凭据（百炼和/或 ZenMux）
+3. 配置您需要的平台凭据（百炼、ZenMux 和/或 MiMo）
 4. 勾选需要在菜单栏展示的配额周期和重置时间
 
 ### 获取百炼凭据
@@ -157,6 +144,18 @@ open CodeBar.xcodeproj
 - **Management API Key**: 从 ZenMux 管理页面复制的 Management API Key
 - 仅支持 Management API Key，标准 API Key 无效
 
+#### 小米 MiMo
+
+在设置界面中填入：
+- **Service Token**: 从浏览器 Cookie 中复制的 `api-platform_serviceToken` 值
+- **User ID**: 从浏览器 Cookie 中复制的 `userId` 值
+
+获取步骤：
+1. 访问 https://platform.xiaomimimo.com/ 并登录
+2. 按 F12 打开开发者工具，切换到 Application 标签
+3. 在 Cookies 中找到 `platform.xiaomimimo.com`
+4. 复制 `api-platform_serviceToken` 和 `userId` 的值
+
 ## 项目结构
 
 ```
@@ -168,11 +167,12 @@ code_bar/
 │   ├── UsageTracker.swift        # 多平台用量追踪器（配置、刷新、存储、通知）
 │   ├── Constants.swift           # 应用常量配置
 │   ├── KeychainHelper.swift      # Keychain 安全存储封装
-│   ├── AppLogger.swift           # 日志工具
+│   ├── Logger.swift              # 日志工具
 │   └── Providers/
 │       ├── PlatformProvider.swift # 平台协议和数据模型（UsageItem、PlatformUsageData）
 │       ├── BailianProvider.swift  # 阿里云百炼 API 提供者
-│       └── ZenMuxProvider.swift   # ZenMux API 提供者
+│       ├── ZenMuxProvider.swift   # ZenMux API 提供者
+│       └── MimoProvider.swift     # 小米 MiMo API 提供者
 └── README.md                      # 本文件
 ```
 
@@ -213,3 +213,4 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 - [阿里云百炼](https://bailian.console.aliyun.com/) — Code Plan 用量监控
 - [ZenMux](https://zenmux.ai) — AI Coding 平台
+- [小米 MiMo](https://platform.xiaomimimo.com/) — AI 编程平台
