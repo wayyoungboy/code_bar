@@ -354,6 +354,15 @@ struct SettingsWindowView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
+            HStack(spacing: 4) {
+                Image(systemName: "info.circle")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Text("数据准实时更新（5 分钟内延迟），每日数据次日 7:00 UTC 完成校对")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
             HStack {
                 Button(action: { showMimoHelp = true }) {
                     Image(systemName: "questionmark.circle")
