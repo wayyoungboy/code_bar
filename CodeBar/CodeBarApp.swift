@@ -124,8 +124,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let visibleItems = usage.items.filter { activeKeys.contains($0.key) }
         let preferredItems = preferredStatusItems(from: visibleItems)
 
-        let top = preferredItems.first.map(statusLineText) ?? platform.shortName
-        let bottom = preferredItems.dropFirst().first.map(statusLineText) ?? ""
+        let top = preferredItems.first.map { statusLineText(for: $0, platform: platform) } ?? platform.shortName
+        let bottom = preferredItems.dropFirst().first.map { statusLineText(for: $0, platform: platform) } ?? ""
         setStatusTitle(top: top, bottom: bottom, platform: platform)
     }
 
@@ -147,8 +147,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return Array(result.prefix(2))
     }
 
-    private func statusLineText(for item: UsageItem) -> String {
-        "\(compactLabel(for: item)) \(String(format: "%.0f%%", item.percent))"
+    private func statusLineText(for item: UsageItem, platform: PlatformType) -> String {
+        var text = "\(compactLabel(for: item)) \(String(format: "%.0f%%", item.percent))"
+
+        if UsageTracker.shared.isResetTimeEnabled(item.key, for: platform),
+           let resetText = compactResetText(until: item.resetDate) {
+            text += "(\(resetText))"
+        }
+
+        return text
+    }
+
+    private func compactResetText(until resetDate: Date) -> String? {
+        let remaining = resetDate.timeIntervalSinceNow
+        guard remaining > 0 else { return nil }
+
+        let totalMinutes = max(1, Int(remaining) / 60)
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
+
+        if days > 0 {
+            return hours > 0 ? "\(days)d\(hours)h" : "\(days)d"
+        }
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h\(minutes)m" : "\(hours)h"
+        }
+        return "\(minutes)m"
     }
 
     private func compactLabel(for item: UsageItem) -> String {
@@ -232,6 +257,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func statusIcon(for platform: PlatformType?) -> NSImage? {
+        if let assetName = platform?.logoAssetName,
+           let image = NSImage(named: assetName)?.copy() as? NSImage {
+            image.isTemplate = platform?.usesOriginalLogoColor != true
+            return image
+        }
+
         let symbolName = platform?.icon ?? "menubar.dock.rectangle"
         let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: platform?.shortName ?? "CodeBar")
         let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)

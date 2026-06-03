@@ -14,9 +14,25 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     var icon: String {
         switch self {
         case .bailian: return "cloud.fill"
-        case .zenmux: return "bolt.fill"
+        case .zenmux: return "sparkles"
         case .mimo: return "m.circle.fill"
-        case .codex: return "chevron.left.forwardslash.chevron.right"
+        case .codex: return "circle.hexagongrid.fill"
+        }
+    }
+
+    var logoAssetName: String? {
+        switch self {
+        case .bailian: return nil
+        case .zenmux: return "ZenMuxLogo"
+        case .mimo: return "XiaomiLogo"
+        case .codex: return "CodexLogo"
+        }
+    }
+
+    var usesOriginalLogoColor: Bool {
+        switch self {
+        case .mimo: return true
+        default: return false
         }
     }
 

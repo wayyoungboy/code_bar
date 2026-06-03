@@ -48,7 +48,7 @@ struct SettingsWindowView: View {
                 // ZenMux config
                 manualConfigSection(
                     platform: .zenmux,
-                    icon: "bolt.fill",
+                    icon: PlatformType.zenmux.icon,
                     color: .purple
                 ) {
                     zenMuxConfigForm
@@ -57,7 +57,7 @@ struct SettingsWindowView: View {
                 // Mimo config
                 manualConfigSection(
                     platform: .mimo,
-                    icon: "m.circle.fill",
+                    icon: PlatformType.mimo.icon,
                     color: .orange
                 ) {
                     mimoConfigForm
@@ -157,8 +157,7 @@ struct SettingsWindowView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: icon)
-                    .foregroundColor(color)
+                PlatformLogoView(platform: platform)
                 Text(platform.rawValue)
                     .font(.headline)
                 Spacer()

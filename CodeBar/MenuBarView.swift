@@ -1,5 +1,27 @@
 import SwiftUI
 
+struct PlatformLogoView: View {
+    let platform: PlatformType
+    var size: CGFloat = 16
+
+    var body: some View {
+        Group {
+            if let assetName = platform.logoAssetName {
+                Image(assetName)
+                    .resizable()
+                    .renderingMode(platform.usesOriginalLogoColor ? .original : .template)
+                    .scaledToFit()
+            } else {
+                Image(systemName: platform.icon)
+                    .resizable()
+                    .scaledToFit()
+            }
+        }
+        .frame(width: size, height: size)
+        .foregroundColor(platform.usesOriginalLogoColor ? nil : Color(hex: platform.brandColor))
+    }
+}
+
 struct MenuBarView: View {
     @ObservedObject var tracker: UsageTracker
     @ObservedObject var updateChecker: UpdateChecker
@@ -128,8 +150,7 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 10) {
             // 平台名称
             HStack {
-                Image(systemName: platform.icon)
-                    .foregroundColor(Color(hex: platform.brandColor))
+                PlatformLogoView(platform: platform)
                 Text(usage.platformName)
                     .font(.subheadline)
                     .fontWeight(.semibold)

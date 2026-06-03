@@ -2,7 +2,7 @@
 
 一个 macOS 菜单栏应用，用于实时监控 AI Coding 平台的用量。
 
-当前版本：`v2.1.1`
+当前版本：`v2.1.2`
 
 ## 支持平台
 
@@ -220,8 +220,8 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Release -de
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.1.1 -m "CodeBar v2.1.1"
-git push origin v2.1.1
+git tag -a v2.1.2 -m "CodeBar v2.1.2"
+git push origin v2.1.2
 ```
 
 GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release。
@@ -232,6 +232,16 @@ GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release�
 - Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - 不会上传或分享任何凭据信息
 - 日志只记录请求 URL 和状态码，不记录 token、Cookie 或 API Key
+
+## 商标与 Logo
+
+项目中展示的平台 Logo 仅用于标识对应服务，相关商标和 Logo 归各自权利方所有。CodeBar 与阿里云、ZenMux、小米、OpenAI 无官方从属、授权或背书关系。
+
+- ZenMux Logo 来源：[zenmux.ai](https://zenmux.ai/)
+- Xiaomi / Mi Logo 来源：[mi.com](https://www.mi.com/)
+- OpenAI / ChatGPT Logo 来源：[chatgpt.com/codex](https://chatgpt.com/zh-Hans-CN/codex/)
+
+如相关权利方希望调整或移除展示，请通过 Issue 联系。
 
 ## 许可证
 
