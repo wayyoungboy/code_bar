@@ -1,5 +1,8 @@
 # CodeBar Go — Design Spec
 
+> Historical draft. This document describes an earlier Go + Wails rewrite idea and is not the current implementation.
+> The active app is the SwiftUI + AppKit macOS implementation documented in `README.md`, `docs/architecture.md`, and `docs/developer-guide.md`.
+
 ## Problem
 
 CodeBar is macOS-only (SwiftUI + AppKit). The architecture tightly couples UI with provider logic, and adding new platforms requires modifying enum-based switch statements throughout the codebase.

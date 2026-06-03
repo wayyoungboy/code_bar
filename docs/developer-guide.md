@@ -1,501 +1,187 @@
 # CodeBar 开发者指南
 
-> 本文档面向希望扩展 CodeBar 的开发者：添加新 AI 平台 Provider、修改前端 UI、或理解内部工作机制。
+本文档面向希望扩展 CodeBar 的开发者：添加新 Provider、修改 SwiftUI UI、或发布新版本。
 
----
-
-## 目录
-
-1. [快速开始](#1-快速开始)
-2. [添加新 Provider](#2-添加新-provider)
-3. [凭据存储键命名规范](#3-凭据存储键命名规范)
-4. [前端组件开发](#4-前端组件开发)
-5. [Wails 绑定与事件](#5-wails-绑定与事件)
-6. [测试](#6-测试)
-7. [构建与发布](#7-构建与发布)
-8. [常见问题](#8-常见问题)
-
----
-
-## 1. 快速开始
+## 快速开始
 
 ### 环境要求
 
-| 工具 | 版本 | 安装 |
-|------|------|------|
-| Go | ≥ 1.25 | `brew install go` |
-| Node.js | ≥ 20 | `brew install node` |
-| Wails CLI | v2 | `go install github.com/wailsapp/wails/v2/cmd/wails@latest` |
-| Xcode Command Line Tools | 最新 | `xcode-select --install` (macOS) |
+| 工具 | 要求 |
+| --- | --- |
+| macOS | 13.0+ |
+| Xcode | 15.0+ |
+| GitHub CLI | 发布时需要 |
 
-### 首次运行
+### 构建
 
 ```bash
-git clone <repo> && cd code_bar
-go mod download
-cd frontend && npm install && cd ..
-wails dev
+xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 ```
 
-`wails dev` 会:
-1. 启动 Vite 开发服务器 (http://localhost:5173)
-2. 编译 Go 后端
-3. 启动带热重载的桌面窗口
-
-### 项目结构速览
-
-```
-main.go           ← App 结构体 (Wails 绑定), 菜单, 启动逻辑
-internal/config/  ← 凭据存储 (跨平台)
-internal/provider/ ← AI 平台适配器 (每个一个 .go 文件)
-internal/tracker/  ← 定时刷新、缓存、事件推送
-internal/tray/     ← 系统托盘
-frontend/src/      ← React UI
-```
-
----
-
-## 2. 添加新 Provider
-
-添加新 AI 平台只需 **两个文件**，无需修改其他代码。
-
-### 步骤 1: 创建 Go Provider 文件
-
-在 `internal/provider/` 下创建 `yourprovider.go`:
-
-```go
-package provider
-
-import (
-    "codebar/internal/config"
-    "encoding/json"
-    "fmt"
-    "net/http"
-)
-
-// init() 自注册 — 编译时自动加入全局 registry
-func init() { RegisterProvider(&YourProvider{}) }
-
-type YourProvider struct{ store config.Store }
-
-// SetStore 由 InstantiateProviders() 通过类型断言调用
-func (y *YourProvider) SetStore(s config.Store) { y.store = s }
-
-// Name 返回显示名称 (出现在 UI 卡片标题)
-func (y *YourProvider) Name() string { return "YourPlatform" }
-
-// Icon 返回图标键 (对应前端 PROVIDER_CONFIG 中的 key)
-func (y *YourProvider) Icon() string { return "yourplatform" }
-
-// IsConfigured 检查凭据是否已配置
-func (y *YourProvider) IsConfigured() bool {
-    if y.store == nil {
-        return false
-    }
-    ok, _ := y.store.Exists("yourplatform.api_key")
-    return ok
-}
-
-// FetchUsage 调用真实 API 获取用量数据
-func (y *YourProvider) FetchUsage() (*Usage, error) {
-    if y.store == nil {
-        return nil, fmt.Errorf("yourplatform: config store not set")
-    }
-    key, _ := y.store.Get("yourplatform.api_key")
-    if key == "" {
-        return nil, fmt.Errorf("yourplatform: API key not configured")
-    }
-
-    req, _ := http.NewRequest(http.MethodGet, "https://api.yourplatform.com/v1/usage", nil)
-    req.Header.Set("Authorization", "Bearer "+key)
-
-    // 使用共享 HTTP 辅助函数 (自动处理 401/403/429)
-    body, err := doRequest("yourplatform", req)
-    if err != nil {
-        return nil, err
-    }
-
-    var result struct {
-        Plan  string  `json:"plan"`
-        Used  float64 `json:"used"`
-        Limit float64 `json:"limit"`
-    }
-    if err := json.Unmarshal(body, &result); err != nil {
-        return nil, fmt.Errorf("yourplatform: parse response: %w", err)
-    }
-
-    return &Usage{
-        PlatformName: "YourPlatform",
-        PlanType:     result.Plan,
-        Items: []UsageItem{{
-            Key:   "quota",
-            Label: "配额使用",
-            Used:  result.Used,
-            Total: result.Limit,
-            Unit:  "requests",
-        }},
-    }, nil
-}
-
-// ValidateConfig 验证凭据有效性 (实际调用 FetchUsage)
-func (y *YourProvider) ValidateConfig() error {
-    if !y.IsConfigured() {
-        return fmt.Errorf("yourplatform: not configured")
-    }
-    _, err := y.FetchUsage()
-    return err
-}
-```
-
-### 步骤 2: 注册前端配置
-
-在 `frontend/src/App.tsx` 中添加两处配置:
-
-**1. PROVIDER_CONFIG** — 图标颜色和缩写:
-
-```typescript
-const PROVIDER_CONFIG: Record<string, { color: string; label: string }> = {
-  // ... 现有配置
-  yourplatform: { color: '#FF6B6B', label: 'YP' },
-}
-```
-
-**2. CREDENTIAL_FIELDS** — 设置面板字段:
-
-```typescript
-const CREDENTIAL_FIELDS: Record<string, { key: string; label: string; secret: boolean }[]> = {
-  // ... 现有配置
-  'YourPlatform': [{ key: 'yourplatform.api_key', label: 'API Key', secret: true }],
-}
-```
-
-### 完成
-
-重新运行 `wails dev`，新 Provider 会自动出现在设置面板中。配置凭据后，下次刷新即可看到用量数据。
-
-### 多凭据字段
-
-如果 Provider 需要多个凭据 (如百炼需要 Cookie + sec_token):
-
-```go
-func (b *BailianProvider) IsConfigured() bool {
-    ok, _ := b.store.Exists("bailian.cookie")
-    return ok
-}
-
-func (b *BailianProvider) FetchUsage() (*Usage, error) {
-    cookie, _ := b.store.Get("bailian.cookie")
-    secToken, _ := b.store.Get("bailian.sec_token")
-    region, _ := b.store.Get("bailian.region")
-    // ...
-}
-```
-
-对应前端:
-
-```typescript
-'阿里云百炼': [
-    { key: 'bailian.cookie', label: 'Cookie', secret: true },
-    { key: 'bailian.sec_token', label: 'Sec Token', secret: true },
-    { key: 'bailian.region', label: '地域 (默认 cn-beijing)', secret: false },
-],
-```
-
-### 多个 UsageItem
-
-Provider 可返回多个用量条目 (如 ZenMux 返回 5小时和 7天配额):
-
-```go
-items := []UsageItem{
-    {Key: "5hour", Label: "5小时", Used: 800, Total: 6182, Unit: "flows", ResetDate: resetTime5h},
-    {Key: "7day",  Label: "7天",   Used: 2400, Total: 12000, Unit: "flows", ResetDate: resetTime7d},
-}
-```
-
-### ExtraInfo
-
-额外信息以键值对形式显示在卡片底部:
-
-```go
-extra := []ExtraInfoKV{
-    {Label: "账户状态", Value: "active"},
-    {Label: "套餐", Value: "Ultra $199/month"},
-    {Label: "单价", Value: "$0.0322/flow"},
-}
-```
-
----
-
-## 3. 凭据存储键命名规范
-
-格式: `{provider}.{field}`
-
-| Provider | 键 | 说明 |
-|----------|-----|------|
-| ZenMux | `zenmux.api_key` | API Key |
-| 百炼 | `bailian.cookie` | Cookie |
-| 百炼 | `bailian.sec_token` | Security Token |
-| 百炼 | `bailian.region` | 地域 (非密钥) |
-| Claude | `claude.oauth_token` | OAuth Token |
-| Copilot | `copilot.api_key` | API Key |
-| ... | `{name}.api_key` | 标准格式 |
-
----
-
-## 4. 前端组件开发
-
-### 组件概览
-
-| 组件 | 文件位置 | 职责 |
-|------|---------|------|
-| `App` | App.tsx:335 | 根组件，管理全局状态和路由 |
-| `UsageCard` | App.tsx:172 | 单个平台的用量卡片 |
-| `ProgressBar` | App.tsx:142 | 进度条，支持标签和重置时间 |
-| `ProviderIcon` | App.tsx:74 | 彩色圆形图标 |
-| `SettingsPanel` | App.tsx:212 | 凭据配置面板 |
-| `Toast` | App.tsx:127 | 通知弹窗 (4s 自动消失) |
-| `Spinner` | App.tsx:318 | SVG 加载旋转动画 |
-
-### 状态管理
-
-使用 React `useState` + `useEffect`，无外部状态库:
-
-```typescript
-const [snapshots, setSnapshots] = useState<Record<string, UsageSnapshot>>({})
-const [lastRefresh, setLastRefresh] = useState<string>('')
-const [view, setView] = useState<'panel' | 'settings'>('panel')
-const [providers, setProviders] = useState<ProviderInfo[]>([])
-const [isRefreshing, setIsRefreshing] = useState(false)
-```
-
-### 事件监听
-
-在 `App` 组件的 `useEffect` 中注册 Wails 事件:
-
-```typescript
-useEffect(() => {
-    EventsOn('usage-update', (snap: UsageSnapshot) => {
-        setSnapshots(prev => ({ ...prev, [snap.platformName]: snap }))
-        setLastRefresh(new Date().toLocaleTimeString())
-        setIsRefreshing(false)
-    })
-
-    EventsOn('navigate', (target: string) => {
-        if (target === 'settings') setView('settings')
-        else if (target === 'panel') setView('panel')
-    })
-}, [])
-```
-
-### 样式约定
-
-- 使用 Tailwind CSS v4 utility classes
-- 深色主题: 背景 `#0f0f14` (`bg-[#0f0f14]`)
-- 卡片: `bg-gray-800 rounded-xl border border-gray-700`
-- 文字: 白色 (`text-white`) / 灰色 (`text-gray-300`/`text-gray-400`)
-- 按钮: `bg-indigo-600 hover:bg-indigo-500` (主要) / `bg-gray-700 hover:bg-gray-600` (次要)
-
-### Wails 拖拽区域
-
-窗口标题栏使用 CSS 自定义属性实现拖拽:
-
-```tsx
-<div style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
-    {/* 可拖拽区域 */}
-    <div style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
-        {/* 按钮等不可拖拽元素 */}
-    </div>
-</div>
-```
-
----
-
-## 5. Wails 绑定与事件
-
-### 绑定机制
-
-Wails 通过反射将 `App` 结构体的公开方法暴露为 JavaScript 函数:
-
-```go
-// main.go
-Bind: []interface{}{app}
-```
-
-自动生成的 TypeScript 声明: `frontend/src/wailsjs/go/main/App.d.ts`
-
-### 重新生成绑定
-
-修改 `App` 结构体的方法签名后:
+Release 验证：
 
 ```bash
-wails generate module
+xcodebuild -project CodeBar.xcodeproj \
+  -scheme CodeBar \
+  -configuration Release \
+  -derivedDataPath build \
+  CODE_SIGN_IDENTITY="" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  build
 ```
 
-这会重新生成 `App.d.ts` 和 `models.ts`。
+## 添加新 Provider
 
-### 事件方向
+### 1. 添加平台枚举
 
-| 方向 | Go 端 | Frontend 端 |
-|------|-------|------------|
-| Go → Frontend | `runtime.EventsEmit(ctx, "event-name", data)` | `EventsOn("event-name", callback)` |
-| Frontend → Go | 通过绑定方法调用 | `api.MethodName(args)` |
+在 `UsageTracker.swift` 的 `PlatformType` 中添加平台：
 
----
-
-## 6. 测试
-
-### Go 测试
-
-```bash
-# 全部测试
-go test ./...
-
-# 特定包
-go test ./internal/provider/ -v
-
-# ZenMux 集成测试 (需要真实 API Key)
-ZENMUX_API_KEY=sk-... go test ./internal/provider/ -run TestZenMux -v
+```swift
+case yourPlatform = "Your Platform"
 ```
 
-### 编写集成测试
+同时补齐：
 
-参考 `internal/provider/zenmux_test.go`:
+- `icon`
+- `shortName`
+- `brandColor`
 
-```go
-func TestZenMuxFetch(t *testing.T) {
-    key := os.Getenv("ZENMUX_API_KEY")
-    if key == "" {
-        t.Skip("ZENMUX_API_KEY not set")
+### 2. 添加配置模型
+
+在 `Providers/PlatformProvider.swift` 中添加配置结构：
+
+```swift
+struct YourPlatformConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .yourPlatform
+    var apiKey: String
+
+    var isValid: Bool {
+        !apiKey.isEmpty
     }
-
-    p := &ZenMuxProvider{}
-    p.SetStore(newMemStore(map[string]string{
-        "zenmux.api_key": key,
-    }))
-
-    usage, err := p.FetchUsage()
-    if err != nil {
-        t.Fatalf("FetchUsage failed: %v", err)
-    }
-    // 验证数据
 }
 ```
 
-### memStore 测试辅助
+如果平台不需要 CodeBar 保存凭据，可以像 `CodexConfig` 一样让 `isValid` 始终为 `true`，只保存网络配置或展示配置。
 
-```go
-type memStore struct{ data map[string]string }
+### 3. 实现 Provider
 
-func (m *memStore) Get(key string) (string, error) { return m.data[key], nil }
-func (m *memStore) Set(key, value string) error     { m.data[key] = value; return nil }
-func (m *memStore) Delete(key string) error          { delete(m.data, key); return nil }
-func (m *memStore) Exists(key string) (bool, error)  { _, ok := m.data[key]; return ok, nil }
-func (m *memStore) Keys() ([]string, error) {
-    keys := make([]string, 0, len(m.data))
-    for k := range m.data { keys = append(keys, k) }
-    return keys, nil
+在 `CodeBar/Providers/` 下创建 Provider：
+
+```swift
+struct YourPlatformProvider: PlatformProvider {
+    let platformName = "Your Platform"
+    private let config: YourPlatformConfig
+
+    var isConfigured: Bool {
+        config.isValid
+    }
+
+    func fetchUsage() async throws -> PlatformUsageData {
+        // 1. 构造 URLRequest
+        // 2. 调用 URLSession
+        // 3. 解析平台响应
+        // 4. 映射成 PlatformUsageData
+    }
+
+    func validateConfig() async throws -> Bool {
+        _ = try await fetchUsage()
+        return true
+    }
 }
 ```
 
-### 前端类型检查
+UI 只依赖 `PlatformUsageData`，Provider 可以自由定义 `UsageItem.key`、`label`、`unit` 和 `extraInfo`。
+
+### 4. 注册 Provider
+
+在 `UsageTracker.loadConfig()` 中读取配置并注册：
+
+```swift
+if let data = allConfigs[PlatformType.yourPlatform.rawValue],
+   let config = try? JSONDecoder().decode(YourPlatformConfig.self, from: data) {
+    providers[.yourPlatform] = YourPlatformProvider(config: config)
+}
+```
+
+再添加保存和读取配置的方法，参考 `saveMimoConfig` 或 `saveCodexProxyURL`。
+
+### 5. 添加设置 UI
+
+在 `SettingsWindow.swift` 中：
+
+- 添加 `@State` 字段
+- 在 `body` 中加入 `manualConfigSection`
+- 添加配置表单
+- 添加帮助 sheet 内容
+- 在 `onAppear` 加载已保存配置
+
+## Codex Provider 注意事项
+
+Codex 与其他平台不同：
+
+- 不在 CodeBar 中保存 access token
+- 自动读取 Keychain `Codex Auth` 或 `~/.codex/auth.json`
+- 仅支持 `auth_mode == "chatgpt"`
+- 代理配置可选，保存到 CodeBar Keychain
+- 请求 `chatgpt.com/backend-api/wham/usage`
+
+新增 Codex 字段时，应优先保持与接口原始字段名对应的 `CodingKeys`，再映射成 UI 需要的 `UsageItem` 或 `extraInfo`。
+
+## 配置与缓存
+
+| 数据 | 存储位置 |
+| --- | --- |
+| 平台凭据 | Keychain `PlatformConfigs` |
+| Codex 代理配置 | Keychain `PlatformConfigs` |
+| Codex OAuth | Codex CLI Keychain / `~/.codex/auth.json` |
+| 平台启用状态 | UserDefaults |
+| 展示项配置 | UserDefaults |
+| 重置时间展示配置 | UserDefaults |
+| 用量缓存 | UserDefaults |
+
+## UI 约定
+
+- 平台卡片由 `MenuBarView.platformUsageCard` 渲染
+- Provider 不直接操作 UI
+- `UsageItem.key` 必须稳定，避免用户展示配置失效
+- `extraInfo` 用于展示套餐、账号状态、余额、到期时间等非进度条信息
+- 按钮、开关和帮助内容放在 `SettingsWindow`
+
+## 发布
+
+发布不需要手动上传本地 DMG。流程：
+
+1. 更新 `CodeBar/Info.plist`：
+
+```xml
+<key>CFBundleShortVersionString</key>
+<string>2.1.0</string>
+```
+
+2. 提交版本变更：
 
 ```bash
-cd frontend && npx tsc -b
+git add CodeBar/Info.plist
+git commit -m "Bump version to 2.1.0"
+git push origin main
 ```
 
-### 代码质量检查
+3. 创建并推送 tag：
 
 ```bash
-go vet ./...
-cd frontend && npm run lint
+git tag -a v2.1.0 -m "CodeBar v2.1.0"
+git push origin v2.1.0
 ```
 
----
+4. GitHub Actions 自动构建、签名、创建 DMG 并上传 Release。
 
-## 7. 构建与发布
+## 验证清单
 
-### 本地构建
+发布前至少运行：
 
 ```bash
-# 生产构建
-wails build
-
-# macOS — 指定架构
-wails build -platform darwin/arm64
-wails build -platform darwin/amd64
-
-# Linux
-wails build -platform linux/amd64
-
-# Windows
-wails build -platform windows/amd64
+xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 ```
 
-### 构建产物
-
-| 平台 | 路径 | 大小 (约) |
-|------|------|---------|
-| macOS | `build/bin/CodeBar.app` | 9 MB (arm64) |
-| Linux | `build/bin/CodeBar` | — |
-| Windows | `build/bin/CodeBar.exe` | — |
-
-### macOS 代码签名
-
-```bash
-# Ad-hoc 签名 (本地使用)
-codesign --force --deep --sign - build/bin/CodeBar.app
-
-# 开发者签名 (分发)
-codesign --force --deep --sign "Developer ID Application: ..." build/bin/CodeBar.app
-```
-
-### Info.plist 配置
-
-关键配置项 (`build/darwin/Info.plist`):
-
-- `LSUIElement: 1` — 不显示 Dock 图标 (菜单栏应用)
-- `NSHighResolutionCapable: true` — Retina 支持
-- `LSMinimumSystemVersion: 10.13.0` — 最低 macOS 版本
-
----
-
-## 8. 常见问题
-
-### Q: 为什么 Linux/Windows 的凭据存储回退到文件?
-
-A: MVP 阶段优先保证功能可用。`libsecretStore` 和 `dpapiStore` 目前委托给 `fileStore` (AES-GCM 加密)。后续版本会完善原生 D-Bus/DPAPI 实现。
-
-### Q: Keychain 写入失败怎么办?
-
-A: `Set()` 使用 delete-then-add 模式避免重复键错误。如果仍然失败，检查 Keychain Access 中是否有 "codebar" 服务的权限问题。
-
-### Q: 如何调试 Provider API 调用?
-
-A: 使用 `slog` 日志。Tracker 会在 `fetchOne()` 失败时输出 warning:
-
-```
-slog.Warn("provider fetch failed", "provider", p.Name(), "err", err)
-```
-
-运行 `wails dev` 时日志输出到终端。
-
-### Q: 前端如何知道 Provider 是否已配置?
-
-A: `ListKnownProviders()` 返回每个 provider 的 `configured` 字段 (`"true"/"false"`)。前端据此决定是否显示绿色指示器和空状态引导。
-
-### Q: 为什么使用 init() 自注册而不是显式注册?
-
-A: 零耦合。新 provider 只需创建一个文件，`go build` 自动编译并注册。无需在 main.go 或其他文件中添加 import 或注册代码。
-
-### Q: tray 标签轮换如何工作?
-
-A: `main.go` 中的协程每 5 秒递增 `atomic.Int64` 索引，从 `trayLabels` 切片中取下一个 provider 名，查找其最新 snapshot，格式化为 `"ZM 83%"` 并调用 `sysTray.UpdateLabel()`。
-
-### Q: SingleInstanceLock 如何工作?
-
-A: Wails v2 的 `SingleInstanceLock` 使用 OS 级别的锁机制。当第二个实例启动时:
-1. 检测到锁已被持有
-2. 将启动参数发送给第一个实例
-3. 第一个实例的 `OnSecondInstanceLaunch` 回调被触发
-4. 第一个实例显示窗口并发送 `"second-instance"` 事件
-5. 第二个实例自动退出
+涉及发布时额外运行 Release 构建。涉及 UI 变更时，启动 Debug app 并人工检查菜单栏弹窗和设置窗口。
