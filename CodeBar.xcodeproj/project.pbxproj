@@ -20,6 +20,7 @@
 			A1000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000012 /* Assets.xcassets */; };
 			A1000012 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* UpdateChecker.swift */; };
 			A1000038 /* MimoProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* MimoProvider.swift */; };
+			A1000039 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000040 /* CodexProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 			A2000013 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 			A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 			A2000039 /* MimoProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimoProvider.swift; sourceTree = "<group>"; };
+			A2000040 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -92,6 +94,7 @@
 					A2000005 /* BailianProvider.swift */,
 					A2000007 /* ZenMuxProvider.swift */,
 					A2000039 /* MimoProvider.swift */,
+					A2000040 /* CodexProvider.swift */,
 				);
 				path = Providers;
 				sourceTree = "<group>";
@@ -178,6 +181,7 @@
 					A1000010 /* Logger.swift in Sources */,
 					A1000012 /* UpdateChecker.swift in Sources */,
 					A1000038 /* MimoProvider.swift in Sources */,
+					A1000039 /* CodexProvider.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};

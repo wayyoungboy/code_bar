@@ -7,6 +7,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     case bailian = "阿里云百炼"
     case zenmux = "ZenMux"
     case mimo = "小米 MiMo"
+    case codex = "Codex"
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .bailian: return "cloud.fill"
         case .zenmux: return "bolt.fill"
         case .mimo: return "m.circle.fill"
+        case .codex: return "terminal.fill"
         }
     }
 
@@ -23,6 +25,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .bailian: return "百炼"
         case .zenmux: return "ZenMux"
         case .mimo: return "MiMo"
+        case .codex: return "Codex"
         }
     }
 
@@ -31,6 +34,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .bailian: return "#0070FF"
         case .zenmux: return "#8B5CF6"
         case .mimo: return "#FF6900"
+        case .codex: return "#10A37F"
         }
     }
 }
@@ -148,6 +152,11 @@ class UsageTracker: ObservableObject {
             providers[.mimo] = MimoProvider(config: config)
             AppLogger.logConfigChange(platform: "MiMo", action: "加载配置")
         }
+
+        let codexConfig = allConfigs[PlatformType.codex.rawValue]
+            .flatMap { try? JSONDecoder().decode(CodexConfig.self, from: $0) } ?? CodexConfig()
+        providers[.codex] = CodexProvider(config: codexConfig)
+        AppLogger.logConfigChange(platform: "Codex", action: "加载配置")
     }
 
     private func loadAllConfigs() -> [String: Data] {
@@ -227,9 +236,28 @@ class UsageTracker: ObservableObject {
         return try? JSONDecoder().decode(MimoConfig.self, from: data)
     }
 
+    func saveCodexProxyURL(_ proxyURL: String?) {
+        let trimmed = proxyURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let config = CodexConfig(proxyURL: trimmed?.isEmpty == true ? nil : trimmed)
+        providers[.codex] = CodexProvider(config: config)
+        savePlatformConfig(config, for: .codex)
+        AppLogger.logConfigChange(platform: "Codex", action: "保存代理配置")
+        errorMessages[.codex] = nil
+        refresh()
+    }
+
+    func loadCodexConfig() -> CodexConfig? {
+        guard let data = loadAllConfigs()[PlatformType.codex.rawValue] else { return nil }
+        return try? JSONDecoder().decode(CodexConfig.self, from: data)
+    }
+
     func clearConfig(for platform: PlatformType) {
         removePlatformConfig(for: platform)
-        providers[platform] = nil
+        if platform == .codex {
+            providers[.codex] = CodexProvider()
+        } else {
+            providers[platform] = nil
+        }
         platforms[platform] = nil
         errorMessages[platform] = nil
         AppLogger.logConfigChange(platform: platform.shortName, action: "清除配置")

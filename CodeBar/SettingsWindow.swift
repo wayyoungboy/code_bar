@@ -5,6 +5,7 @@ struct SettingsWindowView: View {
     @State private var showBailianHelp = false
     @State private var showZenMuxHelp = false
     @State private var showMimoHelp = false
+    @State private var showCodexHelp = false
 
     // Bailian config
     @State private var cookies = ""
@@ -17,6 +18,9 @@ struct SettingsWindowView: View {
     // Mimo config
     @State private var mimoServiceToken = ""
     @State private var mimoUserId = ""
+
+    // Codex network config
+    @State private var codexProxyURL = ""
 
     var body: some View {
         ScrollView {
@@ -57,6 +61,15 @@ struct SettingsWindowView: View {
                     color: .orange
                 ) {
                     mimoConfigForm
+                }
+
+                // Codex config
+                manualConfigSection(
+                    platform: .codex,
+                    icon: "terminal.fill",
+                    color: .green
+                ) {
+                    codexConfigForm
                 }
 
                 // ZenMux notification settings
@@ -110,6 +123,9 @@ struct SettingsWindowView: View {
         .sheet(isPresented: $showMimoHelp) {
             HelpWindowView(platform: .mimo)
         }
+        .sheet(isPresented: $showCodexHelp) {
+            HelpWindowView(platform: .codex)
+        }
         .onAppear {
             if let config = tracker.loadBailianConfig() {
                 cookies = config.cookies
@@ -122,6 +138,9 @@ struct SettingsWindowView: View {
             if let config = tracker.loadMimoConfig() {
                 mimoServiceToken = config.serviceToken
                 mimoUserId = config.userId
+            }
+            if let config = tracker.loadCodexConfig() {
+                codexProxyURL = config.proxyURL ?? ""
             }
             tracker.checkNotificationPermission()
         }
@@ -376,6 +395,40 @@ struct SettingsWindowView: View {
             }
         }
     }
+
+    // MARK: - Codex config form
+
+    private var codexConfigForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 4) {
+                Image(systemName: "info.circle")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Text("自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5小时 / 7天订阅额度")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("代理地址（可选）")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $codexProxyURL)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack {
+                Button(action: { showCodexHelp = true }) {
+                    Image(systemName: "questionmark.circle")
+                    Text("帮助")
+                }
+                Spacer()
+                Button("保存代理") {
+                    tracker.saveCodexProxyURL(codexProxyURL)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Help Window
@@ -401,6 +454,8 @@ struct HelpWindowView: View {
                         zenMuxHelpSteps
                     case .mimo:
                         mimoHelpSteps
+                    case .codex:
+                        codexHelpSteps
                     }
                 }
             }
@@ -422,6 +477,7 @@ struct HelpWindowView: View {
         case .bailian: return "获取百炼凭据帮助"
         case .zenmux: return "获取 ZenMux API Key 帮助"
         case .mimo: return "获取小米 MiMo 凭据帮助"
+        case .codex: return "获取 Codex 用量凭据帮助"
         }
     }
 
@@ -468,6 +524,15 @@ struct HelpWindowView: View {
             HelpStepView(number: 3, title: "切换到 Application 标签", description: "在开发者工具中点击 Application（应用）标签", icon: "network")
             HelpStepView(number: 4, title: "找到 Cookies", description: "在左侧 Cookies 中找到 https://platform.xiaomimimo.com", icon: "doc")
             HelpStepView(number: 5, title: "复制凭据", description: "复制 api-platform_serviceToken 和 userId 的值", icon: "doc.on.clipboard")
+        }
+    }
+
+    private var codexHelpSteps: some View {
+        Group {
+            HelpStepView(number: 1, title: "安装 Codex CLI", description: "安装并打开 OpenAI Codex CLI", icon: "terminal")
+            HelpStepView(number: 2, title: "使用 ChatGPT 登录", description: "通过 Codex CLI 登录 ChatGPT 账号，使 ~/.codex/auth.json 或 Keychain 中生成 OAuth 凭据", icon: "person.circle")
+            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 Codex Auth 或 ~/.codex/auth.json，不需要手动填写凭据", icon: "key")
+            HelpStepView(number: 4, title: "代理可选", description: "无法直连 chatgpt.com 时，可填写 http 或 socks5 代理地址", icon: "network")
         }
     }
 }

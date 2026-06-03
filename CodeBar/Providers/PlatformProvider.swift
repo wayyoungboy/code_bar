@@ -113,6 +113,34 @@ struct MimoConfig: PlatformConfig, Codable {
     }
 }
 
+/// Codex CLI / ChatGPT OAuth 用量配置
+struct CodexConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .codex
+    var proxyURL: String?
+
+    init(proxyURL: String? = nil) {
+        self.proxyURL = proxyURL
+    }
+
+    var isValid: Bool {
+        true
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case proxyURL = "codex_proxy_url"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        proxyURL = try container.decodeIfPresent(String.self, forKey: .proxyURL)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(proxyURL, forKey: .proxyURL)
+    }
+}
+
 // MARK: - 辅助扩展
 
 extension String {
