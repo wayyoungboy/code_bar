@@ -1,6 +1,6 @@
 # CodeBar 架构文档
 
-> 版本：2.1.0  
+> 版本：2.1.2  
 > 框架：SwiftUI + AppKit  
 > 平台：macOS 13+
 
@@ -27,6 +27,18 @@ CodeBar 是一个 macOS 菜单栏应用，用于监控多个 AI Coding 平台的
 | 日志 | `OSLog` |
 | 发布 | GitHub Actions + GitHub Releases |
 
+## 菜单栏展示
+
+菜单栏由 `CodeBarApp` 管理 `NSStatusItem`。配置多个平台时按 `Constants.rotationInterval` 轮播；配置多个展示项时，菜单栏状态文本会分为上下两层展示，例如 `5h 8%` / `7d 1%`。如果用户在设置页启用了对应展示项的重置时间，状态文本会追加紧凑剩余时间，例如 `5h 8%(3h20m)`。
+
+平台图标优先使用 `Assets.xcassets` 中的品牌资产：
+
+- `CodexLogo`
+- `ZenMuxLogo`
+- `XiaomiLogo`
+
+未配置品牌资产的平台使用 `PlatformType.icon` 中的 SF Symbol 兜底。商标与 Logo 来源声明维护在 `README.md`。
+
 ## 核心模块
 
 ```text
@@ -39,6 +51,7 @@ CodeBar/
 ├── KeychainHelper.swift
 ├── Logger.swift
 ├── UpdateChecker.swift
+├── Assets.xcassets
 └── Providers/
     ├── PlatformProvider.swift
     ├── BailianProvider.swift

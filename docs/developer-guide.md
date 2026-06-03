@@ -156,22 +156,22 @@ Codex 与其他平台不同：
 
 ```xml
 <key>CFBundleShortVersionString</key>
-<string>2.1.0</string>
+<string>2.1.2</string>
 ```
 
 2. 提交版本变更：
 
 ```bash
-git add CodeBar/Info.plist
-git commit -m "Bump version to 2.1.0"
+git add CodeBar/Info.plist CodeBar.xcodeproj/project.pbxproj README.md
+git commit -m "Bump version to 2.1.2"
 git push origin main
 ```
 
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.1.0 -m "CodeBar v2.1.0"
-git push origin v2.1.0
+git tag -a v2.1.2 -m "CodeBar v2.1.2"
+git push origin v2.1.2
 ```
 
 4. GitHub Actions 自动构建、签名、创建 DMG 并上传 Release。
@@ -185,3 +185,12 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 ```
 
 涉及发布时额外运行 Release 构建。涉及 UI 变更时，启动 Debug app 并人工检查菜单栏弹窗和设置窗口。
+
+## 平台 Logo
+
+平台 Logo 资产放在 `CodeBar/Assets.xcassets`，由 `PlatformType.logoAssetName` 关联到 UI。新增品牌 Logo 时需要：
+
+1. 新增 `*.imageset`，包含 `Contents.json` 和图片/SVG 文件
+2. 在 `PlatformType.logoAssetName` 中返回 asset 名称
+3. 如果 Logo 必须保留原色，在 `usesOriginalLogoColor` 中返回 `true`
+4. 在 `README.md` 的“商标与 Logo”章节补充来源和声明
