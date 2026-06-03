@@ -16,7 +16,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .bailian: return "cloud.fill"
         case .zenmux: return "bolt.fill"
         case .mimo: return "m.circle.fill"
-        case .codex: return "terminal.fill"
+        case .codex: return "chevron.left.forwardslash.chevron.right"
         }
     }
 

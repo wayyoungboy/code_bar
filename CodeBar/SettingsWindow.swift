@@ -66,7 +66,7 @@ struct SettingsWindowView: View {
                 // Codex config
                 manualConfigSection(
                     platform: .codex,
-                    icon: "terminal.fill",
+                    icon: PlatformType.codex.icon,
                     color: .green
                 ) {
                     codexConfigForm

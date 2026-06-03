@@ -2,7 +2,7 @@
 
 一个 macOS 菜单栏应用，用于实时监控 AI Coding 平台的用量。
 
-当前版本：`v2.1.0`
+当前版本：`v2.1.1`
 
 ## 支持平台
 
@@ -220,8 +220,8 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Release -de
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.1.0 -m "CodeBar v2.1.0"
-git push origin v2.1.0
+git tag -a v2.1.1 -m "CodeBar v2.1.1"
+git push origin v2.1.1
 ```
 
 GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release。
