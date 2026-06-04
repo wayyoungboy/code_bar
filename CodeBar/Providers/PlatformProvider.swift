@@ -39,12 +39,148 @@ struct UsageItem {
     }
 }
 
+/// 单账号用量数据（用于支持同平台多账号明细）
+struct AccountUsageData: Identifiable {
+    let id: String
+    let alias: String
+    let planType: String
+    let items: [UsageItem]
+    let resetTimeKeys: [String]
+    var extraInfo: [(label: String, value: String)] = []
+    var errorMessage: String?
+}
+
 /// 平台用量数据
 struct PlatformUsageData {
     let platformName: String
     let planType: String
     let items: [UsageItem]
     var extraInfo: [(label: String, value: String)] = []
+    var accountBreakdowns: [AccountUsageData] = []
+}
+
+enum MonitorModuleConfig: Codable {
+    case bailian(BailianConfig)
+    case zenmux(ZenMuxAccountConfig)
+    case mimo(MimoConfig)
+    case codex(CodexConfig)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case bailian
+        case zenmux
+        case mimo
+        case codex
+    }
+
+    var platform: PlatformType {
+        switch self {
+        case .bailian: return .bailian
+        case .zenmux: return .zenmux
+        case .mimo: return .mimo
+        case .codex: return .codex
+        }
+    }
+
+    var isValid: Bool {
+        switch self {
+        case .bailian(let config):
+            return config.isValid
+        case .zenmux(let account):
+            return account.isValid
+        case .mimo(let config):
+            return config.isValid
+        case .codex(let config):
+            return config.isValid
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(PlatformType.self, forKey: .type)
+        switch type {
+        case .bailian:
+            self = .bailian(try container.decode(BailianConfig.self, forKey: .bailian))
+        case .zenmux:
+            self = .zenmux(try container.decode(ZenMuxAccountConfig.self, forKey: .zenmux))
+        case .mimo:
+            self = .mimo(try container.decode(MimoConfig.self, forKey: .mimo))
+        case .codex:
+            self = .codex(try container.decode(CodexConfig.self, forKey: .codex))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(platform, forKey: .type)
+        switch self {
+        case .bailian(let config):
+            try container.encode(config, forKey: .bailian)
+        case .zenmux(let account):
+            try container.encode(account, forKey: .zenmux)
+        case .mimo(let config):
+            try container.encode(config, forKey: .mimo)
+        case .codex(let config):
+            try container.encode(config, forKey: .codex)
+        }
+    }
+}
+
+struct MonitorModule: Codable, Identifiable {
+    var id: String
+    var alias: String
+    var config: MonitorModuleConfig
+    var isMonitoringEnabled: Bool
+    var showInMenuBar: Bool
+    var showInDetail: Bool
+    var isNotificationEnabled: Bool
+    var displayKeys: [String]
+    var resetTimeKeys: [String]
+    var sortOrder: Int
+
+    init(
+        id: String = UUID().uuidString,
+        alias: String,
+        config: MonitorModuleConfig,
+        isMonitoringEnabled: Bool = true,
+        showInMenuBar: Bool = true,
+        showInDetail: Bool = true,
+        isNotificationEnabled: Bool = true,
+        displayKeys: [String] = [],
+        resetTimeKeys: [String] = [],
+        sortOrder: Int
+    ) {
+        self.id = id
+        self.alias = alias
+        self.config = config
+        self.isMonitoringEnabled = isMonitoringEnabled
+        self.showInMenuBar = showInMenuBar
+        self.showInDetail = showInDetail
+        self.isNotificationEnabled = isNotificationEnabled
+        self.displayKeys = displayKeys
+        self.resetTimeKeys = resetTimeKeys
+        self.sortOrder = sortOrder
+    }
+
+    var platform: PlatformType {
+        config.platform
+    }
+
+    var aliasDisplayName: String? {
+        let trimmed = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var displayName: String {
+        if let aliasDisplayName {
+            return "\(platform.shortName) · \(aliasDisplayName)"
+        }
+        return platform.shortName
+    }
+
+    var isValid: Bool {
+        config.isValid
+    }
 }
 
 /// 平台提供者协议
@@ -86,14 +222,51 @@ struct BailianConfig: PlatformConfig, Codable {
 /// ZenMux 平台配置
 struct ZenMuxConfig: PlatformConfig, Codable {
     let platform: PlatformType = .zenmux
-    var apiKey: String
+    var accounts: [ZenMuxAccountConfig]
+
+    init(accounts: [ZenMuxAccountConfig] = []) {
+        self.accounts = accounts
+    }
 
     var isValid: Bool {
-        !apiKey.isEmpty && apiKey.count >= 20  // 基本长度检查
+        accounts.contains(where: \.isValid)
     }
 
     enum CodingKeys: String, CodingKey {
-        case apiKey = "zenmux_api_key"
+        case accounts = "zenmux_accounts"
+    }
+}
+
+struct ZenMuxAccountConfig: Codable, Identifiable, Equatable {
+    var id: String
+    var alias: String
+    var apiKey: String
+    var displayKeys: [String]
+    var resetTimeKeys: [String]
+
+    init(
+        id: String = UUID().uuidString,
+        alias: String = "",
+        apiKey: String = "",
+        displayKeys: [String] = ZenMuxAccountConfig.defaultDisplayKeys,
+        resetTimeKeys: [String] = []
+    ) {
+        self.id = id
+        self.alias = alias
+        self.apiKey = apiKey
+        self.displayKeys = displayKeys
+        self.resetTimeKeys = resetTimeKeys
+    }
+
+    static let defaultDisplayKeys = ["5hour", "7day"]
+
+    var isValid: Bool {
+        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && apiKey.count >= 20
+    }
+
+    var displayName: String {
+        let trimmed = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "未命名账号" : trimmed
     }
 }
 

@@ -91,12 +91,29 @@ classDiagram
     }
 
     class UsageTracker {
+        +modules [MonitorModule]
+        +moduleUsages [String: PlatformUsageData]
+        +moduleErrors [String: String]
         +platforms [PlatformType: PlatformUsageData]
         +errorMessages [PlatformType: String]
         +enabledPlatforms [PlatformType: Bool]
         +providers [PlatformType: PlatformProvider]
         +refresh() async
-        +saveCodexProxyURL(String?)
+        +addModule(MonitorModule)
+        +updateModule(MonitorModule)
+        +moveModules(IndexSet, Int)
+    }
+
+    class MonitorModule {
+        +id String
+        +alias String
+        +config MonitorModuleConfig
+        +isMonitoringEnabled Bool
+        +showInMenuBar Bool
+        +showInDetail Bool
+        +displayKeys [String]
+        +resetTimeKeys [String]
+        +sortOrder Int
     }
 
     class BailianProvider
@@ -108,6 +125,7 @@ classDiagram
     PlatformProvider <|.. ZenMuxProvider
     PlatformProvider <|.. MimoProvider
     PlatformProvider <|.. CodexProvider
+    UsageTracker --> MonitorModule
     UsageTracker --> PlatformProvider
     PlatformProvider --> PlatformUsageData
     PlatformUsageData *-- UsageItem
@@ -119,19 +137,22 @@ classDiagram
 sequenceDiagram
     participant Timer
     participant Tracker as UsageTracker
+    participant Module as MonitorModule
     participant Provider as PlatformProvider
     participant API as Platform API
     participant UI as SwiftUI Views
     participant Cache as UserDefaults
 
     Timer->>Tracker: refresh()
-    Tracker->>Tracker: filter enabled providers
-    loop each enabled provider
+    Tracker->>Tracker: filter enabled monitor modules
+    loop each enabled module
+        Tracker->>Module: read config/display/reset options
+        Tracker->>Provider: create provider from module config
         Tracker->>Provider: fetchUsage()
         Provider->>API: HTTPS request
         API-->>Provider: JSON response
         Provider-->>Tracker: PlatformUsageData
-        Tracker->>Tracker: update platforms
+        Tracker->>Tracker: update moduleUsages[module.id]
     end
     Tracker->>Cache: saveToStorage()
     Tracker-->>UI: @Published state change
@@ -149,9 +170,9 @@ sequenceDiagram
     participant API as chatgpt.com wham usage
 
     Tracker->>Codex: fetchUsage()
-    Codex->>Keychain: read Codex Auth
-    alt Keychain missing or invalid
-        Codex->>File: read auth.json
+    Codex->>File: read auth.json
+    alt file missing or invalid
+        Codex->>Keychain: read Codex Auth
     end
     Codex->>Codex: validate auth_mode == chatgpt
     Codex->>Codex: build URLSession

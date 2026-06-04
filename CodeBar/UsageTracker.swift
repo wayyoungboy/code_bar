@@ -55,6 +55,27 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
+    case independent
+    case rotating
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .independent: return "独立"
+        case .rotating: return "轮播"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .independent: return "每个模块创建一个独立 bar 栏状态项"
+        case .rotating: return "多个模块共用一个状态项，按顺序自动切换"
+        }
+    }
+}
+
 /// 多平台用量追踪器
 @MainActor
 class UsageTracker: ObservableObject {
@@ -72,9 +93,20 @@ class UsageTracker: ObservableObject {
 
     @Published var platforms: [PlatformType: PlatformUsageData] = [:]
     @Published var errorMessages: [PlatformType: String] = [:]
+    @Published var modules: [MonitorModule] = []
+    @Published var moduleUsages: [String: PlatformUsageData] = [:]
+    @Published var moduleErrors: [String: String] = [:]
     @Published var isLoading: Bool = false
     @Published var lastRefreshDate: Date = Date()
     @Published var notificationPermissionGranted: Bool = false
+    @Published var menuBarDisplayMode: MenuBarDisplayMode = MenuBarDisplayMode(
+        rawValue: UserDefaults.standard.string(forKey: Constants.menuBarDisplayModeKey) ?? ""
+    ) ?? .independent {
+        didSet {
+            UserDefaults.standard.set(menuBarDisplayMode.rawValue, forKey: Constants.menuBarDisplayModeKey)
+            NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
+        }
+    }
 
     // 每个平台的启用状态
     @Published var enabledPlatforms: [PlatformType: Bool] = [:] {
@@ -126,15 +158,15 @@ class UsageTracker: ObservableObject {
         errorMessages.values.first
     }
 
-    /// ZenMux 通知功能是否启用
-    var isZenMuxNoticeEnabled: Bool {
+    /// 额度刷新通知总开关
+    var isQuotaRefreshNoticeEnabled: Bool {
         get { UserDefaults.standard.object(forKey: Constants.zenmuxNoticeEnabledKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: Constants.zenmuxNoticeEnabledKey) }
     }
 
     init() {
         UNUserNotificationCenter.current().delegate = notificationDelegate
-        loadConfig()
+        loadModules()
         loadEnabledConfig()
         loadResetTimeConfig()
         loadDisplayConfig()
@@ -147,6 +179,142 @@ class UsageTracker: ObservableObject {
     }
 
     // MARK: - 配置管理
+
+    var sortedModules: [MonitorModule] {
+        modules.sorted { lhs, rhs in
+            if lhs.sortOrder == rhs.sortOrder {
+                return lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+            }
+            return lhs.sortOrder < rhs.sortOrder
+        }
+    }
+
+    var detailModules: [MonitorModule] {
+        sortedModules.filter(\.showInDetail)
+    }
+
+    var menuBarModules: [MonitorModule] {
+        sortedModules.filter { $0.isMonitoringEnabled && $0.showInMenuBar && $0.isValid }
+    }
+
+    var hasAnyModule: Bool {
+        !modules.isEmpty
+    }
+
+    func canAddModule(for platform: PlatformType, excluding moduleID: String? = nil) -> Bool {
+        if platform == .zenmux {
+            return true
+        }
+        return !modules.contains { module in
+            module.id != moduleID && module.platform == platform
+        }
+    }
+
+    func addModule(_ module: MonitorModule) {
+        guard canAddModule(for: module.platform) else { return }
+        var newModule = module
+        if !modules.contains(where: { $0.id == module.id }) {
+            newModule.sortOrder = modules.count
+        }
+        modules.append(newModule)
+        normalizeModuleOrder()
+        saveModules()
+        refresh()
+    }
+
+    func updateModule(_ module: MonitorModule) {
+        guard let index = modules.firstIndex(where: { $0.id == module.id }) else { return }
+        guard canAddModule(for: module.platform, excluding: module.id) else { return }
+        modules[index] = module
+        normalizeModuleOrder()
+        saveModules()
+        refresh()
+    }
+
+    func updateModule(id: String, mutate: (inout MonitorModule) -> Void) {
+        guard let index = modules.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&modules[index])
+        normalizeModuleOrder()
+        saveModules()
+        refresh()
+    }
+
+    func deleteModule(_ module: MonitorModule) {
+        modules.removeAll { $0.id == module.id }
+        moduleUsages[module.id] = nil
+        moduleErrors[module.id] = nil
+        normalizeModuleOrder()
+        saveModules()
+        refresh()
+    }
+
+    func moveModules(from source: IndexSet, to destination: Int) {
+        var sorted = sortedModules
+        sorted.move(fromOffsets: source, toOffset: destination)
+        for index in sorted.indices {
+            if let originalIndex = modules.firstIndex(where: { $0.id == sorted[index].id }) {
+                modules[originalIndex].sortOrder = index
+            }
+        }
+        saveModules()
+        NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
+    }
+
+    func displayKeys(for module: MonitorModule) -> [String] {
+        if !module.displayKeys.isEmpty {
+            return module.displayKeys
+        }
+        return moduleUsages[module.id]?.items.map(\.key) ?? []
+    }
+
+    func isResetTimeEnabled(_ key: String, for module: MonitorModule) -> Bool {
+        module.resetTimeKeys.contains(key)
+    }
+
+    private func loadModules() {
+        guard let data = try? KeychainHelper.shared.read(for: Constants.monitorModulesKey),
+              let decoded = try? JSONDecoder().decode([MonitorModule].self, from: data) else {
+            modules = []
+            return
+        }
+        modules = decoded
+        normalizeModuleOrder()
+    }
+
+    private func saveModules() {
+        do {
+            let data = try JSONEncoder().encode(modules)
+            try KeychainHelper.shared.save(data, for: Constants.monitorModulesKey)
+            NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
+        } catch {
+            AppLogger.logError(error)
+        }
+    }
+
+    private func normalizeModuleOrder() {
+        let sorted = sortedModules
+        for index in sorted.indices {
+            if let originalIndex = modules.firstIndex(where: { $0.id == sorted[index].id }) {
+                modules[originalIndex].sortOrder = index
+            }
+        }
+    }
+
+    private func provider(for module: MonitorModule) -> PlatformProvider? {
+        switch module.config {
+        case .bailian(let config):
+            return BailianProvider(config: config)
+        case .zenmux(let account):
+            var account = account
+            account.displayKeys = module.displayKeys.isEmpty ? ZenMuxAccountConfig.defaultDisplayKeys : module.displayKeys
+            account.resetTimeKeys = module.resetTimeKeys
+            return ZenMuxProvider(config: ZenMuxConfig(accounts: [account]))
+        case .mimo(let config):
+            return MimoProvider(config: config)
+        case .codex(let config):
+            return CodexProvider(config: config)
+        }
+    }
 
     func loadConfig() {
         let allConfigs = loadAllConfigs()
@@ -224,8 +392,7 @@ class UsageTracker: ObservableObject {
         return try? JSONDecoder().decode(BailianConfig.self, from: data)
     }
 
-    func saveZenMuxConfig(apiKey: String) {
-        let config = ZenMuxConfig(apiKey: apiKey)
+    func saveZenMuxConfig(_ config: ZenMuxConfig) {
         providers[.zenmux] = ZenMuxProvider(config: config)
         savePlatformConfig(config, for: .zenmux)
         AppLogger.logConfigChange(platform: "ZenMux", action: "保存配置")
@@ -303,6 +470,9 @@ class UsageTracker: ObservableObject {
 
     /// 获取平台的显示 key 列表，未配置时返回该平台所有 item key
     func displayKeys(for platform: PlatformType) -> [String] {
+        if platform == .zenmux {
+            return platforms[platform]?.items.map(\.key) ?? []
+        }
         if let keys = displayTypes[platform], !keys.isEmpty {
             return keys
         }
@@ -345,7 +515,12 @@ class UsageTracker: ObservableObject {
     // MARK: - 重置时间配置
 
     func isResetTimeEnabled(_ key: String, for platform: PlatformType) -> Bool {
-        resetTimeKeys[platform]?.contains(key) == true
+        if platform == .zenmux {
+            return loadZenMuxConfig()?.accounts.contains { account in
+                account.displayKeys.contains(key) && account.resetTimeKeys.contains(key)
+            } == true
+        }
+        return resetTimeKeys[platform]?.contains(key) == true
     }
 
     func toggleResetTime(_ key: String, for platform: PlatformType) {
@@ -382,9 +557,16 @@ class UsageTracker: ObservableObject {
         guard !isLoading else { return }
         isLoading = true
         errorMessages = [:]
+        moduleErrors = [:]
 
         defer {
             isLoading = false
+        }
+
+        if !modules.isEmpty {
+            await refreshModules()
+            lastRefreshDate = Date()
+            return
         }
 
         for (platform, provider) in providers {
@@ -392,22 +574,72 @@ class UsageTracker: ObservableObject {
             do {
                 let usage = try await provider.fetchUsage()
                 platforms[platform] = usage
-                if platform == .zenmux && isZenMuxNoticeEnabled {
+                if platform == .zenmux && isQuotaRefreshNoticeEnabled {
                     checkZenMuxRefreshNotices(usage: usage)
                 }
                 let firstItem = usage.items.first
                 AppLogger.logUsageUpdate(platform: platform.shortName, used: firstItem?.used ?? 0, total: firstItem?.total ?? 0)
             } catch let err as PlatformError {
                 errorMessages[platform] = err.errorDescription
+                if platform == .zenmux {
+                    platforms[platform] = nil
+                }
                 AppLogger.logError(err)
             } catch {
                 errorMessages[platform] = error.localizedDescription
+                if platform == .zenmux {
+                    platforms[platform] = nil
+                }
                 AppLogger.logError(error)
             }
         }
 
         lastRefreshDate = Date()
         saveToStorage()
+    }
+
+    private func refreshModules() async {
+        for module in sortedModules {
+            guard module.isMonitoringEnabled else {
+                moduleUsages[module.id] = nil
+                continue
+            }
+            guard module.isValid, let provider = provider(for: module) else {
+                moduleUsages[module.id] = nil
+                moduleErrors[module.id] = "配置无效"
+                continue
+            }
+
+            do {
+                var usage = try await provider.fetchUsage()
+                usage = PlatformUsageData(
+                    platformName: module.displayName,
+                    planType: usage.planType,
+                    items: filteredItems(usage.items, for: module),
+                    extraInfo: usage.extraInfo,
+                    accountBreakdowns: usage.accountBreakdowns
+                )
+                moduleUsages[module.id] = usage
+                if module.platform == .zenmux && isQuotaRefreshNoticeEnabled && module.isNotificationEnabled {
+                    checkZenMuxRefreshNotices(usage: usage, moduleID: module.id)
+                }
+                let firstItem = usage.items.first
+                AppLogger.logUsageUpdate(platform: module.displayName, used: firstItem?.used ?? 0, total: firstItem?.total ?? 0)
+            } catch let err as PlatformError {
+                moduleUsages[module.id] = nil
+                moduleErrors[module.id] = err.errorDescription
+                AppLogger.logError(err)
+            } catch {
+                moduleUsages[module.id] = nil
+                moduleErrors[module.id] = error.localizedDescription
+                AppLogger.logError(error)
+            }
+        }
+    }
+
+    private func filteredItems(_ items: [UsageItem], for module: MonitorModule) -> [UsageItem] {
+        guard !module.displayKeys.isEmpty else { return items }
+        return items.filter { module.displayKeys.contains($0.key) }
     }
 
     func refresh() {
@@ -434,11 +666,39 @@ class UsageTracker: ObservableObject {
             let extraArray = usage.extraInfo.map { info -> [String: String] in
                 ["label": info.label, "value": info.value]
             }
+            let accountArray = usage.accountBreakdowns.map { account -> [String: Any] in
+                let accountItems = account.items.map { item -> [String: Any] in
+                    [
+                        "key": item.key,
+                        "label": item.label,
+                        "used": item.used,
+                        "total": item.total,
+                        "unit": item.unit,
+                        "resetDate": item.resetDate,
+                    ]
+                }
+                let accountExtra = account.extraInfo.map { info -> [String: String] in
+                    ["label": info.label, "value": info.value]
+                }
+                var accountDict: [String: Any] = [
+                    "id": account.id,
+                    "alias": account.alias,
+                    "planType": account.planType,
+                    "items": accountItems,
+                    "resetTimeKeys": account.resetTimeKeys,
+                    "extraInfo": accountExtra,
+                ]
+                if let errorMessage = account.errorMessage {
+                    accountDict["errorMessage"] = errorMessage
+                }
+                return accountDict
+            }
             data[platform.rawValue] = [
                 "platformName": usage.platformName,
                 "planType": usage.planType,
                 "items": itemsArray,
                 "extraInfo": extraArray,
+                "accountBreakdowns": accountArray,
             ]
         }
         UserDefaults.standard.set(data, forKey: Constants.usageCacheKey)
@@ -478,11 +738,54 @@ class UsageTracker: ObservableObject {
                 }
             }
 
+            var accountBreakdowns: [AccountUsageData] = []
+            if let accountArray = dict["accountBreakdowns"] as? [[String: Any]] {
+                accountBreakdowns = accountArray.compactMap { accountDict in
+                    guard let id = accountDict["id"] as? String,
+                          let alias = accountDict["alias"] as? String,
+                          let accountPlanType = accountDict["planType"] as? String,
+                          let accountItemsArray = accountDict["items"] as? [[String: Any]] else {
+                        return nil
+                    }
+
+                    let accountItems = accountItemsArray.compactMap { itemDict -> UsageItem? in
+                        guard let key = itemDict["key"] as? String,
+                              let label = itemDict["label"] as? String,
+                              let used = itemDict["used"] as? Int,
+                              let total = itemDict["total"] as? Int,
+                              let unit = itemDict["unit"] as? String,
+                              let resetDate = itemDict["resetDate"] as? Date else {
+                            return nil
+                        }
+                        return UsageItem(key: key, label: label, used: used, total: total, unit: unit, resetDate: resetDate)
+                    }
+
+                    var accountExtra: [(label: String, value: String)] = []
+                    if let accountExtraArray = accountDict["extraInfo"] as? [[String: String]] {
+                        accountExtra = accountExtraArray.compactMap { d in
+                            guard let label = d["label"], let value = d["value"] else { return nil }
+                            return (label: label, value: value)
+                        }
+                    }
+
+                    return AccountUsageData(
+                        id: id,
+                        alias: alias,
+                        planType: accountPlanType,
+                        items: accountItems,
+                        resetTimeKeys: accountDict["resetTimeKeys"] as? [String] ?? [],
+                        extraInfo: accountExtra,
+                        errorMessage: accountDict["errorMessage"] as? String
+                    )
+                }
+            }
+
             platforms[platform] = PlatformUsageData(
                 platformName: platformName,
                 planType: planType,
                 items: items,
-                extraInfo: extraInfo
+                extraInfo: extraInfo,
+                accountBreakdowns: accountBreakdowns
             )
         }
     }
@@ -550,9 +853,9 @@ class UsageTracker: ObservableObject {
         }
     }
 
-    private func checkZenMuxRefreshNotices(usage: PlatformUsageData) {
+    private func checkZenMuxRefreshNotices(usage: PlatformUsageData, moduleID: String? = nil) {
         for item in usage.items {
-            guard let cacheKey = noticeCacheKey(for: item.key) else { continue }
+            guard let cacheKey = noticeCacheKey(for: item.key, moduleID: moduleID) else { continue }
             let newResetDate = item.resetDate
 
             // resetDate 变化超过 1 小时才算真正进入新周期
@@ -580,12 +883,18 @@ class UsageTracker: ObservableObject {
         }
     }
 
-    private func noticeCacheKey(for itemKey: String) -> String? {
+    private func noticeCacheKey(for itemKey: String, moduleID: String? = nil) -> String? {
+        let baseKey: String
         switch itemKey {
-        case "5hour": return Constants.zenmuxNotice5Hour
-        case "7day": return Constants.zenmuxNotice7Day
-        default: return nil
+        case "5hour":
+            baseKey = Constants.zenmuxNotice5Hour
+        case "7day":
+            baseKey = Constants.zenmuxNotice7Day
+        default:
+            return nil
         }
+        guard let moduleID else { return baseKey }
+        return "\(baseKey)_\(moduleID)"
     }
 
     private func setupTimer() {

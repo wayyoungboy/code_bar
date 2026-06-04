@@ -37,6 +37,9 @@ struct Constants {
     /// 统一平台配置存储键（所有平台共用一个条目）
     static let platformConfigsKey = "PlatformConfigs"
 
+    /// 监控模块配置存储键
+    static let monitorModulesKey = "MonitorModules"
+
     // MARK: - 其他键名
     /// 用量数据缓存键
     static let usageCacheKey = "PlatformUsage"
@@ -49,6 +52,9 @@ struct Constants {
 
     /// 重置时间显示配置键
     static let resetTimeKeysKey = "PlatformResetTimeKeys"
+
+    /// 菜单栏多模块展示模式键
+    static let menuBarDisplayModeKey = "MenuBarDisplayMode"
 
     // MARK: - 通知
     /// ZenMux 5 小时额度刷新通知缓存键

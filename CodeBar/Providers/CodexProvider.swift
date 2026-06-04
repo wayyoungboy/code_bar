@@ -1,5 +1,28 @@
 import Foundation
 
+private final class CodexKeychainCredentialCache {
+    static let shared = CodexKeychainCredentialCache()
+
+    private let lock = NSLock()
+    private var didRead = false
+    private var cachedContent: String?
+
+    private init() {}
+
+    func readCodexAuth() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if didRead {
+            return cachedContent
+        }
+
+        cachedContent = KeychainHelper.readExternalItem(service: "Codex Auth")
+        didRead = true
+        return cachedContent
+    }
+}
+
 /// Codex CLI / ChatGPT OAuth 订阅额度提供者
 struct CodexProvider: PlatformProvider {
     let platformName = "Codex"
@@ -212,43 +235,39 @@ struct CodexProvider: PlatformProvider {
     }
 
     private func readCredentials() -> CodexCredentials {
-        if let keychainContent = KeychainHelper.readExternalItem(service: "Codex Auth"),
-           let credentials = parseCredentialsJSON(keychainContent, source: .keychain) {
-            return credentials
-        }
-
         let authPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".codex")
             .appendingPathComponent("auth.json")
 
-        guard FileManager.default.fileExists(atPath: authPath.path) else {
-            return CodexCredentials(
-                accessToken: nil,
-                accountID: nil,
-                source: .file,
-                isStale: false,
-                message: "未找到 ~/.codex/auth.json，请先使用 Codex CLI 登录 ChatGPT"
-            )
+        if FileManager.default.fileExists(atPath: authPath.path) {
+            do {
+                let content = try String(contentsOf: authPath, encoding: .utf8)
+                if let credentials = parseCredentialsJSON(content, source: .file), credentials.accessToken != nil {
+                    return credentials
+                }
+            } catch {
+                return CodexCredentials(
+                    accessToken: nil,
+                    accountID: nil,
+                    source: .file,
+                    isStale: false,
+                    message: "读取 Codex auth.json 失败：\(error.localizedDescription)"
+                )
+            }
         }
 
-        do {
-            let content = try String(contentsOf: authPath, encoding: .utf8)
-            return parseCredentialsJSON(content, source: .file) ?? CodexCredentials(
-                accessToken: nil,
-                accountID: nil,
-                source: .file,
-                isStale: false,
-                message: "无法解析 Codex auth.json"
-            )
-        } catch {
-            return CodexCredentials(
-                accessToken: nil,
-                accountID: nil,
-                source: .file,
-                isStale: false,
-                message: "读取 Codex auth.json 失败：\(error.localizedDescription)"
-            )
+        if let keychainContent = CodexKeychainCredentialCache.shared.readCodexAuth(),
+           let credentials = parseCredentialsJSON(keychainContent, source: .keychain) {
+            return credentials
         }
+
+        return CodexCredentials(
+            accessToken: nil,
+            accountID: nil,
+            source: .file,
+            isStale: false,
+            message: "未找到可用的 Codex ChatGPT OAuth 凭据，请先使用 Codex CLI 登录 ChatGPT"
+        )
     }
 
     private func makeSession() throws -> URLSession {

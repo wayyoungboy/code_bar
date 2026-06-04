@@ -15,13 +15,88 @@ struct ZenMuxProvider: PlatformProvider {
     }
 
     func fetchUsage() async throws -> PlatformUsageData {
+        let validAccounts = config.accounts.filter(\.isValid)
+        let invalidAccounts = config.accounts.filter { !$0.isValid }
+        guard !validAccounts.isEmpty else {
+            throw PlatformError.invalidAPIKey
+        }
+
+        var accountBreakdowns = invalidAccounts.map { account in
+            AccountUsageData(
+                id: account.id,
+                alias: account.displayName,
+                planType: "错误",
+                items: [],
+                resetTimeKeys: account.resetTimeKeys,
+                errorMessage: "API Key 无效"
+            )
+        }
+        var failures = invalidAccounts.map { (alias: $0.displayName, message: "API Key 无效") }
+
+        await withTaskGroup(of: (ZenMuxAccountConfig, Result<AccountUsageData, Error>).self) { group in
+            for account in validAccounts {
+                group.addTask {
+                    do {
+                        let usage = try await fetchAccountUsage(for: account)
+                        return (account, .success(usage))
+                    } catch {
+                        return (account, .failure(error))
+                    }
+                }
+            }
+
+            for await (account, result) in group {
+                switch result {
+                case .success(let usage):
+                    accountBreakdowns.append(usage)
+                case .failure(let error):
+                    let message = (error as? PlatformError)?.errorDescription ?? error.localizedDescription
+                    failures.append((alias: account.displayName, message: message))
+                    accountBreakdowns.append(AccountUsageData(
+                        id: account.id,
+                        alias: account.displayName,
+                        planType: "错误",
+                        items: [],
+                        resetTimeKeys: account.resetTimeKeys,
+                        errorMessage: message
+                    ))
+                }
+            }
+        }
+
+        let successfulAccounts = accountBreakdowns.filter { $0.errorMessage == nil }
+        guard !successfulAccounts.isEmpty else {
+            let message = failures.first?.message ?? "所有 ZenMux 账号请求失败"
+            throw PlatformError.unknown(message)
+        }
+
+        let aggregateItems = aggregateItems(from: successfulAccounts)
+        var extra: [(label: String, value: String)] = config.accounts.count == 1
+            ? (successfulAccounts.first?.extraInfo ?? [])
+            : []
+        for failure in failures {
+            extra.append((label: "\(failure.alias)失败", value: failure.message))
+        }
+
+        accountBreakdowns.sort { $0.alias.localizedStandardCompare($1.alias) == .orderedAscending }
+
+        return PlatformUsageData(
+            platformName: platformName,
+            planType: config.accounts.count == 1 ? (successfulAccounts.first?.planType ?? "ZenMux") : "\(successfulAccounts.count)/\(config.accounts.count) 账号",
+            items: aggregateItems,
+            extraInfo: extra,
+            accountBreakdowns: accountBreakdowns
+        )
+    }
+
+    private func fetchAccountUsage(for account: ZenMuxAccountConfig) async throws -> AccountUsageData {
         guard let url = URL(string: "\(baseURL)/subscription/detail") else {
             throw PlatformError.unknown("无效的 URL")
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(account.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         // 使用安全的日志记录
@@ -108,13 +183,17 @@ struct ZenMuxProvider: PlatformProvider {
         extra.append((label: "7天费用", value: "$\(String(format: "%.2f", used7DayUsd)) / $\(String(format: "%.2f", max7DayUsd))"))
         extra.append((label: "月配额", value: "\(monthlyMaxFlows) flows ($\(String(format: "%.2f", monthlyMaxUsd)))"))
 
-        return PlatformUsageData(
-            platformName: platformName,
+        let items = [
+            UsageItem(key: "5hour", label: "5小时", used: used5Hour, total: total5Hour, unit: "flows", resetDate: resetDate5Hour),
+            UsageItem(key: "7day", label: "7天", used: used7Day, total: total7Day, unit: "flows", resetDate: resetDate7Day),
+        ].filter { account.displayKeys.contains($0.key) }
+
+        return AccountUsageData(
+            id: account.id,
+            alias: account.displayName,
             planType: planType.capitalized,
-            items: [
-                UsageItem(key: "5hour", label: "5小时", used: used5Hour, total: total5Hour, unit: "flows", resetDate: resetDate5Hour),
-                UsageItem(key: "7day", label: "7天", used: used7Day, total: total7Day, unit: "flows", resetDate: resetDate7Day),
-            ],
+            items: items,
+            resetTimeKeys: account.resetTimeKeys,
             extraInfo: extra
         )
     }
@@ -126,9 +205,35 @@ struct ZenMuxProvider: PlatformProvider {
 
     // MARK: - 辅助方法
 
+    private func aggregateItems(from accounts: [AccountUsageData]) -> [UsageItem] {
+        let preferredOrder = ["5hour", "7day"]
+        let grouped = Dictionary(grouping: accounts.flatMap(\.items), by: \.key)
+
+        return preferredOrder.compactMap { key in
+            guard let items = grouped[key], let first = items.first else { return nil }
+            let used = items.reduce(0) { $0 + $1.used }
+            let total = items.reduce(0) { $0 + $1.total }
+            let resetDate = items.map(\.resetDate).min() ?? first.resetDate
+            return UsageItem(
+                key: first.key,
+                label: first.label,
+                used: used,
+                total: total,
+                unit: first.unit,
+                resetDate: resetDate
+            )
+        }
+    }
+
     private func parseISODate(_ string: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: string) {
+            return date
+        }
+
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.formatOptions = [.withInternetDateTime]
         return formatter.date(from: string)
     }
 }

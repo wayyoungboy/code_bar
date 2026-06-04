@@ -93,35 +93,40 @@ struct YourPlatformProvider: PlatformProvider {
 
 UI 只依赖 `PlatformUsageData`，Provider 可以自由定义 `UsageItem.key`、`label`、`unit` 和 `extraInfo`。
 
-### 4. 注册 Provider
+如果平台需要同平台多账号展示，可以填充 `PlatformUsageData.accountBreakdowns`。ZenMux 是当前参考实现：账号级配置保存在 `ZenMuxAccountConfig`，Provider 对每个账号独立请求并汇总为平台层 `items`，弹窗再展示账号明细。
 
-在 `UsageTracker.loadConfig()` 中读取配置并注册：
+### 4. 接入监控模块
+
+在 `Providers/PlatformProvider.swift` 的 `MonitorModuleConfig` 中添加该平台的配置 case，并补齐 `platform`、`isValid`、`Codable` 编解码逻辑：
 
 ```swift
-if let data = allConfigs[PlatformType.yourPlatform.rawValue],
-   let config = try? JSONDecoder().decode(YourPlatformConfig.self, from: data) {
-    providers[.yourPlatform] = YourPlatformProvider(config: config)
-}
+case yourPlatform(YourPlatformConfig)
 ```
 
-再添加保存和读取配置的方法，参考 `saveMimoConfig` 或 `saveCodexProxyURL`。
+然后在 `UsageTracker.provider(for:)` 中把模块配置转换为 Provider：
+
+```swift
+case .yourPlatform(let config):
+    return YourPlatformProvider(config: config)
+```
+
+`MonitorModule` 会保存别名、展示开关、显示项、重置时间项和排序。新增平台通常不需要再新增独立的 UserDefaults 展示配置。
 
 ### 5. 添加设置 UI
 
 在 `SettingsWindow.swift` 中：
 
-- 添加 `@State` 字段
-- 在 `body` 中加入 `manualConfigSection`
-- 添加配置表单
-- 添加帮助 sheet 内容
-- 在 `onAppear` 加载已保存配置
+- 在 `ModuleEditorView` 中添加对应供应商的凭据字段
+- 在供应商 picker、`providerForm`、`quotaOptionsSection`、`canSave` 和 `makeModule()` 中接入新平台
+- 如果需要帮助内容，在 `HelpWindowView` 中添加平台说明
+- 保持所有配置为模块级配置，不再添加全局平台级开关
 
 ## Codex Provider 注意事项
 
 Codex 与其他平台不同：
 
 - 不在 CodeBar 中保存 access token
-- 自动读取 Keychain `Codex Auth` 或 `~/.codex/auth.json`
+- 自动读取 `~/.codex/auth.json`，文件不可用时 fallback 到 Keychain `Codex Auth`
 - 仅支持 `auth_mode == "chatgpt"`
 - 代理配置可选，保存到 CodeBar Keychain
 - 请求 `chatgpt.com/backend-api/wham/usage`
@@ -132,21 +137,20 @@ Codex 与其他平台不同：
 
 | 数据 | 存储位置 |
 | --- | --- |
-| 平台凭据 | Keychain `PlatformConfigs` |
-| Codex 代理配置 | Keychain `PlatformConfigs` |
+| 监控模块、模块凭据、展示项、排序 | Keychain `MonitorModules` |
 | Codex OAuth | Codex CLI Keychain / `~/.codex/auth.json` |
-| 平台启用状态 | UserDefaults |
-| 展示项配置 | UserDefaults |
-| 重置时间展示配置 | UserDefaults |
 | 用量缓存 | UserDefaults |
 
 ## UI 约定
 
-- 平台卡片由 `MenuBarView.platformUsageCard` 渲染
+- 详情页模块卡片由 `MenuBarView.moduleUsageCard` 渲染
 - Provider 不直接操作 UI
 - `UsageItem.key` 必须稳定，避免用户展示配置失效
 - `extraInfo` 用于展示套餐、账号状态、余额、到期时间等非进度条信息
-- 按钮、开关和帮助内容放在 `SettingsWindow`
+- 模块级 `displayKeys` 决定详情页和菜单栏显示哪些用量项
+- 模块级 `resetTimeKeys` 决定用量项是否显示重置时间
+- `showInMenuBar` 为 true 的模块会创建独立 `NSStatusItem`
+- 按钮、开关、拖动排序和帮助内容放在 `SettingsWindow`
 
 ## 发布
 
@@ -156,22 +160,22 @@ Codex 与其他平台不同：
 
 ```xml
 <key>CFBundleShortVersionString</key>
-<string>2.1.2</string>
+<string>2.2.0</string>
 ```
 
 2. 提交版本变更：
 
 ```bash
 git add CodeBar/Info.plist CodeBar.xcodeproj/project.pbxproj README.md
-git commit -m "Bump version to 2.1.2"
+git commit -m "Bump version to 2.2.0"
 git push origin main
 ```
 
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.1.2 -m "CodeBar v2.1.2"
-git push origin v2.1.2
+git tag -a v2.2.0 -m "CodeBar v2.2.0"
+git push origin v2.2.0
 ```
 
 4. GitHub Actions 自动构建、签名、创建 DMG 并上传 Release。

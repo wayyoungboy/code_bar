@@ -31,20 +31,21 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 16) {
             // 标题
             HStack {
-                Text("Code Plan 用量")
+                Text("CodeBar 用量")
                     .font(.headline)
                 Spacer()
             }
             .padding(.bottom, 8)
 
-            // 用量显示 - 显示所有已配置的平台
-            if tracker.hasAnyConfig {
+            // 用量显示 - 显示所有详情页模块
+            if tracker.hasAnyModule {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(PlatformType.allCases) { platform in
-                        if tracker.isPlatformEnabled(platform),
-                           let usage = tracker.platforms[platform] {
-                            platformUsageCard(platform: platform, usage: usage, error: tracker.errorMessages[platform])
-                        }
+                    ForEach(tracker.detailModules) { module in
+                        moduleUsageCard(
+                            module: module,
+                            usage: tracker.moduleUsages[module.id],
+                            error: tracker.moduleErrors[module.id]
+                        )
                     }
                 }
             } else if !hasLoadedOnce {
@@ -56,14 +57,14 @@ struct MenuBarView: View {
             }
 
             // 错误信息汇总
-            if tracker.hasErrors {
+            if !tracker.moduleErrors.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(tracker.errorMessages.keys.sorted(by: { $0.rawValue < $1.rawValue }), id: \.self) { platform in
-                        if let message = tracker.errorMessages[platform] {
+                    ForEach(tracker.detailModules) { module in
+                        if let message = tracker.moduleErrors[module.id] {
                             HStack {
                                 Image(systemName: "exclamationmark.circle.fill")
                                     .foregroundColor(.red)
-                                Text("\(platform.shortName): \(message)")
+                                Text("\(module.displayName): \(message)")
                                     .font(.caption)
                                     .foregroundColor(.red)
                             }
@@ -188,6 +189,22 @@ struct MenuBarView: View {
                 }
             }
 
+            if !usage.accountBreakdowns.isEmpty {
+                Divider()
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(usage.accountBreakdowns) { account in
+                            accountUsageView(account)
+                        }
+                    }
+                    .padding(.top, 4)
+                } label: {
+                    Text("账号明细")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+            }
+
             // 低用量警告
             if visibleItems.contains(where: { $0.percent > 80 }) {
                 HStack {
@@ -215,6 +232,65 @@ struct MenuBarView: View {
         .padding(12)
         .background(Color(hex: platform.brandColor).opacity(0.12))
         .cornerRadius(8)
+    }
+
+    @ViewBuilder
+    private func accountUsageView(_ account: AccountUsageData) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(account.alias)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Spacer()
+                Text(account.planType)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            if let errorMessage = account.errorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.circle")
+                        .foregroundColor(.orange)
+                    Text(errorMessage)
+                        .font(.system(size: 10))
+                        .foregroundColor(.orange)
+                }
+            } else if account.items.isEmpty {
+                Text("未选择显示项")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(account.items, id: \.key) { item in
+                    usageRow(
+                        label: item.label,
+                        used: item.used,
+                        total: item.total,
+                        unit: item.unit,
+                        percent: item.percent,
+                        resetDate: account.resetTimeKeys.contains(item.key) ? item.resetDate : nil
+                    )
+                }
+
+                if !account.extraInfo.isEmpty {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(Array(account.extraInfo.enumerated()), id: \.offset) { _, info in
+                            HStack {
+                                Text(info.label)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(info.value)
+                                    .font(.system(size: 9))
+                                    .fontWeight(.medium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.white.opacity(0.08))
+        .cornerRadius(6)
     }
 
     @ViewBuilder
@@ -261,7 +337,7 @@ struct MenuBarView: View {
             Text("未配置凭据")
                 .font(.headline)
                 .foregroundColor(.secondary)
-            Text("请打开「设置...」配置平台凭据")
+            Text("请打开「设置」添加监控模块")
                 .font(.caption)
                 .foregroundColor(.gray)
         }
@@ -270,6 +346,96 @@ struct MenuBarView: View {
     }
 
     // MARK: - 辅助方法
+
+    @ViewBuilder
+    private func moduleUsageCard(module: MonitorModule, usage: PlatformUsageData?, error: String?) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                PlatformLogoView(platform: module.platform)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(module.platform.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    if let alias = module.aliasDisplayName {
+                        Text(alias)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+                if let usage {
+                    Text(usage.planType)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if !module.isMonitoringEnabled {
+                Text("监控已暂停")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else if let usage {
+                let visibleItems = usage.items.filter { tracker.displayKeys(for: module).contains($0.key) }
+                ForEach(visibleItems, id: \.key) { item in
+                    usageRow(
+                        label: item.label,
+                        used: item.used,
+                        total: item.total,
+                        unit: item.unit,
+                        percent: item.percent,
+                        resetDate: tracker.isResetTimeEnabled(item.key, for: module) ? item.resetDate : nil
+                    )
+                }
+
+                if !usage.extraInfo.isEmpty {
+                    Divider()
+                    ForEach(Array(usage.extraInfo.enumerated()), id: \.offset) { _, info in
+                        HStack {
+                            Text(info.label)
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(info.value)
+                                .font(.system(size: 10))
+                                .fontWeight(.medium)
+                        }
+                    }
+                }
+
+                if visibleItems.contains(where: { $0.percent > 80 }) {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                        Text("用量即将耗尽！")
+                            .foregroundColor(.yellow)
+                            .font(.caption)
+                    }
+                    .padding(.top, 4)
+                }
+            } else {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(error ?? "等待刷新")
+                        .font(.caption)
+                        .foregroundColor(error == nil ? .secondary : .orange)
+                }
+            }
+
+            if let error {
+                HStack {
+                    Image(systemName: "exclamationmark.circle")
+                        .foregroundColor(.orange)
+                    Text(error)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(hex: module.platform.brandColor).opacity(0.12))
+        .cornerRadius(8)
+    }
 
     private func progressColor(for percent: Double) -> Color {
         if percent > 90 {

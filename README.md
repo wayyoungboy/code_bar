@@ -2,12 +2,12 @@
 
 一个 macOS 菜单栏应用，用于实时监控 AI Coding 平台的用量。
 
-当前版本：`v2.1.2`
+当前版本：`v2.2.0`
 
 ## 支持平台
 
 - **阿里云百炼** — 监控 Coding Plan 用量（账单月、5 小时、周）
-- **ZenMux** — 监控 Flow 用量（5 小时、7 天），含订阅详情和费用信息
+- **ZenMux** — 监控 Flow 用量（5 小时、7 天），支持按账号添加独立监控模块
 - **小米 MiMo** — 监控 Token 用量（月用量、总用量）
 - **Codex** — 自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
 
@@ -15,20 +15,28 @@
 
 ## 功能特性
 
-- 菜单栏实时显示多平台用量百分比
-- 弹窗完整展示各平台用量、套餐、重置时间和额外信息
-- 每个配额周期可独立选择是否展示在菜单栏
-- 每个配额周期可独立选择是否展示剩余重置时间
-- 每个平台可独立启用/禁用
-- ZenMux 展示完整订阅信息（套餐、费用、单价、到期时间等）
+- 通过「添加模块」逐个添加供应商账号或凭据
+- 每个模块可配置别名，方便区分个人、团队或项目账号
+- ZenMux 可添加多个账号模块；其他供应商每种最多添加一个模块
+- 每个模块可独立选择是否监控、是否显示在菜单栏、是否显示在详情页
+- 额度刷新通知支持系统总开关和模块级独立开关
+- 模块别名不会替代供应商名；菜单栏中别名显示在 Logo 和用量数据之间
+- 设置页支持拖动模块排序，详情页和菜单栏按模块顺序展示
+- 菜单栏会为启用展示的模块创建独立状态项，每个状态项都可由 macOS 单独拖动
+- 菜单栏多模块展示支持「独立」和「轮播」两种模式；轮播模式会共用一个状态项并按模块顺序自动切换
+- 弹窗按模块独立展示用量、套餐、重置时间和额外信息
+- 每个模块的配额周期可独立选择是否展示，以及是否展示剩余重置时间
+- ZenMux 支持添加多个 Management API Key，每个账号都是一个独立模块
+- ZenMux 展示账号用量和完整订阅信息（套餐、费用、单价、到期时间等）
 - ZenMux 额度刷新通知（5 小时 / 7 天周期自动提醒）
 - Codex 自动读取本机 Codex CLI OAuth，无需在 CodeBar 中配置 token
 - Codex 支持可选代理请求 `chatgpt.com/backend-api/wham/usage`
-- 多平台自动轮播显示（每 5 秒切换）
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
 - 统一 Keychain 存储 CodeBar 自身配置
 
 ## 截图
+
+![CodeBar 多模块监控](screenshots/image5.png)
 
 ![CodeBar Screenshot](screenshots/image3.png)
 
@@ -74,12 +82,14 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 
 1. 运行应用后，点击菜单栏的 CodeBar 图标
 2. 点击设置按钮（齿轮图标）
-3. 配置需要的平台凭据或启用 Codex
-4. 勾选需要在菜单栏展示的配额周期和重置时间
+3. 点击「添加模块」，选择供应商并填写该模块需要的凭据
+4. 保存后，可在模块列表中切换「监控」「bar栏」「详情页」
+5. 拖动模块列表调整展示顺序
+6. 进入模块编辑页，勾选需要展示的配额周期和重置时间
 
 ### 阿里云百炼
 
-在设置界面中填入：
+在设置界面点击「添加模块」，选择「阿里云百炼」，填入：
 
 - **Cookie**：从浏览器复制的完整 Cookie 字符串
 - **Sec Token**：从请求中复制的 `sec_token` 值
@@ -95,11 +105,14 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 
 ### ZenMux
 
-在设置界面中填入：
+在设置界面点击「添加模块」，选择「ZenMux」。每个 ZenMux 账号对应一个独立模块，填入：
 
+- **账号别名**：用于区分项目、团队或个人账号
 - **Management API Key**：从 ZenMux 管理页面复制的 Management API Key
 
 注意：仅支持 Management API Key，标准 API Key 无效。
+
+每个账号模块可以独立勾选是否展示 5 小时 / 7 天配额，以及是否展示对应重置时间。详情页中每个 ZenMux 账号会作为独立模块展示，不再按平台聚合。
 
 ZenMux 5 小时或 7 天额度周期刷新时，CodeBar 可发送 macOS 系统通知。同一周期内不会重复提醒，设置界面可开关通知并发送测试通知。
 
@@ -107,7 +120,7 @@ ZenMux 5 小时或 7 天额度周期刷新时，CodeBar 可发送 macOS 系统�
 
 ### 小米 MiMo
 
-在设置界面中填入：
+在设置界面点击「添加模块」，选择「小米 MiMo」，填入：
 
 - **Service Token**：浏览器 Cookie 中的 `api-platform_serviceToken`
 - **User ID**：浏览器 Cookie 中的 `userId`
@@ -121,10 +134,12 @@ ZenMux 5 小时或 7 天额度周期刷新时，CodeBar 可发送 macOS 系统�
 
 ### Codex
 
-Codex 不需要在 CodeBar 中配置 token。CodeBar 会按以下优先级自动读取本机 Codex CLI 的 ChatGPT OAuth 凭据：
+在设置界面点击「添加模块」，选择「Codex」。Codex 不需要在 CodeBar 中配置 token，CodeBar 会按以下优先级自动读取本机 Codex CLI 的 ChatGPT OAuth 凭据：
 
-1. macOS Keychain：`Codex Auth`
-2. 文件：`~/.codex/auth.json`
+1. 文件：`~/.codex/auth.json`
+2. macOS Keychain：`Codex Auth`
+
+为减少 macOS 授权弹窗，Keychain fallback 在每次应用启动后最多读取一次；后续刷新会复用本次读取结果。
 
 要求：
 
@@ -156,7 +171,7 @@ ChatGPT-Account-Id: <account_id>   # 如存在
 - `spend_control`
 - `rate_limit_reset_credits.available_count`
 
-如果直连 `chatgpt.com` 不稳定，可以在 Codex 设置中填写代理地址：
+如果直连 `chatgpt.com` 不稳定，可以在 Codex 模块中填写代理地址：
 
 ```text
 http://127.0.0.1:7890
@@ -172,8 +187,8 @@ code_bar/
 ├── CodeBar/
 │   ├── CodeBarApp.swift           # 应用入口、菜单栏和弹窗管理
 │   ├── MenuBarView.swift          # 弹窗 UI（用量卡片、进度条、额外信息）
-│   ├── SettingsWindow.swift       # 设置窗口（凭据配置、展示选项、帮助）
-│   ├── UsageTracker.swift         # 多平台用量追踪器（配置、刷新、存储、通知）
+│   ├── SettingsWindow.swift       # 设置窗口（模块管理、凭据配置、展示选项、帮助）
+│   ├── UsageTracker.swift         # 用量追踪器（模块配置、刷新、存储、通知）
 │   ├── Constants.swift            # 应用常量配置
 │   ├── KeychainHelper.swift       # Keychain 安全存储封装
 │   ├── Logger.swift               # 日志工具
@@ -201,8 +216,9 @@ code_bar/
 
 1. 在 `PlatformType` 枚举中添加新平台
 2. 创建新的 Provider，实现 `PlatformProvider`
-3. 在 `UsageTracker.loadConfig()` 中注册 Provider
-4. 在 `SettingsWindow` 中添加配置表单和帮助内容
+3. 在 `MonitorModuleConfig` 中添加该平台的模块配置 case
+4. 在 `UsageTracker.provider(for:)` 中把模块配置映射为 Provider
+5. 在 `ModuleEditorView` 中添加凭据表单、展示项和帮助内容
 
 每个 Provider 可自由定义自己的配额项（`UsageItem`）和额外信息（`extraInfo`），UI 会动态渲染。
 
@@ -220,8 +236,8 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Release -de
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.1.2 -m "CodeBar v2.1.2"
-git push origin v2.1.2
+git tag -a v2.2.0 -m "CodeBar v2.2.0"
+git push origin v2.2.0
 ```
 
 GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release。

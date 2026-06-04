@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsWindowView: View {
     @ObservedObject var tracker: UsageTracker
+    @State private var showModuleEditor = false
+    @State private var editingModule: MonitorModule?
     @State private var showBailianHelp = false
     @State private var showZenMuxHelp = false
     @State private var showMimoHelp = false
@@ -13,7 +15,11 @@ struct SettingsWindowView: View {
     @State private var region = "cn-beijing"
 
     // ZenMux config
-    @State private var zenMuxApiKey = ""
+    @State private var zenMuxAccounts: [ZenMuxAccountConfig] = []
+    @State private var editingZenMuxAccount: ZenMuxAccountConfig?
+    @State private var showZenMuxAccountEditor = false
+    @State private var testingZenMuxAccountID: String?
+    @State private var zenMuxAccountTestMessages: [String: String] = [:]
 
     // Mimo config
     @State private var mimoServiceToken = ""
@@ -25,94 +31,21 @@ struct SettingsWindowView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack {
-                    Image(systemName: "info.circle")
-                        .foregroundColor(.blue)
-                    Text("手动配置平台凭据以查看 AI 编程工具用量")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .padding(12)
-                .background(Color.blue.opacity(0.08))
-                .cornerRadius(8)
+                moduleManagementSection
 
-                // Bailian config
-                manualConfigSection(
-                    platform: .bailian,
-                    icon: "cloud.fill",
-                    color: .blue
-                ) {
-                    bailianConfigForm
-                }
-
-                // ZenMux config
-                manualConfigSection(
-                    platform: .zenmux,
-                    icon: PlatformType.zenmux.icon,
-                    color: .purple
-                ) {
-                    zenMuxConfigForm
-                }
-
-                // Mimo config
-                manualConfigSection(
-                    platform: .mimo,
-                    icon: PlatformType.mimo.icon,
-                    color: .orange
-                ) {
-                    mimoConfigForm
-                }
-
-                // Codex config
-                manualConfigSection(
-                    platform: .codex,
-                    icon: PlatformType.codex.icon,
-                    color: .green
-                ) {
-                    codexConfigForm
-                }
-
-                // ZenMux notification settings
-                if tracker.providers[.zenmux]?.isConfigured == true {
-                    notificationSettingsView
-                        .padding(16)
-                        .background(Color.purple.opacity(0.06))
-                        .cornerRadius(10)
-                }
-
-                // 版本更新提醒
-                HStack {
-                    Image(systemName: "arrow.up.circle")
-                        .foregroundColor(.orange)
-                    Text("版本更新提醒")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { UpdateChecker.shared.isEnabled },
-                        set: { UpdateChecker.shared.isEnabled = $0 }
-                    ))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                }
-                .padding(12)
-                .background(Color.orange.opacity(0.06))
-                .cornerRadius(8)
-
-                if tracker.configuredPlatforms.count > 1 {
-                    HStack {
-                        Image(systemName: "arrow.left.arrow.right")
-                            .foregroundColor(.orange)
-                        Text("多个平台已配置，菜单栏将每 5 秒轮播显示")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(12)
-                    .background(Color.orange.opacity(0.08))
-                    .cornerRadius(8)
-                }
+                systemSettingsSection
             }
             .padding(20)
+        }
+        .sheet(isPresented: $showModuleEditor) {
+            ModuleEditorView(module: editingModule, existingModules: tracker.modules) { module in
+                if editingModule == nil {
+                    tracker.addModule(module)
+                } else {
+                    tracker.updateModule(module)
+                }
+                editingModule = nil
+            }
         }
         .sheet(isPresented: $showBailianHelp) {
             HelpWindowView(platform: .bailian)
@@ -126,24 +59,166 @@ struct SettingsWindowView: View {
         .sheet(isPresented: $showCodexHelp) {
             HelpWindowView(platform: .codex)
         }
+        .sheet(isPresented: $showZenMuxAccountEditor) {
+            ZenMuxAccountEditorView(account: editingZenMuxAccount) { account in
+                saveZenMuxAccount(account)
+            }
+        }
         .onAppear {
-            if let config = tracker.loadBailianConfig() {
-                cookies = config.cookies
-                secToken = config.secToken
-                region = config.region
-            }
-            if let config = tracker.loadZenMuxConfig() {
-                zenMuxApiKey = config.apiKey
-            }
-            if let config = tracker.loadMimoConfig() {
-                mimoServiceToken = config.serviceToken
-                mimoUserId = config.userId
-            }
-            if let config = tracker.loadCodexConfig() {
-                codexProxyURL = config.proxyURL ?? ""
-            }
             tracker.checkNotificationPermission()
         }
+    }
+
+    private var moduleManagementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("监控模块")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    editingModule = nil
+                    showModuleEditor = true
+                } label: {
+                    Image(systemName: "plus.circle")
+                    Text("添加模块")
+                }
+            }
+
+            Text("一个模块对应一组供应商凭据。可拖动模块调整顺序，详情页和菜单栏会按该顺序展示。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if tracker.modules.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.stack.3d.up")
+                        .foregroundColor(.secondary)
+                    Text("还没有监控模块")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 12)
+            } else {
+                List {
+                    ForEach(tracker.sortedModules) { module in
+                        moduleRow(module)
+                    }
+                    .onMove { source, destination in
+                        tracker.moveModules(from: source, to: destination)
+                    }
+                }
+                .frame(minHeight: CGFloat(max(1, tracker.modules.count)) * 88 + 12)
+            }
+        }
+        .padding(16)
+        .background(Color.blue.opacity(0.06))
+        .cornerRadius(10)
+    }
+
+    @ViewBuilder
+    private func moduleRow(_ module: MonitorModule) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                PlatformLogoView(platform: module.platform)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(module.platform.rawValue)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    if let alias = module.aliasDisplayName {
+                        Text(alias)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                Spacer()
+                Button {
+                    editingModule = module
+                    showModuleEditor = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .help("编辑模块")
+
+                Button(role: .destructive) {
+                    tracker.deleteModule(module)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .help("删除模块")
+            }
+
+            HStack(spacing: 14) {
+                moduleBoolToggle(module, title: "监控", keyPath: \.isMonitoringEnabled)
+                moduleBoolToggle(module, title: "bar栏", keyPath: \.showInMenuBar)
+                moduleBoolToggle(module, title: "详情页", keyPath: \.showInDetail)
+                moduleBoolToggle(module, title: "通知", keyPath: \.isNotificationEnabled)
+                Spacer()
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func moduleBoolToggle(_ module: MonitorModule, title: String, keyPath: WritableKeyPath<MonitorModule, Bool>) -> some View {
+        Toggle(isOn: Binding(
+            get: { tracker.modules.first(where: { $0.id == module.id })?[keyPath: keyPath] ?? false },
+            set: { enabled in
+                tracker.updateModule(id: module.id) { draft in
+                    draft[keyPath: keyPath] = enabled
+                }
+            }
+        )) {
+            Text(title)
+                .font(.caption)
+        }
+        .toggleStyle(.checkbox)
+    }
+
+    private var systemSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("系统配置")
+                .font(.headline)
+
+            notificationSettingsView
+
+            HStack {
+                Image(systemName: "menubar.rectangle")
+                    .foregroundColor(.blue)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("bar 栏展示形式")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text(tracker.menuBarDisplayMode.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Picker("bar 栏展示形式", selection: $tracker.menuBarDisplayMode) {
+                    ForEach(MenuBarDisplayMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 120)
+                .labelsHidden()
+            }
+
+            HStack {
+                Image(systemName: "arrow.up.circle")
+                    .foregroundColor(.orange)
+                Text("版本更新提醒")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { UpdateChecker.shared.isEnabled },
+                    set: { UpdateChecker.shared.isEnabled = $0 }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+            }
+        }
+        .padding(16)
+        .background(Color.orange.opacity(0.06))
+        .cornerRadius(10)
     }
 
     // MARK: - Manual config section
@@ -177,7 +252,7 @@ struct SettingsWindowView: View {
 
             content()
 
-            if tracker.providers[platform]?.isConfigured == true {
+            if tracker.providers[platform]?.isConfigured == true, platform != .zenmux {
                 Divider()
                 displayTypeSelection(for: platform)
             }
@@ -235,8 +310,8 @@ struct SettingsWindowView: View {
                     .fontWeight(.medium)
                 Spacer()
                 Toggle("", isOn: Binding(
-                    get: { tracker.isZenMuxNoticeEnabled },
-                    set: { tracker.isZenMuxNoticeEnabled = $0 }
+                    get: { tracker.isQuotaRefreshNoticeEnabled },
+                    set: { tracker.isQuotaRefreshNoticeEnabled = $0 }
                 ))
                 .toggleStyle(.switch)
                 .labelsHidden()
@@ -326,30 +401,216 @@ struct SettingsWindowView: View {
 
     private var zenMuxConfigForm: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Management API Key")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                SecureField("请输入 Management API Key", text: $zenMuxApiKey)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Text("仅支持 Management API Key，标准 API Key 无效")
-                .font(.caption)
-                .foregroundColor(.orange)
-
             HStack {
                 Button(action: { showZenMuxHelp = true }) {
                     Image(systemName: "questionmark.circle")
                     Text("帮助")
                 }
                 Spacer()
-                Button("保存") {
-                    tracker.saveZenMuxConfig(apiKey: zenMuxApiKey)
+                Button {
+                    editingZenMuxAccount = nil
+                    showZenMuxAccountEditor = true
+                } label: {
+                    Image(systemName: "plus.circle")
+                    Text("添加账号")
                 }
-                .disabled(zenMuxApiKey.isEmpty)
+            }
+
+            Text("每个 ZenMux 账号独立保存别名、Management API Key、显示项和重置时间。菜单栏显示所有启用项的聚合用量。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if zenMuxAccounts.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "key")
+                        .foregroundColor(.secondary)
+                    Text("还没有 ZenMux 账号")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.vertical, 8)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(zenMuxAccounts) { account in
+                        zenMuxAccountRow(account)
+                    }
+                }
             }
         }
+    }
+
+    @ViewBuilder
+    private func zenMuxAccountRow(_ account: ZenMuxAccountConfig) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(account.displayName)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text(maskedKey(account.apiKey))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button {
+                    testZenMuxAccount(account)
+                } label: {
+                    if testingZenMuxAccountID == account.id {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "checkmark.seal")
+                    }
+                }
+                .help("测试账号")
+                .disabled(testingZenMuxAccountID != nil)
+
+                Button {
+                    editingZenMuxAccount = account
+                    showZenMuxAccountEditor = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .help("编辑账号")
+
+                Button(role: .destructive) {
+                    deleteZenMuxAccount(account)
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .help("删除账号")
+            }
+
+            HStack(spacing: 14) {
+                Text("显示")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                zenMuxAccountToggle(account: account, key: "5hour", title: "5小时", kind: .display)
+                zenMuxAccountToggle(account: account, key: "7day", title: "7天", kind: .display)
+                Spacer()
+            }
+
+            HStack(spacing: 14) {
+                Text("重置")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                zenMuxAccountToggle(account: account, key: "5hour", title: "5小时", kind: .reset)
+                zenMuxAccountToggle(account: account, key: "7day", title: "7天", kind: .reset)
+                Spacer()
+            }
+
+            if let message = zenMuxAccountTestMessages[account.id] {
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(message.hasPrefix("成功") ? .green : .red)
+            }
+        }
+        .padding(10)
+        .background(Color.purple.opacity(0.08))
+        .cornerRadius(8)
+    }
+
+    private enum ZenMuxToggleKind {
+        case display
+        case reset
+    }
+
+    @ViewBuilder
+    private func zenMuxAccountToggle(account: ZenMuxAccountConfig, key: String, title: String, kind: ZenMuxToggleKind) -> some View {
+        Toggle(isOn: Binding(
+            get: {
+                switch kind {
+                case .display:
+                    return account.displayKeys.contains(key)
+                case .reset:
+                    return account.resetTimeKeys.contains(key)
+                }
+            },
+            set: { enabled in
+                updateZenMuxAccount(account.id) { draft in
+                    switch kind {
+                    case .display:
+                        if enabled {
+                            if !draft.displayKeys.contains(key) {
+                                draft.displayKeys.append(key)
+                            }
+                        } else {
+                            draft.displayKeys.removeAll { $0 == key }
+                            draft.resetTimeKeys.removeAll { $0 == key }
+                        }
+                    case .reset:
+                        guard draft.displayKeys.contains(key) else { return }
+                        if enabled {
+                            if !draft.resetTimeKeys.contains(key) {
+                                draft.resetTimeKeys.append(key)
+                            }
+                        } else {
+                            draft.resetTimeKeys.removeAll { $0 == key }
+                        }
+                    }
+                }
+            }
+        )) {
+            Text(title)
+                .font(.caption)
+        }
+        .toggleStyle(.checkbox)
+        .disabled(kind == .reset && !account.displayKeys.contains(key))
+    }
+
+    private func saveZenMuxAccount(_ account: ZenMuxAccountConfig) {
+        if let index = zenMuxAccounts.firstIndex(where: { $0.id == account.id }) {
+            zenMuxAccounts[index] = account
+        } else {
+            zenMuxAccounts.append(account)
+        }
+        persistZenMuxAccounts()
+    }
+
+    private func deleteZenMuxAccount(_ account: ZenMuxAccountConfig) {
+        zenMuxAccounts.removeAll { $0.id == account.id }
+        zenMuxAccountTestMessages[account.id] = nil
+        persistZenMuxAccounts()
+    }
+
+    private func updateZenMuxAccount(_ id: String, mutate: (inout ZenMuxAccountConfig) -> Void) {
+        guard let index = zenMuxAccounts.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&zenMuxAccounts[index])
+        persistZenMuxAccounts()
+    }
+
+    private func persistZenMuxAccounts() {
+        tracker.saveZenMuxConfig(ZenMuxConfig(accounts: zenMuxAccounts))
+    }
+
+    private func testZenMuxAccount(_ account: ZenMuxAccountConfig) {
+        testingZenMuxAccountID = account.id
+        zenMuxAccountTestMessages[account.id] = nil
+        Task {
+            do {
+                let provider = ZenMuxProvider(config: ZenMuxConfig(accounts: [account]))
+                let usage = try await provider.fetchUsage()
+                let summary = usage.items.map { "\($0.label) \(String(format: "%.0f%%", $0.percent))" }.joined(separator: " / ")
+                await MainActor.run {
+                    zenMuxAccountTestMessages[account.id] = summary.isEmpty ? "成功：账号可用" : "成功：\(summary)"
+                    testingZenMuxAccountID = nil
+                }
+            } catch {
+                let message = (error as? PlatformError)?.errorDescription ?? error.localizedDescription
+                await MainActor.run {
+                    zenMuxAccountTestMessages[account.id] = "失败：\(message)"
+                    testingZenMuxAccountID = nil
+                }
+            }
+        }
+    }
+
+    private func maskedKey(_ key: String) -> String {
+        if key.isEmpty {
+            return "未填写 API Key"
+        }
+        guard key.count > 10 else { return "API Key 过短" }
+        return "\(key.prefix(6))...\(key.suffix(4))"
     }
 
     // MARK: - Mimo config form
@@ -426,6 +687,391 @@ struct SettingsWindowView: View {
                     tracker.saveCodexProxyURL(codexProxyURL)
                 }
             }
+        }
+    }
+}
+
+struct ZenMuxAccountEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var alias: String
+    @State private var apiKey: String
+
+    private let originalAccount: ZenMuxAccountConfig?
+    let onSave: (ZenMuxAccountConfig) -> Void
+
+    init(account: ZenMuxAccountConfig?, onSave: @escaping (ZenMuxAccountConfig) -> Void) {
+        self.originalAccount = account
+        self.onSave = onSave
+        _alias = State(initialValue: account?.alias ?? "")
+        _apiKey = State(initialValue: account?.apiKey ?? "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(originalAccount == nil ? "添加 ZenMux 账号" : "编辑 ZenMux 账号")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("账号别名")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextField("例如 项目 A / 团队账号", text: $alias)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Management API Key")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                SecureField("请输入 Management API Key", text: $apiKey)
+                    .textFieldStyle(.roundedBorder)
+                Text("仅支持 Management API Key，标准 API Key 无效")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+
+            HStack {
+                Spacer()
+                Button("取消") {
+                    dismiss()
+                }
+                Button("保存") {
+                    var account = originalAccount ?? ZenMuxAccountConfig()
+                    account.alias = alias
+                    account.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onSave(account)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 420)
+    }
+}
+
+struct ModuleEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    let module: MonitorModule?
+    let existingModules: [MonitorModule]
+    let onSave: (MonitorModule) -> Void
+
+    @State private var provider: PlatformType
+    @State private var alias: String
+    @State private var cookies: String
+    @State private var secToken: String
+    @State private var region: String
+    @State private var zenMuxApiKey: String
+    @State private var mimoServiceToken: String
+    @State private var mimoUserId: String
+    @State private var codexProxyURL: String
+    @State private var displayKeys: Set<String>
+    @State private var resetTimeKeys: Set<String>
+    @State private var isMonitoringEnabled: Bool
+    @State private var showInMenuBar: Bool
+    @State private var showInDetail: Bool
+    @State private var isNotificationEnabled: Bool
+
+    init(module: MonitorModule?, existingModules: [MonitorModule] = [], onSave: @escaping (MonitorModule) -> Void) {
+        self.module = module
+        self.existingModules = existingModules
+        self.onSave = onSave
+
+        let initialProvider = module?.platform ?? .zenmux
+        _provider = State(initialValue: initialProvider)
+        _alias = State(initialValue: module?.alias ?? "")
+        _displayKeys = State(initialValue: Set(module?.displayKeys ?? ModuleEditorView.defaultDisplayKeys(for: initialProvider)))
+        _resetTimeKeys = State(initialValue: Set(module?.resetTimeKeys ?? []))
+        _isMonitoringEnabled = State(initialValue: module?.isMonitoringEnabled ?? true)
+        _showInMenuBar = State(initialValue: module?.showInMenuBar ?? true)
+        _showInDetail = State(initialValue: module?.showInDetail ?? true)
+        _isNotificationEnabled = State(initialValue: module?.isNotificationEnabled ?? true)
+
+        var initialCookies = ""
+        var initialSecToken = ""
+        var initialRegion = "cn-beijing"
+        var initialZenMuxApiKey = ""
+        var initialMimoServiceToken = ""
+        var initialMimoUserId = ""
+        var initialCodexProxyURL = ""
+
+        if let module {
+            switch module.config {
+            case .bailian(let config):
+                initialCookies = config.cookies
+                initialSecToken = config.secToken
+                initialRegion = config.region
+            case .zenmux(let account):
+                initialZenMuxApiKey = account.apiKey
+            case .mimo(let config):
+                initialMimoServiceToken = config.serviceToken
+                initialMimoUserId = config.userId
+            case .codex(let config):
+                initialCodexProxyURL = config.proxyURL ?? ""
+            }
+        }
+
+        _cookies = State(initialValue: initialCookies)
+        _secToken = State(initialValue: initialSecToken)
+        _region = State(initialValue: initialRegion)
+        _zenMuxApiKey = State(initialValue: initialZenMuxApiKey)
+        _mimoServiceToken = State(initialValue: initialMimoServiceToken)
+        _mimoUserId = State(initialValue: initialMimoUserId)
+        _codexProxyURL = State(initialValue: initialCodexProxyURL)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(module == nil ? "添加监控模块" : "编辑监控模块")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            HStack {
+                Text("供应商")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                Picker("供应商", selection: $provider) {
+                    ForEach(PlatformType.allCases) { platform in
+                        Text(providerTitle(for: platform))
+                            .tag(platform)
+                            .disabled(!canSelectProvider(platform))
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(module != nil)
+                .onChange(of: provider) { newValue in
+                    displayKeys = Set(Self.defaultDisplayKeys(for: newValue))
+                    resetTimeKeys = []
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("模块别名")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextField(defaultAlias, text: $alias)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            providerForm
+
+            moduleOptions
+
+            if !quotaOptions.isEmpty {
+                quotaSelection
+            }
+
+            HStack {
+                Spacer()
+                Button("取消") {
+                    dismiss()
+                }
+                Button("保存") {
+                    onSave(makeModule())
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
+    }
+
+    @ViewBuilder
+    private var providerForm: some View {
+        switch provider {
+        case .bailian:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Cookie")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                TextEditor(text: $cookies)
+                    .font(.system(.caption, design: .monospaced))
+                    .frame(height: 70)
+                    .padding(4)
+                    .background(Color(NSColor.textBackgroundColor))
+                    .cornerRadius(6)
+                HStack {
+                    SecureField("sec_token", text: $secToken)
+                        .textFieldStyle(.roundedBorder)
+                    Picker("区域", selection: $region) {
+                        Text("北京").tag("cn-beijing")
+                        Text("上海").tag("cn-shanghai")
+                        Text("深圳").tag("cn-shenzhen")
+                        Text("杭州").tag("cn-hangzhou")
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 90)
+                }
+            }
+        case .zenmux:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Management API Key")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                SecureField("请输入 Management API Key", text: $zenMuxApiKey)
+                    .textFieldStyle(.roundedBorder)
+                Text("仅支持 Management API Key，标准 API Key 无效")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+        case .mimo:
+            VStack(alignment: .leading, spacing: 8) {
+                SecureField("api-platform_serviceToken", text: $mimoServiceToken)
+                    .textFieldStyle(.roundedBorder)
+                TextField("userId", text: $mimoUserId)
+                    .textFieldStyle(.roundedBorder)
+            }
+        case .codex:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Codex 会自动读取本机 OAuth，代理可选")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $codexProxyURL)
+                    .textFieldStyle(.roundedBorder)
+            }
+        }
+    }
+
+    private var moduleOptions: some View {
+        HStack(spacing: 14) {
+            Toggle("监控", isOn: $isMonitoringEnabled)
+            Toggle("bar栏展示", isOn: $showInMenuBar)
+            Toggle("详情页展示", isOn: $showInDetail)
+            Toggle("通知", isOn: $isNotificationEnabled)
+        }
+        .toggleStyle(.checkbox)
+        .font(.caption)
+    }
+
+    private var quotaSelection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("展示项")
+                .font(.subheadline)
+                .fontWeight(.medium)
+            HStack(spacing: 14) {
+                ForEach(quotaOptions, id: \.key) { option in
+                    Toggle(option.label, isOn: Binding(
+                        get: { displayKeys.contains(option.key) },
+                        set: { enabled in
+                            if enabled {
+                                displayKeys.insert(option.key)
+                            } else {
+                                displayKeys.remove(option.key)
+                                resetTimeKeys.remove(option.key)
+                            }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                }
+            }
+            HStack(spacing: 14) {
+                ForEach(quotaOptions, id: \.key) { option in
+                    Toggle("\(option.label)重置", isOn: Binding(
+                        get: { resetTimeKeys.contains(option.key) },
+                        set: { enabled in
+                            if enabled {
+                                resetTimeKeys.insert(option.key)
+                                displayKeys.insert(option.key)
+                            } else {
+                                resetTimeKeys.remove(option.key)
+                            }
+                        }
+                    ))
+                    .toggleStyle(.checkbox)
+                }
+            }
+        }
+        .font(.caption)
+    }
+
+    private var quotaOptions: [(key: String, label: String)] {
+        switch provider {
+        case .bailian:
+            return [("billMonth", "账单月"), ("5hour", "5小时"), ("week", "周")]
+        case .zenmux:
+            return [("5hour", "5小时"), ("7day", "7天")]
+        case .mimo, .codex:
+            return []
+        }
+    }
+
+    private var canSave: Bool {
+        guard canSelectProvider(provider) else {
+            return false
+        }
+
+        switch provider {
+        case .bailian:
+            return !cookies.isEmpty && !secToken.isEmpty
+        case .zenmux:
+            return !zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .mimo:
+            return !mimoServiceToken.isEmpty && !mimoUserId.isEmpty
+        case .codex:
+            return true
+        }
+    }
+
+    private var defaultAlias: String {
+        module?.aliasDisplayName ?? ""
+    }
+
+    private func providerTitle(for platform: PlatformType) -> String {
+        if canSelectProvider(platform) {
+            return platform.rawValue
+        }
+        return "\(platform.rawValue)（已添加）"
+    }
+
+    private func canSelectProvider(_ platform: PlatformType) -> Bool {
+        if platform == .zenmux {
+            return true
+        }
+        return !existingModules.contains { existingModule in
+            existingModule.id != module?.id && existingModule.platform == platform
+        }
+    }
+
+    private func makeModule() -> MonitorModule {
+        let config: MonitorModuleConfig
+        switch provider {
+        case .bailian:
+            config = .bailian(BailianConfig(cookies: cookies, secToken: secToken, region: region))
+        case .zenmux:
+            config = .zenmux(ZenMuxAccountConfig(alias: alias, apiKey: zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines)))
+        case .mimo:
+            config = .mimo(MimoConfig(serviceToken: mimoServiceToken, userId: mimoUserId))
+        case .codex:
+            let trimmed = codexProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            config = .codex(CodexConfig(proxyURL: trimmed.isEmpty ? nil : trimmed))
+        }
+
+        return MonitorModule(
+            id: module?.id ?? UUID().uuidString,
+            alias: alias.trimmingCharacters(in: .whitespacesAndNewlines),
+            config: config,
+            isMonitoringEnabled: isMonitoringEnabled,
+            showInMenuBar: showInMenuBar,
+            showInDetail: showInDetail,
+            isNotificationEnabled: isNotificationEnabled,
+            displayKeys: Array(displayKeys),
+            resetTimeKeys: Array(resetTimeKeys),
+            sortOrder: module?.sortOrder ?? 0
+        )
+    }
+
+    private static func defaultDisplayKeys(for provider: PlatformType) -> [String] {
+        switch provider {
+        case .bailian:
+            return ["billMonth", "5hour", "week"]
+        case .zenmux:
+            return ZenMuxAccountConfig.defaultDisplayKeys
+        case .mimo, .codex:
+            return []
         }
     }
 }

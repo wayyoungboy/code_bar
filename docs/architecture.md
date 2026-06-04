@@ -1,12 +1,12 @@
 # CodeBar 架构文档
 
-> 版本：2.1.2  
+> 版本：2.2.0  
 > 框架：SwiftUI + AppKit  
 > 平台：macOS 13+
 
 ## 概述
 
-CodeBar 是一个 macOS 菜单栏应用，用于监控多个 AI Coding 平台的用量。应用常驻菜单栏，通过 SwiftUI popover 展示用量卡片，并通过设置窗口管理平台凭据、展示项和通知选项。
+CodeBar 是一个 macOS 菜单栏应用，用于监控多个 AI Coding 平台的用量。应用常驻菜单栏，通过 SwiftUI popover 展示用量卡片，并通过设置窗口管理监控模块、凭据、展示项和通知选项。一个监控模块对应一组供应商凭据，ZenMux 多账号也会拆成多个独立模块；除 ZenMux 外，每个供应商最多只能添加一个模块。
 
 当前支持平台：
 
@@ -29,7 +29,9 @@ CodeBar 是一个 macOS 菜单栏应用，用于监控多个 AI Coding 平台的
 
 ## 菜单栏展示
 
-菜单栏由 `CodeBarApp` 管理 `NSStatusItem`。配置多个平台时按 `Constants.rotationInterval` 轮播；配置多个展示项时，菜单栏状态文本会分为上下两层展示，例如 `5h 8%` / `7d 1%`。如果用户在设置页启用了对应展示项的重置时间，状态文本会追加紧凑剩余时间，例如 `5h 8%(3h20m)`。
+菜单栏由 `CodeBarApp` 管理 `NSStatusItem`。多模块展示模式由 `MenuBarDisplayMode` 控制：`independent` 模式下，每个开启「bar栏展示」的监控模块都会创建一个独立 `NSStatusItem`，因此用户可以在 macOS 菜单栏中单独拖动每个模块；`rotating` 模式下，多个模块共用一个 `NSStatusItem`，按模块顺序和 `Constants.rotationInterval` 自动切换。点击任意状态项都会打开同一个详情 popover。
+
+单个模块配置多个展示项时，菜单栏状态文本会分为上下两层展示，例如 `5h 8%` / `7d 1%`。如果用户在模块中启用了对应展示项的重置时间，状态文本会追加紧凑剩余时间，例如 `5h 8%(3h20m)`。如果模块只展示一个配额项，则状态文本保持单行较大字号。
 
 平台图标优先使用 `Assets.xcassets` 中的品牌资产：
 
@@ -62,6 +64,24 @@ CodeBar/
 
 ## 数据模型
 
+`MonitorModule` 是设置页、详情页和菜单栏的核心配置单元：
+
+```swift
+struct MonitorModule {
+    var id: String
+    var alias: String
+    var config: MonitorModuleConfig
+    var isMonitoringEnabled: Bool
+    var showInMenuBar: Bool
+    var showInDetail: Bool
+    var displayKeys: [String]
+    var resetTimeKeys: [String]
+    var sortOrder: Int
+}
+```
+
+`MonitorModuleConfig` 用 enum 包装各供应商配置。`UsageTracker.provider(for:)` 会把模块配置转换成对应 Provider。ZenMux 模块只包含一个 `ZenMuxAccountConfig`，所以多个 ZenMux 账号不会在 UI 层聚合成一张平台卡片。
+
 `PlatformProvider` 是所有平台 Provider 的统一协议：
 
 ```swift
@@ -81,18 +101,21 @@ struct PlatformUsageData {
     let planType: String
     let items: [UsageItem]
     var extraInfo: [(label: String, value: String)]
+    var accountBreakdowns: [AccountUsageData]
 }
 ```
 
 每个平台可以返回任意数量的 `UsageItem`，例如 5 小时、7 天、月用量或总用量。UI 不关心平台 API 细节，只按统一结构渲染进度条和额外信息。
 
+`AccountUsageData` 仍保留给 Provider 表达子账号明细，但当前主 UI 以 `MonitorModule` 为展示边界。ZenMux 在模块模式下是一账号一模块，详情页不会再按平台聚合多个账号。
+
 ## 刷新流程
 
 1. `CodeBarApp` 启动并创建共享的 `UsageTracker`
-2. `UsageTracker.loadConfig()` 从 Keychain 加载平台配置
-3. Codex Provider 无需用户配置，启动时默认注册
-4. 用户在设置页启用平台后，`refresh()` 调用各 Provider 的 `fetchUsage()`
-5. 成功结果写入 `platforms` 并缓存到 UserDefaults
+2. `UsageTracker.loadModules()` 从 Keychain 加载监控模块
+3. 用户在设置页添加或编辑模块后，`refresh()` 按模块创建 Provider 并调用 `fetchUsage()`
+4. 成功结果写入 `moduleUsages[module.id]`
+5. 失败信息写入 `moduleErrors[module.id]`
 6. SwiftUI 视图订阅 `@Published` 状态并刷新 UI
 7. 定时器每 60 秒加随机 jitter 自动刷新
 
@@ -101,7 +124,7 @@ struct PlatformUsageData {
 | Provider | 凭据来源 | 主要用量 |
 | --- | --- | --- |
 | BailianProvider | CodeBar Keychain 配置 | 账单月、5 小时、周 |
-| ZenMuxProvider | CodeBar Keychain 配置 | 5 小时、7 天 |
+| ZenMuxProvider | CodeBar Keychain 多账号配置 | 5 小时、7 天 |
 | MimoProvider | CodeBar Keychain 配置 | 月用量、总用量 |
 | CodexProvider | Codex CLI Keychain / `~/.codex/auth.json` | 5 小时、7 天、额外 rate limits |
 
@@ -109,8 +132,10 @@ struct PlatformUsageData {
 
 Codex 不在 CodeBar 中保存 token。Provider 按优先级读取已有 Codex CLI OAuth：
 
-1. macOS Keychain service：`Codex Auth`
-2. 文件：`~/.codex/auth.json`
+1. 文件：`~/.codex/auth.json`
+2. macOS Keychain service：`Codex Auth`
+
+Keychain fallback 使用进程级缓存，每次应用启动后最多读取一次，避免定时刷新反复触发 macOS 授权弹窗。
 
 仅 `auth_mode == "chatgpt"` 时可查询用量。请求接口：
 
@@ -131,8 +156,10 @@ Codex 支持可选代理。未配置代理时直接请求；配置 `http://host:
 
 ## 配置存储
 
-- 平台凭据和 Codex 代理配置存储在 Keychain 的统一条目 `PlatformConfigs`
-- 平台启用状态、展示项、重置时间展示项、用量缓存存储在 UserDefaults
+- 监控模块配置存储在 Keychain 条目 `MonitorModules`
+- 模块内包含供应商凭据、别名、展示开关、模块级通知开关、显示项、重置时间项和排序
+- 用量缓存存储在 UserDefaults
+- ZenMux 的别名、API Key、展示项和重置时间项都是模块级配置
 - Codex OAuth token 不复制到 CodeBar 配置，只读取 Codex CLI 已存在的凭据
 
 ## 发布流程
