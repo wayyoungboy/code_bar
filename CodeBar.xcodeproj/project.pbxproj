@@ -210,7 +210,7 @@
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 				shellPath = /bin/sh;
-				shellScript = "\"$SRCROOT/CodeBarTests/run_module_behavior_tests.sh\"";
+				shellScript = "sh \"$SRCROOT/CodeBarTests/run_module_behavior_tests.sh\"";
 			};
 /* End PBXShellScriptBuildPhase section */
 
