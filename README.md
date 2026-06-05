@@ -1,15 +1,43 @@
+<div align="center">
+
 # CodeBar
 
-一个 macOS 菜单栏应用，用于实时监控 AI Coding 平台的用量。
+**macOS 菜单栏里的 AI Coding 用量雷达。**
 
-当前版本：`v2.2.0`
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
+[![Swift](https://img.shields.io/badge/Swift-5.x-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
+[![Release](https://img.shields.io/badge/release-v2.2.0-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases)
+[![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
+
+一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
+
+</div>
+
+![CodeBar 多模块监控](screenshots/image5.png)
+
+## Highlights
+
+| 能力 | 说明 |
+|---|---|
+| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex |
+| 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
+| 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
+| 配额提醒 | 5 小时、7 天、周、月等周期可按模块开启提醒 |
+| 安全存储 | CodeBar 自身配置统一写入 macOS Keychain |
+| Codex 免配置 | 自动读取本机 Codex CLI OAuth 凭据 |
+
+## Preview
+
+| 多模块监控 | Codex 用量 | 额度刷新通知 |
+|---|---|---|
+| ![多模块监控](screenshots/image5.png) | ![Codex Usage](screenshots/codex-usage.png) | ![ZenMux 额度刷新通知](screenshots/image4.png) |
 
 ## 支持平台
 
-- **阿里云百炼** — 监控 Coding Plan 用量（账单月、5 小时、周）
-- **ZenMux** — 监控 Flow 用量（5 小时、7 天），支持按账号添加独立监控模块
-- **小米 MiMo** — 监控 Token 用量（月用量、总用量）
-- **Codex** — 自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
+- **阿里云百炼**：监控 Coding Plan 用量（账单月、5 小时、周）
+- **ZenMux**：监控 Flow 用量（5 小时、7 天），支持按账号添加独立监控模块
+- **小米 MiMo**：监控 Token 用量（月用量、总用量）
+- **Codex**：自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
 
 想支持更多平台？欢迎提交 PR。
 
@@ -17,30 +45,12 @@
 
 - 通过「添加模块」逐个添加供应商账号或凭据
 - 每个模块可配置别名，方便区分个人、团队或项目账号
-- ZenMux 可添加多个账号模块；其他供应商每种最多添加一个模块
 - 每个模块可独立选择是否监控、是否显示在菜单栏、是否显示在详情页
-- 额度刷新通知支持系统总开关和模块级独立开关
-- 模块别名不会替代供应商名；菜单栏中别名显示在 Logo 和用量数据之间
 - 设置页支持拖动模块排序，详情页和菜单栏按模块顺序展示
-- 菜单栏会为启用展示的模块创建独立状态项，每个状态项都可由 macOS 单独拖动
-- 菜单栏多模块展示支持「独立」和「轮播」两种模式；轮播模式会共用一个状态项并按模块顺序自动切换
+- 菜单栏多模块展示支持「独立」和「轮播」两种模式
 - 弹窗按模块独立展示用量、套餐、重置时间和额外信息
 - 每个模块的配额周期可独立选择是否展示，以及是否展示剩余重置时间
-- ZenMux 支持添加多个 Management API Key，每个账号都是一个独立模块
-- ZenMux 展示账号用量和完整订阅信息（套餐、费用、单价、到期时间等）
-- ZenMux 额度刷新通知（5 小时 / 7 天周期自动提醒）
-- Codex 自动读取本机 Codex CLI OAuth，无需在 CodeBar 中配置 token
-- Codex 支持可选代理请求 `chatgpt.com/backend-api/wham/usage`
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
-- 统一 Keychain 存储 CodeBar 自身配置
-
-## 截图
-
-![CodeBar 多模块监控](screenshots/image5.png)
-
-![CodeBar Screenshot](screenshots/image3.png)
-
-![CodeBar Codex Usage](screenshots/codex-usage.png)
 
 ## 系统要求
 
@@ -115,8 +125,6 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 每个账号模块可以独立勾选是否展示 5 小时 / 7 天配额，以及是否展示对应重置时间。详情页中每个 ZenMux 账号会作为独立模块展示，不再按平台聚合。
 
 ZenMux 5 小时或 7 天额度周期刷新时，CodeBar 可发送 macOS 系统通知。同一周期内不会重复提醒，设置界面可开关通知并发送测试通知。
-
-![ZenMux 额度刷新通知](screenshots/image4.png)
 
 ### 小米 MiMo
 
