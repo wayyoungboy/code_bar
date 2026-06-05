@@ -21,6 +21,7 @@
 			A1000012 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* UpdateChecker.swift */; };
 			A1000038 /* MimoProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* MimoProvider.swift */; };
 			A1000039 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000040 /* CodexProvider.swift */; };
+			A1000040 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000041 /* AppIntents.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +40,7 @@
 			A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 			A2000039 /* MimoProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimoProvider.swift; sourceTree = "<group>"; };
 			A2000040 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
+			A2000041 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -47,6 +49,7 @@
 				isa = PBXFrameworksBuildPhase;
 				buildActionMask = 2147483647;
 				files = (
+					A1000040 /* AppIntents.framework in Frameworks */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
@@ -57,6 +60,7 @@
 				isa = PBXGroup;
 				children = (
 					A5000002 /* CodeBar */,
+					A5000005 /* Frameworks */,
 					A5000003 /* Products */,
 				);
 				sourceTree = "<group>";
@@ -99,6 +103,14 @@
 				path = Providers;
 				sourceTree = "<group>";
 			};
+			A5000005 /* Frameworks */ = {
+				isa = PBXGroup;
+				children = (
+					A2000041 /* AppIntents.framework */,
+				);
+				name = Frameworks;
+				sourceTree = "<group>";
+			};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -107,6 +119,7 @@
 				buildConfigurationList = A7000003 /* Build configuration list for PBXNativeTarget "CodeBar" */;
 				buildPhases = (
 					A8000001 /* Sources */,
+					A8000002 /* Run Module Behavior Tests */,
 					A4000001 /* Frameworks */,
 					A9000001 /* Resources */,
 				);
@@ -163,6 +176,43 @@
 				runOnlyForDeploymentPostprocessing = 0;
 			};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+			A8000002 /* Run Module Behavior Tests */ = {
+				isa = PBXShellScriptBuildPhase;
+				buildActionMask = 2147483647;
+				files = (
+				);
+				inputFileListPaths = (
+				);
+				inputPaths = (
+					"$(SRCROOT)/CodeBarTests/run_module_behavior_tests.sh",
+					"$(SRCROOT)/CodeBar/Constants.swift",
+					"$(SRCROOT)/CodeBar/Logger.swift",
+					"$(SRCROOT)/CodeBar/KeychainHelper.swift",
+					"$(SRCROOT)/CodeBar/UsageTracker.swift",
+					"$(SRCROOT)/CodeBar/MenuBarView.swift",
+					"$(SRCROOT)/CodeBar/SettingsWindow.swift",
+					"$(SRCROOT)/CodeBar/UpdateChecker.swift",
+					"$(SRCROOT)/CodeBar/Providers/PlatformProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/BailianProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/ZenMuxProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/MimoProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/CodexProvider.swift",
+					"$(SRCROOT)/CodeBarTests/TestNotifications.swift",
+					"$(SRCROOT)/CodeBarTests/ModuleBehaviorTests.swift",
+				);
+				name = "Run Module Behavior Tests";
+				outputFileListPaths = (
+				);
+				outputPaths = (
+					"$(DERIVED_FILE_DIR)/codebar-module-behavior-tests.passed",
+				);
+				runOnlyForDeploymentPostprocessing = 0;
+				shellPath = /bin/sh;
+				shellScript = "\"$SRCROOT/CodeBarTests/run_module_behavior_tests.sh\"";
+			};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 			A8000001 /* Sources */ = {
@@ -326,7 +376,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-				MARKETING_VERSION = 2.2.0;
+					MARKETING_VERSION = 2.2.1;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;
@@ -354,7 +404,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-				MARKETING_VERSION = 2.2.0;
+					MARKETING_VERSION = 2.2.1;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;

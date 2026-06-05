@@ -304,10 +304,8 @@ class UsageTracker: ObservableObject {
         switch module.config {
         case .bailian(let config):
             return BailianProvider(config: config)
-        case .zenmux(let account):
-            var account = account
-            account.displayKeys = module.displayKeys.isEmpty ? ZenMuxAccountConfig.defaultDisplayKeys : module.displayKeys
-            account.resetTimeKeys = module.resetTimeKeys
+        case .zenmux:
+            let account = ModuleProviderConfiguration.zenMuxAccount(for: module)
             return ZenMuxProvider(config: ZenMuxConfig(accounts: [account]))
         case .mimo(let config):
             return MimoProvider(config: config)
@@ -612,13 +610,7 @@ class UsageTracker: ObservableObject {
 
             do {
                 var usage = try await provider.fetchUsage()
-                usage = PlatformUsageData(
-                    platformName: module.displayName,
-                    planType: usage.planType,
-                    items: filteredItems(usage.items, for: module),
-                    extraInfo: usage.extraInfo,
-                    accountBreakdowns: usage.accountBreakdowns
-                )
+                usage = ModuleUsageStorage.usageForModuleCache(from: usage, module: module)
                 moduleUsages[module.id] = usage
                 if module.platform == .zenmux && isQuotaRefreshNoticeEnabled && module.isNotificationEnabled {
                     checkZenMuxRefreshNotices(usage: usage, moduleID: module.id)
@@ -635,11 +627,6 @@ class UsageTracker: ObservableObject {
                 AppLogger.logError(error)
             }
         }
-    }
-
-    private func filteredItems(_ items: [UsageItem], for module: MonitorModule) -> [UsageItem] {
-        guard !module.displayKeys.isEmpty else { return items }
-        return items.filter { module.displayKeys.contains($0.key) }
     }
 
     func refresh() {

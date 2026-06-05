@@ -59,6 +59,39 @@ struct PlatformUsageData {
     var accountBreakdowns: [AccountUsageData] = []
 }
 
+enum DetailUsagePresentation {
+    static func items(from usage: PlatformUsageData, module: MonitorModule) -> [UsageItem] {
+        usage.items
+    }
+
+    static func resetDate(for item: UsageItem, module: MonitorModule) -> Date? {
+        item.resetDate
+    }
+}
+
+enum ModuleUsageStorage {
+    static func usageForModuleCache(from usage: PlatformUsageData, module: MonitorModule) -> PlatformUsageData {
+        PlatformUsageData(
+            platformName: module.displayName,
+            planType: usage.planType,
+            items: usage.items,
+            extraInfo: usage.extraInfo,
+            accountBreakdowns: usage.accountBreakdowns
+        )
+    }
+}
+
+enum ModuleProviderConfiguration {
+    static func zenMuxAccount(for module: MonitorModule) -> ZenMuxAccountConfig {
+        guard case .zenmux(var account) = module.config else {
+            return ZenMuxAccountConfig()
+        }
+        account.displayKeys = ZenMuxAccountConfig.defaultDisplayKeys
+        account.resetTimeKeys = module.resetTimeKeys
+        return account
+    }
+}
+
 enum MonitorModuleConfig: Codable {
     case bailian(BailianConfig)
     case zenmux(ZenMuxAccountConfig)
@@ -171,6 +204,37 @@ struct MonitorModule: Codable, Identifiable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    var editorAlias: String {
+        let trimmed = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        if case .zenmux(let account) = config {
+            return account.alias
+        }
+        return alias
+    }
+
+    var editorDisplayKeys: [String] {
+        if !displayKeys.isEmpty {
+            return displayKeys
+        }
+        if case .zenmux(let account) = config {
+            return account.displayKeys
+        }
+        return displayKeys
+    }
+
+    var editorResetTimeKeys: [String] {
+        if !resetTimeKeys.isEmpty {
+            return resetTimeKeys
+        }
+        if case .zenmux(let account) = config {
+            return account.resetTimeKeys
+        }
+        return resetTimeKeys
+    }
+
     var displayName: String {
         if let aliasDisplayName {
             return "\(platform.shortName) · \(aliasDisplayName)"
@@ -267,6 +331,22 @@ struct ZenMuxAccountConfig: Codable, Identifiable, Equatable {
     var displayName: String {
         let trimmed = alias.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "未命名账号" : trimmed
+    }
+}
+
+enum ModuleEditorConfigFactory {
+    static func zenMuxConfig(
+        alias: String,
+        apiKey: String,
+        displayKeys: [String],
+        resetTimeKeys: [String]
+    ) -> MonitorModuleConfig {
+        .zenmux(ZenMuxAccountConfig(
+            alias: alias,
+            apiKey: apiKey,
+            displayKeys: displayKeys,
+            resetTimeKeys: resetTimeKeys
+        ))
     }
 }
 

@@ -375,7 +375,7 @@ struct MenuBarView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else if let usage {
-                let visibleItems = usage.items.filter { tracker.displayKeys(for: module).contains($0.key) }
+                let visibleItems = DetailUsagePresentation.items(from: usage, module: module)
                 ForEach(visibleItems, id: \.key) { item in
                     usageRow(
                         label: item.label,
@@ -383,7 +383,7 @@ struct MenuBarView: View {
                         total: item.total,
                         unit: item.unit,
                         percent: item.percent,
-                        resetDate: tracker.isResetTimeEnabled(item.key, for: module) ? item.resetDate : nil
+                        resetDate: DetailUsagePresentation.resetDate(for: item, module: module)
                     )
                 }
 
@@ -457,6 +457,8 @@ struct MenuBarView: View {
     }
 }
 
+#if !CODEBAR_BEHAVIOR_TESTS
 #Preview {
     MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared)
 }
+#endif

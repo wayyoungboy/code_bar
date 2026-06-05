@@ -34,6 +34,8 @@ struct SettingsWindowView: View {
                 moduleManagementSection
 
                 systemSettingsSection
+
+                footerSection
             }
             .padding(20)
         }
@@ -219,6 +221,26 @@ struct SettingsWindowView: View {
         .padding(16)
         .background(Color.orange.opacity(0.06))
         .cornerRadius(10)
+    }
+
+    private var footerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+
+            HStack(spacing: 12) {
+                Label("作者：wayyoungboy", systemImage: "person.circle")
+
+                Spacer()
+
+                Link(destination: URL(string: "https://github.com/wayyoungboy/code_bar")!) {
+                    Label("GitHub 主页", systemImage: "link")
+                }
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Manual config section
@@ -781,9 +803,10 @@ struct ModuleEditorView: View {
 
         let initialProvider = module?.platform ?? .zenmux
         _provider = State(initialValue: initialProvider)
-        _alias = State(initialValue: module?.alias ?? "")
-        _displayKeys = State(initialValue: Set(module?.displayKeys ?? ModuleEditorView.defaultDisplayKeys(for: initialProvider)))
-        _resetTimeKeys = State(initialValue: Set(module?.resetTimeKeys ?? []))
+        _alias = State(initialValue: module?.editorAlias ?? "")
+        let initialDisplayKeys = module?.editorDisplayKeys ?? ModuleEditorView.defaultDisplayKeys(for: initialProvider)
+        _displayKeys = State(initialValue: Set(initialDisplayKeys.isEmpty ? ModuleEditorView.defaultDisplayKeys(for: initialProvider) : initialDisplayKeys))
+        _resetTimeKeys = State(initialValue: Set(module?.editorResetTimeKeys ?? []))
         _isMonitoringEnabled = State(initialValue: module?.isMonitoringEnabled ?? true)
         _showInMenuBar = State(initialValue: module?.showInMenuBar ?? true)
         _showInDetail = State(initialValue: module?.showInDetail ?? true)
@@ -832,7 +855,14 @@ struct ModuleEditorView: View {
                 Text("供应商")
                     .font(.subheadline)
                     .fontWeight(.medium)
-                Picker("供应商", selection: $provider) {
+                Picker("供应商", selection: Binding(
+                    get: { provider },
+                    set: { newValue in
+                        provider = newValue
+                        displayKeys = Set(Self.defaultDisplayKeys(for: newValue))
+                        resetTimeKeys = []
+                    }
+                )) {
                     ForEach(PlatformType.allCases) { platform in
                         Text(providerTitle(for: platform))
                             .tag(platform)
@@ -841,10 +871,6 @@ struct ModuleEditorView: View {
                 }
                 .pickerStyle(.menu)
                 .disabled(module != nil)
-                .onChange(of: provider) { newValue in
-                    displayKeys = Set(Self.defaultDisplayKeys(for: newValue))
-                    resetTimeKeys = []
-                }
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -1042,7 +1068,12 @@ struct ModuleEditorView: View {
         case .bailian:
             config = .bailian(BailianConfig(cookies: cookies, secToken: secToken, region: region))
         case .zenmux:
-            config = .zenmux(ZenMuxAccountConfig(alias: alias, apiKey: zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines)))
+            config = ModuleEditorConfigFactory.zenMuxConfig(
+                alias: alias.trimmingCharacters(in: .whitespacesAndNewlines),
+                apiKey: zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                displayKeys: Array(displayKeys),
+                resetTimeKeys: Array(resetTimeKeys)
+            )
         case .mimo:
             config = .mimo(MimoConfig(serviceToken: mimoServiceToken, userId: mimoUserId))
         case .codex:
