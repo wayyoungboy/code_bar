@@ -97,6 +97,7 @@ enum MonitorModuleConfig: Codable {
     case zenmux(ZenMuxAccountConfig)
     case mimo(MimoConfig)
     case codex(CodexConfig)
+    case gemini(GeminiConfig)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -104,6 +105,7 @@ enum MonitorModuleConfig: Codable {
         case zenmux
         case mimo
         case codex
+        case gemini
     }
 
     var platform: PlatformType {
@@ -112,6 +114,7 @@ enum MonitorModuleConfig: Codable {
         case .zenmux: return .zenmux
         case .mimo: return .mimo
         case .codex: return .codex
+        case .gemini: return .gemini
         }
     }
 
@@ -124,6 +127,8 @@ enum MonitorModuleConfig: Codable {
         case .mimo(let config):
             return config.isValid
         case .codex(let config):
+            return config.isValid
+        case .gemini(let config):
             return config.isValid
         }
     }
@@ -140,6 +145,8 @@ enum MonitorModuleConfig: Codable {
             self = .mimo(try container.decode(MimoConfig.self, forKey: .mimo))
         case .codex:
             self = .codex(try container.decode(CodexConfig.self, forKey: .codex))
+        case .gemini:
+            self = .gemini(try container.decode(GeminiConfig.self, forKey: .gemini))
         }
     }
 
@@ -155,6 +162,8 @@ enum MonitorModuleConfig: Codable {
             try container.encode(config, forKey: .mimo)
         case .codex(let config):
             try container.encode(config, forKey: .codex)
+        case .gemini(let config):
+            try container.encode(config, forKey: .gemini)
         }
     }
 }
@@ -381,6 +390,34 @@ struct CodexConfig: PlatformConfig, Codable {
 
     enum CodingKeys: String, CodingKey {
         case proxyURL = "codex_proxy_url"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        proxyURL = try container.decodeIfPresent(String.self, forKey: .proxyURL)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(proxyURL, forKey: .proxyURL)
+    }
+}
+
+/// Gemini CLI / Code Assist OAuth 用量配置
+struct GeminiConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .gemini
+    var proxyURL: String?
+
+    init(proxyURL: String? = nil) {
+        self.proxyURL = proxyURL
+    }
+
+    var isValid: Bool {
+        true
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case proxyURL = "gemini_proxy_url"
     }
 
     init(from decoder: Decoder) throws {

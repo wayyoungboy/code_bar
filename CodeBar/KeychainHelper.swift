@@ -103,13 +103,16 @@ final class KeychainHelper {
     }
 
     /// 读取外部应用的 Keychain 条目（按 service 名查找）
-    static func readExternalItem(service: String) -> String? {
-        let query: [String: Any] = [
+    static func readExternalItem(service: String, account: String? = nil) -> String? {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let account {
+            query[kSecAttrAccount as String] = account
+        }
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else { return nil }

@@ -50,6 +50,15 @@ private struct ModuleBehaviorTests {
         expect(legacyModule.editorDisplayKeys == ["7day"], "Editor should load display keys from existing ZenMux config")
         expect(legacyModule.editorResetTimeKeys == ["7day"], "Editor should load reset time keys from existing ZenMux config")
 
+        let editSession = ModuleEditorSession.editing(legacyModule)
+        expect(editSession.id == "edit-\(legacyModule.id)", "Editing an existing module should use a module-specific sheet identity")
+        expect(editSession.module?.id == legacyModule.id, "Editing session should carry the existing module into the editor")
+        expect(editSession.module?.editorAlias == "legacy alias", "Editing session should preserve previously saved module configuration")
+
+        let addSession = ModuleEditorSession.adding()
+        expect(addSession.id == "add", "Adding a module should use a separate sheet identity from editing")
+        expect(addSession.module?.id == nil, "Adding session should not carry an existing module")
+
         let savedConfig = ModuleEditorConfigFactory.zenMuxConfig(
             alias: "saved alias",
             apiKey: "abcdefghijklmnopqrstuvwxyz",
@@ -63,6 +72,27 @@ private struct ModuleBehaviorTests {
             expect(account.resetTimeKeys == ["5hour"], "Saved ZenMux config should preserve reset time keys")
         } else {
             fatalError("Saved config should be ZenMux")
+        }
+
+        let geminiConfig = GeminiConfig(proxyURL: " socks5://127.0.0.1:7890 ")
+        let geminiModule = MonitorModule(
+            alias: "gemini",
+            config: .gemini(geminiConfig),
+            displayKeys: [],
+            resetTimeKeys: [],
+            sortOrder: 0
+        )
+
+        expect(geminiModule.platform == .gemini, "Gemini module should report Gemini platform")
+        expect(geminiModule.isValid, "Gemini module should be valid without storing OAuth token")
+        expect(ModuleEditorView.defaultDisplayKeys(for: .gemini) == ["gemini_pro", "gemini_flash", "gemini_flash_lite"], "Gemini should default to all model quota categories")
+
+        let encodedGemini = try! JSONEncoder().encode(geminiModule.config)
+        let decodedGemini = try! JSONDecoder().decode(MonitorModuleConfig.self, from: encodedGemini)
+        if case .gemini(let decodedConfig) = decodedGemini {
+            expect(decodedConfig.proxyURL == " socks5://127.0.0.1:7890 ", "Gemini config should preserve proxy URL through Codable")
+        } else {
+            fatalError("Decoded config should be Gemini")
         }
 
         print("ModuleBehaviorTests passed")

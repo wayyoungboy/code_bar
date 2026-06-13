@@ -1,13 +1,26 @@
 import SwiftUI
 
+struct ModuleEditorSession: Identifiable {
+    let id: String
+    let module: MonitorModule?
+
+    static func adding() -> ModuleEditorSession {
+        ModuleEditorSession(id: "add", module: nil)
+    }
+
+    static func editing(_ module: MonitorModule) -> ModuleEditorSession {
+        ModuleEditorSession(id: "edit-\(module.id)", module: module)
+    }
+}
+
 struct SettingsWindowView: View {
     @ObservedObject var tracker: UsageTracker
-    @State private var showModuleEditor = false
-    @State private var editingModule: MonitorModule?
+    @State private var moduleEditorSession: ModuleEditorSession?
     @State private var showBailianHelp = false
     @State private var showZenMuxHelp = false
     @State private var showMimoHelp = false
     @State private var showCodexHelp = false
+    @State private var showGeminiHelp = false
 
     // Bailian config
     @State private var cookies = ""
@@ -28,6 +41,9 @@ struct SettingsWindowView: View {
     // Codex network config
     @State private var codexProxyURL = ""
 
+    // Gemini network config
+    @State private var geminiProxyURL = ""
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -39,14 +55,14 @@ struct SettingsWindowView: View {
             }
             .padding(20)
         }
-        .sheet(isPresented: $showModuleEditor) {
-            ModuleEditorView(module: editingModule, existingModules: tracker.modules) { module in
-                if editingModule == nil {
+        .sheet(item: $moduleEditorSession) { session in
+            ModuleEditorView(module: session.module, existingModules: tracker.modules) { module in
+                if session.module == nil {
                     tracker.addModule(module)
                 } else {
                     tracker.updateModule(module)
                 }
-                editingModule = nil
+                moduleEditorSession = nil
             }
         }
         .sheet(isPresented: $showBailianHelp) {
@@ -60,6 +76,9 @@ struct SettingsWindowView: View {
         }
         .sheet(isPresented: $showCodexHelp) {
             HelpWindowView(platform: .codex)
+        }
+        .sheet(isPresented: $showGeminiHelp) {
+            HelpWindowView(platform: .gemini)
         }
         .sheet(isPresented: $showZenMuxAccountEditor) {
             ZenMuxAccountEditorView(account: editingZenMuxAccount) { account in
@@ -78,8 +97,7 @@ struct SettingsWindowView: View {
                     .font(.headline)
                 Spacer()
                 Button {
-                    editingModule = nil
-                    showModuleEditor = true
+                    moduleEditorSession = .adding()
                 } label: {
                     Image(systemName: "plus.circle")
                     Text("添加模块")
@@ -133,8 +151,7 @@ struct SettingsWindowView: View {
                 }
                 Spacer()
                 Button {
-                    editingModule = module
-                    showModuleEditor = true
+                    moduleEditorSession = .editing(module)
                 } label: {
                     Image(systemName: "pencil")
                 }
@@ -789,6 +806,7 @@ struct ModuleEditorView: View {
     @State private var mimoServiceToken: String
     @State private var mimoUserId: String
     @State private var codexProxyURL: String
+    @State private var geminiProxyURL: String
     @State private var displayKeys: Set<String>
     @State private var resetTimeKeys: Set<String>
     @State private var isMonitoringEnabled: Bool
@@ -819,6 +837,7 @@ struct ModuleEditorView: View {
         var initialMimoServiceToken = ""
         var initialMimoUserId = ""
         var initialCodexProxyURL = ""
+        var initialGeminiProxyURL = ""
 
         if let module {
             switch module.config {
@@ -833,6 +852,8 @@ struct ModuleEditorView: View {
                 initialMimoUserId = config.userId
             case .codex(let config):
                 initialCodexProxyURL = config.proxyURL ?? ""
+            case .gemini(let config):
+                initialGeminiProxyURL = config.proxyURL ?? ""
             }
         }
 
@@ -843,6 +864,7 @@ struct ModuleEditorView: View {
         _mimoServiceToken = State(initialValue: initialMimoServiceToken)
         _mimoUserId = State(initialValue: initialMimoUserId)
         _codexProxyURL = State(initialValue: initialCodexProxyURL)
+        _geminiProxyURL = State(initialValue: initialGeminiProxyURL)
     }
 
     var body: some View {
@@ -959,6 +981,14 @@ struct ModuleEditorView: View {
                 TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $codexProxyURL)
                     .textFieldStyle(.roundedBorder)
             }
+        case .gemini:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Gemini 会自动读取本机 Gemini CLI OAuth，代理可选")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $geminiProxyURL)
+                    .textFieldStyle(.roundedBorder)
+            }
         }
     }
 
@@ -1020,6 +1050,8 @@ struct ModuleEditorView: View {
             return [("billMonth", "账单月"), ("5hour", "5小时"), ("week", "周")]
         case .zenmux:
             return [("5hour", "5小时"), ("7day", "7天")]
+        case .gemini:
+            return [("gemini_pro", "Pro"), ("gemini_flash", "Flash"), ("gemini_flash_lite", "Flash Lite")]
         case .mimo, .codex:
             return []
         }
@@ -1037,7 +1069,7 @@ struct ModuleEditorView: View {
             return !zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .mimo:
             return !mimoServiceToken.isEmpty && !mimoUserId.isEmpty
-        case .codex:
+        case .codex, .gemini:
             return true
         }
     }
@@ -1079,6 +1111,9 @@ struct ModuleEditorView: View {
         case .codex:
             let trimmed = codexProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
             config = .codex(CodexConfig(proxyURL: trimmed.isEmpty ? nil : trimmed))
+        case .gemini:
+            let trimmed = geminiProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            config = .gemini(GeminiConfig(proxyURL: trimmed.isEmpty ? nil : trimmed))
         }
 
         return MonitorModule(
@@ -1095,12 +1130,14 @@ struct ModuleEditorView: View {
         )
     }
 
-    private static func defaultDisplayKeys(for provider: PlatformType) -> [String] {
+    static func defaultDisplayKeys(for provider: PlatformType) -> [String] {
         switch provider {
         case .bailian:
             return ["billMonth", "5hour", "week"]
         case .zenmux:
             return ZenMuxAccountConfig.defaultDisplayKeys
+        case .gemini:
+            return ["gemini_pro", "gemini_flash", "gemini_flash_lite"]
         case .mimo, .codex:
             return []
         }
@@ -1132,6 +1169,8 @@ struct HelpWindowView: View {
                         mimoHelpSteps
                     case .codex:
                         codexHelpSteps
+                    case .gemini:
+                        geminiHelpSteps
                     }
                 }
             }
@@ -1154,6 +1193,7 @@ struct HelpWindowView: View {
         case .zenmux: return "获取 ZenMux API Key 帮助"
         case .mimo: return "获取小米 MiMo 凭据帮助"
         case .codex: return "获取 Codex 用量凭据帮助"
+        case .gemini: return "获取 Gemini 用量凭据帮助"
         }
     }
 
@@ -1209,6 +1249,15 @@ struct HelpWindowView: View {
             HelpStepView(number: 2, title: "使用 ChatGPT 登录", description: "通过 Codex CLI 登录 ChatGPT 账号，使 ~/.codex/auth.json 或 Keychain 中生成 OAuth 凭据", icon: "person.circle")
             HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 Codex Auth 或 ~/.codex/auth.json，不需要手动填写凭据", icon: "key")
             HelpStepView(number: 4, title: "代理可选", description: "无法直连 chatgpt.com 时，可填写 http 或 socks5 代理地址", icon: "network")
+        }
+    }
+
+    private var geminiHelpSteps: some View {
+        Group {
+            HelpStepView(number: 1, title: "安装 Gemini CLI", description: "安装并打开 Google Gemini CLI", icon: "terminal")
+            HelpStepView(number: 2, title: "使用 Google 登录", description: "通过 Gemini CLI 登录 Google 账号，使 Keychain 或 ~/.gemini/oauth_creds.json 中生成 OAuth 凭据", icon: "person.circle")
+            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 gemini-cli-oauth 或 ~/.gemini/oauth_creds.json，不需要手动填写凭据", icon: "key")
+            HelpStepView(number: 4, title: "代理可选", description: "无法直连 Google Code Assist 接口时，可填写 http 或 socks5 代理地址", icon: "network")
         }
     }
 }

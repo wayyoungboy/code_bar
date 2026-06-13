@@ -21,6 +21,7 @@
 			A1000012 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* UpdateChecker.swift */; };
 			A1000038 /* MimoProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* MimoProvider.swift */; };
 			A1000039 /* CodexProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000040 /* CodexProvider.swift */; };
+			A1000041 /* GeminiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000042 /* GeminiProvider.swift */; };
 			A1000040 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000041 /* AppIntents.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 /* End PBXBuildFile section */
 
@@ -41,6 +42,7 @@
 			A2000039 /* MimoProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimoProvider.swift; sourceTree = "<group>"; };
 			A2000040 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
 			A2000041 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
+			A2000042 /* GeminiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiProvider.swift; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -99,6 +101,7 @@
 					A2000007 /* ZenMuxProvider.swift */,
 					A2000039 /* MimoProvider.swift */,
 					A2000040 /* CodexProvider.swift */,
+					A2000042 /* GeminiProvider.swift */,
 				);
 				path = Providers;
 				sourceTree = "<group>";
@@ -199,6 +202,7 @@
 					"$(SRCROOT)/CodeBar/Providers/ZenMuxProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/MimoProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/CodexProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/GeminiProvider.swift",
 					"$(SRCROOT)/CodeBarTests/TestNotifications.swift",
 					"$(SRCROOT)/CodeBarTests/ModuleBehaviorTests.swift",
 				);
@@ -206,6 +210,7 @@
 				outputFileListPaths = (
 				);
 				outputPaths = (
+					"$(DERIVED_FILE_DIR)/codebar-module-behavior-tests",
 					"$(DERIVED_FILE_DIR)/codebar-module-behavior-tests.passed",
 				);
 				runOnlyForDeploymentPostprocessing = 0;
@@ -232,6 +237,7 @@
 					A1000012 /* UpdateChecker.swift in Sources */,
 					A1000038 /* MimoProvider.swift in Sources */,
 					A1000039 /* CodexProvider.swift in Sources */,
+					A1000041 /* GeminiProvider.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
@@ -376,7 +382,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.1;
+					MARKETING_VERSION = 2.2.2;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;
@@ -404,7 +410,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.1;
+					MARKETING_VERSION = 2.2.2;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;

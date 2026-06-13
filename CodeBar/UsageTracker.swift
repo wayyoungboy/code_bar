@@ -8,6 +8,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     case zenmux = "ZenMux"
     case mimo = "小米 MiMo"
     case codex = "Codex"
+    case gemini = "Gemini"
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .zenmux: return "sparkles"
         case .mimo: return "m.circle.fill"
         case .codex: return "circle.hexagongrid.fill"
+        case .gemini: return "sparkles"
         }
     }
 
@@ -26,12 +28,13 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .zenmux: return "ZenMuxLogo"
         case .mimo: return "XiaomiLogo"
         case .codex: return "CodexLogo"
+        case .gemini: return "GeminiLogo"
         }
     }
 
     var usesOriginalLogoColor: Bool {
         switch self {
-        case .mimo: return true
+        case .mimo, .gemini: return true
         default: return false
         }
     }
@@ -42,6 +45,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .zenmux: return "ZenMux"
         case .mimo: return "MiMo"
         case .codex: return "Codex"
+        case .gemini: return "Gemini"
         }
     }
 
@@ -51,6 +55,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .zenmux: return "#8B5CF6"
         case .mimo: return "#FF6900"
         case .codex: return "#10A37F"
+        case .gemini: return "#4285F4"
         }
     }
 }
@@ -311,6 +316,8 @@ class UsageTracker: ObservableObject {
             return MimoProvider(config: config)
         case .codex(let config):
             return CodexProvider(config: config)
+        case .gemini(let config):
+            return GeminiProvider(config: config)
         }
     }
 
@@ -339,6 +346,11 @@ class UsageTracker: ObservableObject {
             .flatMap { try? JSONDecoder().decode(CodexConfig.self, from: $0) } ?? CodexConfig()
         providers[.codex] = CodexProvider(config: codexConfig)
         AppLogger.logConfigChange(platform: "Codex", action: "加载配置")
+
+        let geminiConfig = allConfigs[PlatformType.gemini.rawValue]
+            .flatMap { try? JSONDecoder().decode(GeminiConfig.self, from: $0) } ?? GeminiConfig()
+        providers[.gemini] = GeminiProvider(config: geminiConfig)
+        AppLogger.logConfigChange(platform: "Gemini", action: "加载配置")
     }
 
     private func loadAllConfigs() -> [String: Data] {
@@ -432,10 +444,27 @@ class UsageTracker: ObservableObject {
         return try? JSONDecoder().decode(CodexConfig.self, from: data)
     }
 
+    func saveGeminiProxyURL(_ proxyURL: String?) {
+        let trimmed = proxyURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let config = GeminiConfig(proxyURL: trimmed?.isEmpty == true ? nil : trimmed)
+        providers[.gemini] = GeminiProvider(config: config)
+        savePlatformConfig(config, for: .gemini)
+        AppLogger.logConfigChange(platform: "Gemini", action: "保存代理配置")
+        errorMessages[.gemini] = nil
+        refresh()
+    }
+
+    func loadGeminiConfig() -> GeminiConfig? {
+        guard let data = loadAllConfigs()[PlatformType.gemini.rawValue] else { return nil }
+        return try? JSONDecoder().decode(GeminiConfig.self, from: data)
+    }
+
     func clearConfig(for platform: PlatformType) {
         removePlatformConfig(for: platform)
         if platform == .codex {
             providers[.codex] = CodexProvider()
+        } else if platform == .gemini {
+            providers[.gemini] = GeminiProvider()
         } else {
             providers[platform] = nil
         }

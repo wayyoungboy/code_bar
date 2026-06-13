@@ -6,10 +6,10 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
 [![Swift](https://img.shields.io/badge/Swift-5.x-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.0-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases)
+[![Release](https://img.shields.io/badge/release-v2.2.2-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
-一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
+一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
 
 </div>
 
@@ -19,12 +19,12 @@
 
 | 能力 | 说明 |
 |---|---|
-| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex |
+| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini |
 | 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
 | 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
 | 配额提醒 | 5 小时、7 天、周、月等周期可按模块开启提醒 |
 | 安全存储 | CodeBar 自身配置统一写入 macOS Keychain |
-| Codex 免配置 | 自动读取本机 Codex CLI OAuth 凭据 |
+| OAuth 免配置 | 自动读取本机 Codex CLI / Gemini CLI OAuth 凭据 |
 
 ## Preview
 
@@ -38,6 +38,7 @@
 - **ZenMux**：监控 Flow 用量（5 小时、7 天），支持按账号添加独立监控模块
 - **小米 MiMo**：监控 Token 用量（月用量、总用量）
 - **Codex**：自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
+- **Gemini**：自动读取 Gemini CLI 的 Google OAuth 凭据，查询官方 Code Assist 配额
 
 想支持更多平台？欢迎提交 PR。
 
@@ -50,6 +51,13 @@
 - 菜单栏多模块展示支持「独立」和「轮播」两种模式
 - 弹窗按模块独立展示用量、套餐、重置时间和额外信息
 - 每个模块的配额周期可独立选择是否展示，以及是否展示剩余重置时间
+- ZenMux 支持添加多个 Management API Key，每个账号都是一个独立模块
+- ZenMux 展示账号用量和完整订阅信息（套餐、费用、单价、到期时间等）
+- ZenMux 额度刷新通知（5 小时 / 7 天周期自动提醒）
+- Codex 自动读取本机 Codex CLI OAuth，无需在 CodeBar 中配置 token
+- Codex 支持可选代理请求 `chatgpt.com/backend-api/wham/usage`
+- Gemini 自动读取本机 Gemini CLI OAuth，无需在 CodeBar 中配置 token
+- Gemini 支持可选代理请求 Google Code Assist 配额接口
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
 
 ## 系统要求
@@ -188,6 +196,39 @@ socks5://127.0.0.1:7890
 
 不配置代理时会直接请求，行为与 cc-switch 的默认模式一致。
 
+### Gemini
+
+在设置界面点击「添加模块」，选择「Gemini」。Gemini 不需要在 CodeBar 中配置 token，CodeBar 会按以下优先级自动读取本机 Gemini CLI 的 Google OAuth 凭据：
+
+1. macOS Keychain：service `gemini-cli-oauth`，account `main-account`
+2. 文件：`~/.gemini/oauth_creds.json`
+
+要求：
+
+- Gemini CLI 已使用 Google OAuth 登录
+- OAuth 凭据中存在 `access_token`
+- 如果 `access_token` 过期，凭据中需要有 `refresh_token` 用于刷新
+
+CodeBar 请求的官方接口与 cc-switch 对齐：
+
+```text
+POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist
+POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota
+```
+
+支持展示：
+
+- Gemini Pro
+- Gemini Flash
+- Gemini Flash Lite
+
+如果直连 Google Code Assist 接口不稳定，可以在 Gemini 模块中填写代理地址：
+
+```text
+http://127.0.0.1:7890
+socks5://127.0.0.1:7890
+```
+
 ## 项目结构
 
 ```text
@@ -206,7 +247,8 @@ code_bar/
 │       ├── BailianProvider.swift  # 阿里云百炼 API Provider
 │       ├── ZenMuxProvider.swift   # ZenMux API Provider
 │       ├── MimoProvider.swift     # 小米 MiMo API Provider
-│       └── CodexProvider.swift    # Codex / ChatGPT OAuth Provider
+│       ├── CodexProvider.swift    # Codex / ChatGPT OAuth Provider
+│       └── GeminiProvider.swift   # Gemini CLI / Code Assist OAuth Provider
 ├── docs/
 │   ├── architecture.md
 │   ├── developer-guide.md
@@ -244,8 +286,8 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Release -de
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.0 -m "CodeBar v2.2.0"
-git push origin v2.2.0
+git tag -a v2.2.2 -m "CodeBar v2.2.2"
+git push origin v2.2.2
 ```
 
 GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release。
@@ -254,16 +296,18 @@ GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release�
 
 - CodeBar 自身配置存储在 macOS Keychain
 - Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
+- Gemini OAuth 凭据只从 Gemini CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - 不会上传或分享任何凭据信息
 - 日志只记录请求 URL 和状态码，不记录 token、Cookie 或 API Key
 
 ## 商标与 Logo
 
-项目中展示的平台 Logo 仅用于标识对应服务，相关商标和 Logo 归各自权利方所有。CodeBar 与阿里云、ZenMux、小米、OpenAI 无官方从属、授权或背书关系。
+项目中展示的平台 Logo 仅用于标识对应服务，相关商标和 Logo 归各自权利方所有。CodeBar 与阿里云、ZenMux、小米、OpenAI、Google 无官方从属、授权或背书关系。
 
 - ZenMux Logo 来源：[zenmux.ai](https://zenmux.ai/)
 - Xiaomi / Mi Logo 来源：[mi.com](https://www.mi.com/)
 - OpenAI / ChatGPT Logo 来源：[chatgpt.com/codex](https://chatgpt.com/zh-Hans-CN/codex/)
+- Gemini Logo 来源：[gstatic.com](https://www.gstatic.com/lamda/images/gemini_sparkle_aurora_33f86dc0c0257da337c63.svg)
 
 如相关权利方希望调整或移除展示，请通过 Issue 联系。
 
