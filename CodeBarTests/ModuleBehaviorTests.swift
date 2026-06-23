@@ -34,6 +34,7 @@ private struct ModuleBehaviorTests {
         expect(Int(UsagePercentDisplayMode.used.percent(for: fiveHour).rounded()) == 10, "Used mode should show consumed percent")
         expect(UsagePercentDisplayMode.remaining.value(for: fiveHour) == 9, "Remaining mode should show the remaining value")
         expect(Int(UsagePercentDisplayMode.remaining.percent(for: fiveHour).rounded()) == 90, "Remaining mode should show remaining percent")
+        expect(UsageStatusFormatting.compactPercentText(for: fiveHour, displayMode: .remaining) == "剩90%", "Menu bar compact text should label remaining percent")
 
         let providerAccount = ModuleProviderConfiguration.zenMuxAccount(for: module)
         expect(providerAccount.displayKeys == ["5hour", "7day"], "ZenMux provider should receive all quota keys so the detail page can show all items")
@@ -121,6 +122,23 @@ private struct ModuleBehaviorTests {
         expect(decodedLegacyModule.isCollapsed == false, "Legacy module JSON should default to expanded cards")
         expect(decodedLegacyModule.percentDisplayMode == .used, "Legacy module JSON should default to used percent display")
 
+        let lenientModuleJSON = """
+        {
+          "id": "lenient-gemini",
+          "alias": "lenient",
+          "config": {
+            "type": "Gemini",
+            "gemini": {}
+          },
+          "isCollapsed": "true",
+          "percentDisplayMode": "future-mode",
+          "sortOrder": 0
+        }
+        """
+        let decodedLenientModule = try! JSONDecoder().decode(MonitorModule.self, from: Data(lenientModuleJSON.utf8))
+        expect(decodedLenientModule.isCollapsed, "Module JSON should accept string booleans for new UI-only fields")
+        expect(decodedLenientModule.percentDisplayMode == .used, "Unknown percent display mode should fall back to used mode")
+
         let exhaustedCodexJSON = """
         {
           "plan_type": "pro",
@@ -157,6 +175,37 @@ private struct ModuleBehaviorTests {
         let exhaustedCodexItems = try! CodexProvider.testUsageItems(from: exhaustedCodexJSON)
         expect(exhaustedCodexItems.map(\.key) == ["5hour", "7day"], "Codex exhausted response should still expose primary quota windows")
         expect(exhaustedCodexItems.allSatisfy { $0.used == 100 }, "Codex exhausted response should show fully used quota windows")
+        let expectedCodexReset = ISO8601DateFormatter().date(from: "2027-01-15T00:00:00Z")!
+        expect(exhaustedCodexItems.first?.resetDate == expectedCodexReset, "Codex ISO reset_at should decode into the quota reset date")
+
+        let missingWindowSecondsCodexJSON = """
+        {
+          "rate_limit": {
+            "primary_window": {
+              "remaining_percent": 10,
+              "reset_after_seconds": 60
+            },
+            "secondary_window": {
+              "used_percent": 25,
+              "reset_after_seconds": 120
+            }
+          },
+          "additional_rate_limits": [
+            {
+              "limit_name": "Mystery",
+              "rate_limit": {
+                "primary_window": {
+                  "used_percent": 10,
+                  "reset_after_seconds": 30
+                }
+              }
+            }
+          ]
+        }
+        """
+        let missingWindowItems = try! CodexProvider.testUsageItems(from: missingWindowSecondsCodexJSON)
+        expect(missingWindowItems.map(\.key) == ["5hour", "7day"], "Codex primary and secondary windows should keep stable keys when limit_window_seconds is missing")
+        expect(missingWindowItems.map(\.used) == [90, 25], "Codex missing-window fallback should preserve used and remaining percent semantics")
 
         print("ModuleBehaviorTests passed")
     }

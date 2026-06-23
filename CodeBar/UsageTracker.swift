@@ -247,7 +247,7 @@ class UsageTracker: ObservableObject {
     func updateModuleDisplayState(id: String, mutate: (inout MonitorModule) -> Void) {
         guard let index = modules.firstIndex(where: { $0.id == id }) else { return }
         mutate(&modules[index])
-        saveModules()
+        saveModules(notifyStatusItemsChanged: false)
     }
 
     func deleteModule(_ module: MonitorModule) {
@@ -292,11 +292,13 @@ class UsageTracker: ObservableObject {
         normalizeModuleOrder()
     }
 
-    private func saveModules() {
+    private func saveModules(notifyStatusItemsChanged: Bool = true) {
         do {
             let data = try JSONEncoder().encode(modules)
             try KeychainHelper.shared.save(data, for: Constants.monitorModulesKey)
-            NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
+            if notifyStatusItemsChanged {
+                NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
+            }
         } catch {
             AppLogger.logError(error)
         }

@@ -287,7 +287,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func statusLineText(for item: UsageItem, module: MonitorModule) -> String {
-        var text = "\(compactLabel(for: item)) \(String(format: "%.0f%%", item.percent))"
+        var text = "\(compactLabel(for: item)) \(UsageStatusFormatting.compactPercentText(for: item, displayMode: module.percentDisplayMode))"
 
         if UsageTracker.shared.isResetTimeEnabled(item.key, for: module),
            let resetText = compactResetText(until: item.resetDate) {

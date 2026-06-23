@@ -130,8 +130,8 @@ struct CodexProvider: PlatformProvider {
 
         if let rateLimit = response.rateLimit {
             items.append(contentsOf: [
-                rateLimit.primaryWindow.flatMap { makeUsageItem(from: $0) },
-                rateLimit.secondaryWindow.flatMap { makeUsageItem(from: $0) },
+                rateLimit.primaryWindow.flatMap { makeUsageItem(from: $0, fallbackSeconds: 18_000) },
+                rateLimit.secondaryWindow.flatMap { makeUsageItem(from: $0, fallbackSeconds: 604_800) },
             ].compactMap { $0 })
         }
 
@@ -148,10 +148,15 @@ struct CodexProvider: PlatformProvider {
         return items
     }
 
-    private func makeUsageItem(from window: CodexRateLimitWindow, keyPrefix: String? = nil, labelPrefix: String? = nil) -> UsageItem? {
+    private func makeUsageItem(
+        from window: CodexRateLimitWindow,
+        keyPrefix: String? = nil,
+        labelPrefix: String? = nil,
+        fallbackSeconds: Int? = nil
+    ) -> UsageItem? {
         guard let usedPercent = window.usedPercent else { return nil }
         let used = max(0, min(100, Int(usedPercent.rounded())))
-        let seconds = window.limitWindowSeconds ?? 0
+        guard let seconds = window.limitWindowSeconds ?? fallbackSeconds else { return nil }
         let resetDate = window.resetAt
             .flatMap { Date(timeIntervalSince1970: TimeInterval($0)) }
             ?? Date().addingTimeInterval(TimeInterval(max(window.resetAfterSeconds ?? seconds, 0)))

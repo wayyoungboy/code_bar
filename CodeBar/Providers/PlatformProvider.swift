@@ -236,8 +236,8 @@ struct MonitorModule: Codable, Identifiable {
         isNotificationEnabled = try container.decodeIfPresent(Bool.self, forKey: .isNotificationEnabled) ?? true
         displayKeys = try container.decodeIfPresent([String].self, forKey: .displayKeys) ?? []
         resetTimeKeys = try container.decodeIfPresent([String].self, forKey: .resetTimeKeys) ?? []
-        isCollapsed = try container.decodeIfPresent(Bool.self, forKey: .isCollapsed) ?? false
-        percentDisplayMode = try container.decodeIfPresent(UsagePercentDisplayMode.self, forKey: .percentDisplayMode) ?? .used
+        isCollapsed = Self.decodeBoolIfPresent(container, forKey: .isCollapsed) ?? false
+        percentDisplayMode = (try? container.decodeIfPresent(UsagePercentDisplayMode.self, forKey: .percentDisplayMode)) ?? .used
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
     }
 
@@ -307,6 +307,26 @@ struct MonitorModule: Codable, Identifiable {
     var isValid: Bool {
         config.isValid
     }
+
+    private static func decodeBoolIfPresent<K: CodingKey>(_ container: KeyedDecodingContainer<K>, forKey key: K) -> Bool? {
+        if let value = try? container.decodeIfPresent(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
+        }
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return value != 0
+        }
+        return nil
+    }
 }
 
 enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
@@ -347,6 +367,13 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
         case .remaining:
             return percent(for: item) < 20
         }
+    }
+}
+
+enum UsageStatusFormatting {
+    static func compactPercentText(for item: UsageItem, displayMode: UsagePercentDisplayMode) -> String {
+        let prefix = displayMode == .remaining ? "剩" : ""
+        return "\(prefix)\(String(format: "%.0f%%", displayMode.percent(for: item)))"
     }
 }
 

@@ -64,10 +64,11 @@ struct MenuBarView: View {
                             HStack {
                                 Image(systemName: "exclamationmark.circle.fill")
                                     .foregroundColor(.red)
-                                Text("\(module.displayName): \(message)")
+                                Text(module.isCollapsed ? "\(module.displayName): 刷新异常" : "\(module.displayName): \(message)")
                                     .font(.caption)
                                     .foregroundColor(.red)
                             }
+                            .help(message)
                         }
                     }
                 }
@@ -296,6 +297,7 @@ struct MenuBarView: View {
     ) -> some View {
         let displayValue = displayMode.value(for: item)
         let displayPercent = displayMode.percent(for: item)
+        let helpText = "\(item.label) \(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.total)) \(item.unit)"
 
         VStack(alignment: .leading, spacing: 4) {
             if !compact {
@@ -331,6 +333,7 @@ struct MenuBarView: View {
                 .foregroundColor(.secondary)
             }
         }
+        .help(helpText)
     }
 
     private var emptyStateView: some View {
@@ -353,6 +356,8 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private func moduleUsageCard(module: MonitorModule, usage: PlatformUsageData?, error: String?) -> some View {
+        let hasUsage = usage != nil
+
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 PlatformLogoView(platform: module.platform)
@@ -426,21 +431,41 @@ struct MenuBarView: View {
                 }
             } else {
                 HStack {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text(error ?? "等待刷新")
-                        .font(.caption)
-                        .foregroundColor(error == nil ? .secondary : .orange)
+                    if module.isCollapsed, error != nil {
+                        Image(systemName: "exclamationmark.circle")
+                            .foregroundColor(.orange)
+                        Text("刷新异常")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(error ?? "等待刷新")
+                            .font(.caption)
+                            .foregroundColor(error == nil ? .secondary : .orange)
+                    }
                 }
+                .help(error ?? "等待刷新")
             }
 
-            if let error {
-                HStack {
-                    Image(systemName: "exclamationmark.circle")
-                        .foregroundColor(.orange)
-                    Text(error)
-                        .font(.caption)
-                        .foregroundColor(.orange)
+            if let error, hasUsage {
+                if module.isCollapsed {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.circle")
+                            .foregroundColor(.orange)
+                        Text("刷新异常")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    .help(error)
+                } else {
+                    HStack {
+                        Image(systemName: "exclamationmark.circle")
+                            .foregroundColor(.orange)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
                 }
             }
         }
