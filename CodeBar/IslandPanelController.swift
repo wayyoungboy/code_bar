@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class CodeBarIslandPanel: NSPanel {
@@ -47,6 +48,8 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     private var outsideMonitor: Any?
     private var localMonitor: Any?
     private var maxContentHeight = Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
+    private var pendingLayoutRefresh: Task<Void, Never>?
+    private var cancellables: Set<AnyCancellable> = []
 
     init(
         tracker: UsageTracker,
@@ -69,9 +72,26 @@ final class CodeBarIslandController: NSObject, ObservableObject {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleApplicationDidResignActive(_:)),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        tracker.objectWillChange
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.scheduleLayoutRefresh() }
+            }
+            .store(in: &cancellables)
+        updateChecker.objectWillChange
+            .sink { [weak self] _ in
+                Task { @MainActor in self?.scheduleLayoutRefresh() }
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
+        pendingLayoutRefresh?.cancel()
         if let outsideMonitor { NSEvent.removeMonitor(outsideMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         NotificationCenter.default.removeObserver(self)
@@ -81,6 +101,12 @@ final class CodeBarIslandController: NSObject, ObservableObject {
         guard let screen = targetScreen() else { return false }
         let panel = CodeBarIslandPanel(contentRect: frame(for: .closed, screen: screen, contentHeight: nil))
         self.panel = panel
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePanelDidResignKey(_:)),
+            name: NSWindow.didResignKeyNotification,
+            object: panel
+        )
         rebuildRootView()
         panel.orderFrontRegardless()
         return true
@@ -112,6 +138,8 @@ final class CodeBarIslandController: NSObject, ObservableObject {
 
     func refreshLayout() {
         guard let screen = targetScreen() else { return }
+        pendingLayoutRefresh?.cancel()
+        pendingLayoutRefresh = nil
         let contentHeight = state.isOpened ? measuredContentHeight(for: screen) : nil
         let nextFrame = frame(for: state, screen: screen, contentHeight: contentHeight)
         maxContentHeight = state.isOpened
@@ -119,6 +147,16 @@ final class CodeBarIslandController: NSObject, ObservableObject {
             : Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
         rebuildRootView()
         panel?.setFrame(nextFrame, display: true, animate: true)
+    }
+
+    private func scheduleLayoutRefresh() {
+        guard state.isOpened else { return }
+        pendingLayoutRefresh?.cancel()
+        pendingLayoutRefresh = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            self?.refreshLayout()
+        }
     }
 
     private func rebuildRootView() {
@@ -221,6 +259,16 @@ final class CodeBarIslandController: NSObject, ObservableObject {
 
     @objc private func handleScreenParametersChanged(_ notification: Notification) {
         refreshLayout()
+    }
+
+    @objc private func handlePanelDidResignKey(_ notification: Notification) {
+        guard state.isOpened, notification.object as? CodeBarIslandPanel === panel else { return }
+        close()
+    }
+
+    @objc private func handleApplicationDidResignActive(_ notification: Notification) {
+        guard state.isOpened else { return }
+        close()
     }
 }
 
