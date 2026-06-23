@@ -46,6 +46,7 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     private var hostingController: NSHostingController<CodeBarIslandView>?
     private var outsideMonitor: Any?
     private var localMonitor: Any?
+    private var maxContentHeight = Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
 
     init(
         tracker: UsageTracker,
@@ -62,6 +63,12 @@ final class CodeBarIslandController: NSObject, ObservableObject {
             name: .codeBarIslandEscapePressed,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScreenParametersChanged(_:)),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
     }
 
     deinit {
@@ -71,8 +78,8 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     }
 
     func show() -> Bool {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return false }
-        let panel = CodeBarIslandPanel(contentRect: frame(for: .closed, screen: screen))
+        guard let screen = targetScreen() else { return false }
+        let panel = CodeBarIslandPanel(contentRect: frame(for: .closed, screen: screen, contentHeight: nil))
         self.panel = panel
         rebuildRootView()
         panel.orderFrontRegardless()
@@ -81,8 +88,8 @@ final class CodeBarIslandController: NSObject, ObservableObject {
 
     func open() {
         state = .opened
-        refreshLayout()
         rebuildRootView()
+        refreshLayout()
         panel?.makeKey()
         installOutsideMonitors()
     }
@@ -90,8 +97,9 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     func close() {
         state = .closed
         removeOutsideMonitors()
-        refreshLayout()
         rebuildRootView()
+        refreshLayout()
+        panel?.resignKey()
     }
 
     func toggle() {
@@ -103,9 +111,14 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     }
 
     func refreshLayout() {
-        guard let screen = panel?.screen ?? NSScreen.main ?? NSScreen.screens.first else { return }
-        panel?.setFrame(frame(for: state, screen: screen), display: true, animate: true)
+        guard let screen = targetScreen() else { return }
+        let contentHeight = state.isOpened ? measuredContentHeight(for: screen) : nil
+        let nextFrame = frame(for: state, screen: screen, contentHeight: contentHeight)
+        maxContentHeight = state.isOpened
+            ? CodeBarIslandLayout.openedContentHeight(panelHeight: nextFrame.height)
+            : Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
         rebuildRootView()
+        panel?.setFrame(nextFrame, display: true, animate: true)
     }
 
     private func rebuildRootView() {
@@ -119,7 +132,8 @@ final class CodeBarIslandController: NSObject, ObservableObject {
                 self?.close()
                 self?.onSettings()
             },
-            onQuit: { NSApplication.shared.terminate(nil) }
+            onQuit: { NSApplication.shared.terminate(nil) },
+            maxContentHeight: maxContentHeight
         )
 
         if let hostingController {
@@ -133,11 +147,45 @@ final class CodeBarIslandController: NSObject, ObservableObject {
         }
     }
 
-    private func frame(for state: CodeBarIslandState, screen: NSScreen) -> CGRect {
-        let size = state.isOpened
-            ? CGSize(width: Constants.islandOpenedWidth, height: Constants.islandOpenedMaximumHeight)
-            : CGSize(width: Constants.islandClosedWidth, height: Constants.islandClosedHeight)
-        return CodeBarIslandLayout.frame(screenFrame: screen.frame, size: size)
+    private func targetScreen() -> NSScreen? {
+        if let panelScreen = panel?.screen {
+            return panelScreen
+        }
+
+        let mouseLocation = NSEvent.mouseLocation
+        if let mouseScreen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }) {
+            return mouseScreen
+        }
+        return NSScreen.main ?? NSScreen.screens.first
+    }
+
+    private func frame(for state: CodeBarIslandState, screen: NSScreen, contentHeight: CGFloat?) -> CGRect {
+        if state.isOpened {
+            return CodeBarIslandLayout.openedFrame(
+                screenFrame: screen.frame,
+                visibleFrame: screen.visibleFrame,
+                contentHeight: contentHeight ?? Constants.islandOpenedMaximumHeight
+            )
+        }
+
+        return CodeBarIslandLayout.frame(
+            screenFrame: screen.frame,
+            size: CGSize(width: Constants.islandClosedWidth, height: Constants.islandClosedHeight)
+        )
+    }
+
+    private func measuredContentHeight(for screen: NSScreen) -> CGFloat {
+        let maximumPanelHeight = min(Constants.islandOpenedMaximumHeight, screen.visibleFrame.height)
+        maxContentHeight = CodeBarIslandLayout.openedContentHeight(panelHeight: maximumPanelHeight)
+        rebuildRootView()
+
+        guard let view = hostingController?.view else {
+            return Constants.islandOpenedMaximumHeight
+        }
+
+        view.frame.size = CGSize(width: Constants.islandOpenedWidth, height: maximumPanelHeight)
+        view.layoutSubtreeIfNeeded()
+        return view.fittingSize.height
     }
 
     private func installOutsideMonitors() {
@@ -145,8 +193,12 @@ final class CodeBarIslandController: NSObject, ObservableObject {
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.close() }
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            Task { @MainActor in self?.closeIfMouseOutsidePanel() }
+        guard let panel else { return }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self, weak panel] event in
+            guard let panel else { return event }
+            if event.window !== panel {
+                Task { @MainActor in self?.close() }
+            }
             return event
         }
     }
@@ -162,16 +214,13 @@ final class CodeBarIslandController: NSObject, ObservableObject {
         }
     }
 
-    private func closeIfMouseOutsidePanel() {
-        guard state.isOpened, let panel else { return }
-        if !panel.frame.contains(NSEvent.mouseLocation) {
-            close()
-        }
-    }
-
     @objc private func handleEscapePressed(_ notification: Notification) {
         guard notification.object as? CodeBarIslandPanel === panel else { return }
         close()
+    }
+
+    @objc private func handleScreenParametersChanged(_ notification: Notification) {
+        refreshLayout()
     }
 }
 

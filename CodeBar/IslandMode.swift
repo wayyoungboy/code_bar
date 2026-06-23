@@ -29,7 +29,11 @@ enum CodeBarIslandCompactStatusBuilder {
         usages: [String: PlatformUsageData],
         errors: [String: String]
     ) -> CodeBarIslandCompactStatus {
-        guard !modules.isEmpty else {
+        let visibleModules = modules.filter { module in
+            module.isMonitoringEnabled && module.showInMenuBar && module.isValid
+        }
+
+        guard !visibleModules.isEmpty else {
             return CodeBarIslandCompactStatus(
                 title: "CodeBar",
                 detail: "未配置",
@@ -38,7 +42,7 @@ enum CodeBarIslandCompactStatusBuilder {
             )
         }
 
-        if let erroredModule = modules.first(where: { errors[$0.id] != nil }) {
+        if let erroredModule = visibleModules.first(where: { errors[$0.id] != nil }) {
             return CodeBarIslandCompactStatus(
                 title: erroredModule.platform.shortName,
                 detail: "刷新异常",
@@ -47,7 +51,7 @@ enum CodeBarIslandCompactStatusBuilder {
             )
         }
 
-        let candidates = modules.compactMap { module -> StatusCandidate? in
+        let candidates = visibleModules.compactMap { module -> StatusCandidate? in
             guard let usage = usages[module.id] else { return nil }
             let visibleItems = visibleUsageItems(from: usage, module: module)
             guard let item = mostConstrainedItem(from: visibleItems, displayMode: module.percentDisplayMode) else {
@@ -76,7 +80,7 @@ enum CodeBarIslandCompactStatusBuilder {
             )
         }
 
-        let firstModule = modules[0]
+        let firstModule = visibleModules[0]
         return CodeBarIslandCompactStatus(
             title: firstModule.platform.shortName,
             detail: "刷新中",
@@ -118,6 +122,30 @@ enum CodeBarIslandLayout {
         let originX = screenFrame.minX + max(0, (screenFrame.width - size.width) / 2)
         let originY = screenFrame.maxY - size.height
         return CGRect(origin: CGPoint(x: originX, y: originY), size: size)
+    }
+
+    static func openedFrame(
+        screenFrame: CGRect,
+        visibleFrame: CGRect,
+        contentHeight: CGFloat
+    ) -> CGRect {
+        let cappedHeight = openedHeight(contentHeight: contentHeight, visibleFrame: visibleFrame)
+        let size = CGSize(width: Constants.islandOpenedWidth, height: cappedHeight)
+        let frame = frame(screenFrame: screenFrame, size: size)
+        if frame.minY < visibleFrame.minY {
+            return frame.offsetBy(dx: 0, dy: visibleFrame.minY - frame.minY)
+        }
+        return frame
+    }
+
+    static func openedHeight(contentHeight: CGFloat, visibleFrame: CGRect) -> CGFloat {
+        let desiredHeight = max(Constants.islandClosedHeight, contentHeight)
+        let maximumHeight = min(Constants.islandOpenedMaximumHeight, visibleFrame.height)
+        return min(desiredHeight, maximumHeight)
+    }
+
+    static func openedContentHeight(panelHeight: CGFloat) -> CGFloat {
+        max(0, panelHeight - Constants.islandClosedHeight - 16)
     }
 }
 
@@ -172,6 +200,7 @@ struct CodeBarIslandView: View {
     let onClose: () -> Void
     let onSettings: () -> Void
     let onQuit: () -> Void
+    var maxContentHeight: CGFloat = Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
 
     private var isOpened: Bool {
         state.isOpened
@@ -179,7 +208,7 @@ struct CodeBarIslandView: View {
 
     private var compactStatus: CodeBarIslandCompactStatus {
         CodeBarIslandCompactStatusBuilder.status(
-            modules: tracker.detailModules,
+            modules: tracker.menuBarModules,
             usages: tracker.moduleUsages,
             errors: tracker.moduleErrors
         )
@@ -264,14 +293,17 @@ struct CodeBarIslandView: View {
     }
 
     private var openedContent: some View {
-        MenuBarView(
-            tracker: tracker,
-            updateChecker: updateChecker,
-            chrome: .island,
-            onSettings: onSettings,
-            onQuit: onQuit
-        )
-        .frame(maxHeight: Constants.islandOpenedMaximumHeight, alignment: .top)
+        ScrollView(.vertical, showsIndicators: true) {
+            MenuBarView(
+                tracker: tracker,
+                updateChecker: updateChecker,
+                chrome: .island,
+                onSettings: onSettings,
+                onQuit: onQuit
+            )
+            .padding(.trailing, 4)
+        }
+        .frame(maxHeight: maxContentHeight, alignment: .top)
     }
 }
 

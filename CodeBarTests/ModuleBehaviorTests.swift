@@ -80,12 +80,52 @@ private struct ModuleBehaviorTests {
         expect(errorStatus.tone == .error, "Island compact status should surface module errors")
         expect(errorStatus.detail == "刷新异常", "Island compact status should use compact error text")
 
+        let hiddenIslandModule = MonitorModule(
+            alias: "hidden",
+            config: .gemini(GeminiConfig()),
+            isMonitoringEnabled: true,
+            showInMenuBar: false,
+            showInDetail: true,
+            percentDisplayMode: .remaining,
+            sortOrder: 0
+        )
+        let hiddenStatus = CodeBarIslandCompactStatusBuilder.status(
+            modules: [hiddenIslandModule],
+            usages: [hiddenIslandModule.id: islandUsage],
+            errors: [:]
+        )
+        expect(hiddenStatus.title == "CodeBar", "Island compact status should ignore modules hidden from the menu bar")
+        expect(hiddenStatus.detail == "未配置", "Island compact status should show empty status when no menu-bar modules remain")
+
+        let pausedIslandModule = MonitorModule(
+            alias: "paused",
+            config: .gemini(GeminiConfig()),
+            isMonitoringEnabled: false,
+            showInMenuBar: true,
+            percentDisplayMode: .remaining,
+            sortOrder: 0
+        )
+        let pausedStatus = CodeBarIslandCompactStatusBuilder.status(
+            modules: [pausedIslandModule],
+            usages: [pausedIslandModule.id: islandUsage],
+            errors: [:]
+        )
+        expect(pausedStatus.title == "CodeBar", "Island compact status should ignore paused modules")
+
         let closedFrame = CodeBarIslandLayout.frame(
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
             size: CGSize(width: 200, height: 36)
         )
         expect(Int(closedFrame.origin.x) == 620, "Island closed frame should be horizontally centered")
         expect(Int(closedFrame.origin.y) == 864, "Island closed frame should be pinned to the top edge")
+        let smallScreenVisibleFrame = CGRect(x: 0, y: 24, width: 1440, height: 280)
+        let cappedOpenedFrame = CodeBarIslandLayout.openedFrame(
+            screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 304),
+            visibleFrame: smallScreenVisibleFrame,
+            contentHeight: 1_000
+        )
+        expect(cappedOpenedFrame.height == smallScreenVisibleFrame.height, "Island opened frame should cap to visible screen height")
+        expect(cappedOpenedFrame.minY >= smallScreenVisibleFrame.minY, "Island opened frame should stay inside the visible screen")
         expect(Constants.islandClosedWidth > 0, "Island closed width should be configured")
         expect(Constants.islandOpenedWidth >= Constants.popoverWidth, "Island opened width should fit existing usage content")
         expect(Constants.islandClosedHeight < Constants.islandOpenedMaximumHeight, "Island closed height should be smaller than opened maximum height")
