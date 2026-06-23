@@ -21,6 +21,18 @@ struct Constants {
     /// 弹出窗口宽度
     static let popoverWidth: CGFloat = 420
 
+    /// Island 收起状态宽度
+    static let islandClosedWidth: CGFloat = 210
+
+    /// Island 收起状态高度
+    static let islandClosedHeight: CGFloat = 36
+
+    /// Island 展开状态宽度
+    static let islandOpenedWidth: CGFloat = 500
+
+    /// Island 展开状态最大高度
+    static let islandOpenedMaximumHeight: CGFloat = 620
+
     /// 设置窗口宽度
     static let settingsWindowWidth: CGFloat = 520
 

@@ -15,6 +15,7 @@ swiftc \
   "$SRCROOT/CodeBar/KeychainHelper.swift" \
   "$SRCROOT/CodeBar/UsageTracker.swift" \
   "$SRCROOT/CodeBar/MenuBarView.swift" \
+  "$SRCROOT/CodeBar/IslandMode.swift" \
   "$SRCROOT/CodeBar/SettingsWindow.swift" \
   "$SRCROOT/CodeBar/UpdateChecker.swift" \
   "$SRCROOT/CodeBar/Providers/PlatformProvider.swift" \

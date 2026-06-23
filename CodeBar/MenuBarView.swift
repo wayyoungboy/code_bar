@@ -23,9 +23,21 @@ struct PlatformLogoView: View {
 }
 
 struct MenuBarView: View {
+    enum Chrome {
+        case popover
+        case island
+    }
+
     @ObservedObject var tracker: UsageTracker
     @ObservedObject var updateChecker: UpdateChecker
+    var chrome: Chrome = .popover
+    var onSettings: (() -> Void)?
+    var onQuit: (() -> Void)?
     @State private var hasLoadedOnce = false
+
+    private var isIslandChrome: Bool {
+        chrome == .island
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -102,7 +114,11 @@ struct MenuBarView: View {
                     .foregroundColor(.secondary)
                 Spacer()
                 Button(action: {
-                    NotificationCenter.default.post(name: .showSettings, object: nil)
+                    if let onSettings {
+                        onSettings()
+                    } else {
+                        NotificationCenter.default.post(name: .showSettings, object: nil)
+                    }
                 }) {
                     Image(systemName: "gearshape.fill")
                     Text("设置")
@@ -129,8 +145,9 @@ struct MenuBarView: View {
             }
             .keyboardShortcut("q", modifiers: .command)
         }
-        .padding(20)
-        .frame(width: Constants.popoverWidth)
+        .padding(isIslandChrome ? 0 : 20)
+        .frame(width: isIslandChrome ? nil : Constants.popoverWidth)
+        .foregroundColor(isIslandChrome ? .white : .primary)
         .onAppear {
             hasLoadedOnce = true
         }
@@ -139,7 +156,11 @@ struct MenuBarView: View {
     // MARK: - 辅助方法
 
     private func quitApp() {
-        NSApplication.shared.terminate(nil)
+        if let onQuit {
+            onQuit()
+        } else {
+            NSApplication.shared.terminate(nil)
+        }
     }
 
     // MARK: - 平台用量卡片
@@ -228,8 +249,10 @@ struct MenuBarView: View {
             }
         }
         .padding(12)
-        .background(Color(hex: platform.brandColor).opacity(0.12))
-        .cornerRadius(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isIslandChrome ? Color.white.opacity(0.08) : Color(hex: platform.brandColor).opacity(0.12))
+        )
     }
 
     @ViewBuilder
@@ -470,8 +493,10 @@ struct MenuBarView: View {
             }
         }
         .padding(12)
-        .background(Color(hex: module.platform.brandColor).opacity(0.12))
-        .cornerRadius(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isIslandChrome ? Color.white.opacity(0.08) : Color(hex: module.platform.brandColor).opacity(0.12))
+        )
     }
 
     private func progressColor(for percent: Double, mode: UsagePercentDisplayMode) -> Color {

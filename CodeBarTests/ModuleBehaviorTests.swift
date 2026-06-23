@@ -36,6 +36,60 @@ private struct ModuleBehaviorTests {
         expect(Int(UsagePercentDisplayMode.remaining.percent(for: fiveHour).rounded()) == 90, "Remaining mode should show remaining percent")
         expect(UsageStatusFormatting.compactPercentText(for: fiveHour, displayMode: .remaining) == "剩90%", "Menu bar compact text should label remaining percent")
 
+        let depletedSoon = UsageItem(
+            key: "depleted",
+            label: "快耗尽",
+            used: 95,
+            total: 100,
+            unit: "%",
+            resetDate: fiveHourReset
+        )
+        let safeQuota = UsageItem(
+            key: "safe",
+            label: "安全",
+            used: 20,
+            total: 100,
+            unit: "%",
+            resetDate: sevenDayReset
+        )
+        let islandUsage = PlatformUsageData(
+            platformName: "Gemini",
+            planType: "CLI",
+            items: [safeQuota, depletedSoon]
+        )
+        let islandModule = MonitorModule(
+            alias: "work",
+            config: .gemini(GeminiConfig()),
+            percentDisplayMode: .remaining,
+            sortOrder: 0
+        )
+        let compactStatus = CodeBarIslandCompactStatusBuilder.status(
+            modules: [islandModule],
+            usages: [islandModule.id: islandUsage],
+            errors: [:]
+        )
+        expect(compactStatus.title == "Gemini", "Island compact status should use the module platform short name")
+        expect(compactStatus.detail == "剩5%", "Island compact status should show the most constrained remaining quota")
+        expect(compactStatus.tone == .warning, "Island compact status should warn for near-limit quota")
+
+        let errorStatus = CodeBarIslandCompactStatusBuilder.status(
+            modules: [islandModule],
+            usages: [islandModule.id: islandUsage],
+            errors: [islandModule.id: "network failed"]
+        )
+        expect(errorStatus.tone == .error, "Island compact status should surface module errors")
+        expect(errorStatus.detail == "刷新异常", "Island compact status should use compact error text")
+
+        let closedFrame = CodeBarIslandLayout.frame(
+            screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            size: CGSize(width: 200, height: 36)
+        )
+        expect(Int(closedFrame.origin.x) == 620, "Island closed frame should be horizontally centered")
+        expect(Int(closedFrame.origin.y) == 864, "Island closed frame should be pinned to the top edge")
+        expect(Constants.islandClosedWidth > 0, "Island closed width should be configured")
+        expect(Constants.islandOpenedWidth >= Constants.popoverWidth, "Island opened width should fit existing usage content")
+        expect(Constants.islandClosedHeight < Constants.islandOpenedMaximumHeight, "Island closed height should be smaller than opened maximum height")
+
         let providerAccount = ModuleProviderConfiguration.zenMuxAccount(for: module)
         expect(providerAccount.displayKeys == ["5hour", "7day"], "ZenMux provider should receive all quota keys so the detail page can show all items")
 
