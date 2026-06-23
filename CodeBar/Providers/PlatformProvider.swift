@@ -178,7 +178,24 @@ struct MonitorModule: Codable, Identifiable {
     var isNotificationEnabled: Bool
     var displayKeys: [String]
     var resetTimeKeys: [String]
+    var isCollapsed: Bool
+    var percentDisplayMode: UsagePercentDisplayMode
     var sortOrder: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case alias
+        case config
+        case isMonitoringEnabled
+        case showInMenuBar
+        case showInDetail
+        case isNotificationEnabled
+        case displayKeys
+        case resetTimeKeys
+        case isCollapsed
+        case percentDisplayMode
+        case sortOrder
+    }
 
     init(
         id: String = UUID().uuidString,
@@ -190,6 +207,8 @@ struct MonitorModule: Codable, Identifiable {
         isNotificationEnabled: Bool = true,
         displayKeys: [String] = [],
         resetTimeKeys: [String] = [],
+        isCollapsed: Bool = false,
+        percentDisplayMode: UsagePercentDisplayMode = .used,
         sortOrder: Int
     ) {
         self.id = id
@@ -201,7 +220,41 @@ struct MonitorModule: Codable, Identifiable {
         self.isNotificationEnabled = isNotificationEnabled
         self.displayKeys = displayKeys
         self.resetTimeKeys = resetTimeKeys
+        self.isCollapsed = isCollapsed
+        self.percentDisplayMode = percentDisplayMode
         self.sortOrder = sortOrder
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        alias = try container.decode(String.self, forKey: .alias)
+        config = try container.decode(MonitorModuleConfig.self, forKey: .config)
+        isMonitoringEnabled = try container.decodeIfPresent(Bool.self, forKey: .isMonitoringEnabled) ?? true
+        showInMenuBar = try container.decodeIfPresent(Bool.self, forKey: .showInMenuBar) ?? true
+        showInDetail = try container.decodeIfPresent(Bool.self, forKey: .showInDetail) ?? true
+        isNotificationEnabled = try container.decodeIfPresent(Bool.self, forKey: .isNotificationEnabled) ?? true
+        displayKeys = try container.decodeIfPresent([String].self, forKey: .displayKeys) ?? []
+        resetTimeKeys = try container.decodeIfPresent([String].self, forKey: .resetTimeKeys) ?? []
+        isCollapsed = try container.decodeIfPresent(Bool.self, forKey: .isCollapsed) ?? false
+        percentDisplayMode = try container.decodeIfPresent(UsagePercentDisplayMode.self, forKey: .percentDisplayMode) ?? .used
+        sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(alias, forKey: .alias)
+        try container.encode(config, forKey: .config)
+        try container.encode(isMonitoringEnabled, forKey: .isMonitoringEnabled)
+        try container.encode(showInMenuBar, forKey: .showInMenuBar)
+        try container.encode(showInDetail, forKey: .showInDetail)
+        try container.encode(isNotificationEnabled, forKey: .isNotificationEnabled)
+        try container.encode(displayKeys, forKey: .displayKeys)
+        try container.encode(resetTimeKeys, forKey: .resetTimeKeys)
+        try container.encode(isCollapsed, forKey: .isCollapsed)
+        try container.encode(percentDisplayMode, forKey: .percentDisplayMode)
+        try container.encode(sortOrder, forKey: .sortOrder)
     }
 
     var platform: PlatformType {
@@ -253,6 +306,47 @@ struct MonitorModule: Codable, Identifiable {
 
     var isValid: Bool {
         config.isValid
+    }
+}
+
+enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
+    case used
+    case remaining
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .used: return "已用"
+        case .remaining: return "剩余"
+        }
+    }
+
+    func value(for item: UsageItem) -> Int {
+        switch self {
+        case .used:
+            return item.used
+        case .remaining:
+            return max(item.total - item.used, 0)
+        }
+    }
+
+    func percent(for item: UsageItem) -> Double {
+        switch self {
+        case .used:
+            return item.percent
+        case .remaining:
+            return max(0, min(100, 100 - item.percent))
+        }
+    }
+
+    func isNearLimit(_ item: UsageItem) -> Bool {
+        switch self {
+        case .used:
+            return item.percent > 80
+        case .remaining:
+            return percent(for: item) < 20
+        }
     }
 }
 

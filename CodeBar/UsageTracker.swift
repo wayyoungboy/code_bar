@@ -244,6 +244,12 @@ class UsageTracker: ObservableObject {
         refresh()
     }
 
+    func updateModuleDisplayState(id: String, mutate: (inout MonitorModule) -> Void) {
+        guard let index = modules.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&modules[index])
+        saveModules()
+    }
+
     func deleteModule(_ module: MonitorModule) {
         modules.removeAll { $0.id == module.id }
         moduleUsages[module.id] = nil

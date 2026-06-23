@@ -164,11 +164,8 @@ struct MenuBarView: View {
             // 根据配置显示对应的用量
             ForEach(visibleItems, id: \.key) { item in
                 usageRow(
-                    label: item.label,
-                    used: item.used,
-                    total: item.total,
-                    unit: item.unit,
-                    percent: item.percent,
+                    item: item,
+                    displayMode: .used,
                     resetDate: item.resetDate
                 )
             }
@@ -206,7 +203,7 @@ struct MenuBarView: View {
             }
 
             // 低用量警告
-            if visibleItems.contains(where: { $0.percent > 80 }) {
+            if visibleItems.contains(where: { UsagePercentDisplayMode.used.isNearLimit($0) }) {
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.yellow)
@@ -262,11 +259,8 @@ struct MenuBarView: View {
             } else {
                 ForEach(account.items, id: \.key) { item in
                     usageRow(
-                        label: item.label,
-                        used: item.used,
-                        total: item.total,
-                        unit: item.unit,
-                        percent: item.percent,
+                        item: item,
+                        displayMode: .used,
                         resetDate: account.resetTimeKeys.contains(item.key) ? item.resetDate : nil
                     )
                 }
@@ -294,16 +288,26 @@ struct MenuBarView: View {
     }
 
     @ViewBuilder
-    private func usageRow(label: String, used: Int, total: Int, unit: String, percent: Double, resetDate: Date? = nil) -> some View {
+    private func usageRow(
+        item: UsageItem,
+        displayMode: UsagePercentDisplayMode,
+        resetDate: Date? = nil,
+        compact: Bool = false
+    ) -> some View {
+        let displayValue = displayMode.value(for: item)
+        let displayPercent = displayMode.percent(for: item)
+
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(label)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text("\(formatNumber(used)) / \(formatNumber(total)) \(unit)")
-                    .font(.caption)
-                    .fontWeight(.medium)
+            if !compact {
+                HStack {
+                    Text(item.label)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.total)) \(item.unit)")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
             }
             // 进度条
             GeometryReader { geometry in
@@ -311,13 +315,13 @@ struct MenuBarView: View {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color.gray.opacity(0.2))
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(progressColor(for: percent))
-                        .frame(width: geometry.size.width * CGFloat(percent / 100))
+                        .fill(progressColor(for: displayPercent, mode: displayMode))
+                        .frame(width: geometry.size.width * CGFloat(displayPercent / 100))
                 }
             }
             .frame(height: 6)
 
-            if let resetDate = resetDate {
+            if let resetDate = resetDate, !compact {
                 HStack {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 9))
@@ -368,6 +372,16 @@ struct MenuBarView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                Button {
+                    tracker.updateModuleDisplayState(id: module.id) { module in
+                        module.isCollapsed.toggle()
+                    }
+                } label: {
+                    Image(systemName: module.isCollapsed ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .help(module.isCollapsed ? "展开" : "折叠")
             }
 
             if !module.isMonitoringEnabled {
@@ -378,16 +392,14 @@ struct MenuBarView: View {
                 let visibleItems = DetailUsagePresentation.items(from: usage, module: module)
                 ForEach(visibleItems, id: \.key) { item in
                     usageRow(
-                        label: item.label,
-                        used: item.used,
-                        total: item.total,
-                        unit: item.unit,
-                        percent: item.percent,
-                        resetDate: DetailUsagePresentation.resetDate(for: item, module: module)
+                        item: item,
+                        displayMode: module.percentDisplayMode,
+                        resetDate: DetailUsagePresentation.resetDate(for: item, module: module),
+                        compact: module.isCollapsed
                     )
                 }
 
-                if !usage.extraInfo.isEmpty {
+                if !module.isCollapsed, !usage.extraInfo.isEmpty {
                     Divider()
                     ForEach(Array(usage.extraInfo.enumerated()), id: \.offset) { _, info in
                         HStack {
@@ -402,7 +414,7 @@ struct MenuBarView: View {
                     }
                 }
 
-                if visibleItems.contains(where: { $0.percent > 80 }) {
+                if !module.isCollapsed, visibleItems.contains(where: { module.percentDisplayMode.isNearLimit($0) }) {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.yellow)
@@ -437,12 +449,21 @@ struct MenuBarView: View {
         .cornerRadius(8)
     }
 
-    private func progressColor(for percent: Double) -> Color {
-        if percent > 90 {
-            return .red
-        } else if percent > 70 {
-            return .orange
-        } else {
+    private func progressColor(for percent: Double, mode: UsagePercentDisplayMode) -> Color {
+        switch mode {
+        case .used:
+            if percent > 90 {
+                return .red
+            } else if percent > 70 {
+                return .orange
+            }
+            return .green
+        case .remaining:
+            if percent < 10 {
+                return .red
+            } else if percent < 30 {
+                return .orange
+            }
             return .green
         }
     }

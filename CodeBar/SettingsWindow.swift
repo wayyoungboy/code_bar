@@ -813,6 +813,7 @@ struct ModuleEditorView: View {
     @State private var showInMenuBar: Bool
     @State private var showInDetail: Bool
     @State private var isNotificationEnabled: Bool
+    @State private var percentDisplayMode: UsagePercentDisplayMode
 
     init(module: MonitorModule?, existingModules: [MonitorModule] = [], onSave: @escaping (MonitorModule) -> Void) {
         self.module = module
@@ -829,6 +830,7 @@ struct ModuleEditorView: View {
         _showInMenuBar = State(initialValue: module?.showInMenuBar ?? true)
         _showInDetail = State(initialValue: module?.showInDetail ?? true)
         _isNotificationEnabled = State(initialValue: module?.isNotificationEnabled ?? true)
+        _percentDisplayMode = State(initialValue: module?.percentDisplayMode ?? .used)
 
         var initialCookies = ""
         var initialSecToken = ""
@@ -993,13 +995,26 @@ struct ModuleEditorView: View {
     }
 
     private var moduleOptions: some View {
-        HStack(spacing: 14) {
-            Toggle("监控", isOn: $isMonitoringEnabled)
-            Toggle("bar栏展示", isOn: $showInMenuBar)
-            Toggle("详情页展示", isOn: $showInDetail)
-            Toggle("通知", isOn: $isNotificationEnabled)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                Toggle("监控", isOn: $isMonitoringEnabled)
+                Toggle("bar栏展示", isOn: $showInMenuBar)
+                Toggle("详情页展示", isOn: $showInDetail)
+                Toggle("通知", isOn: $isNotificationEnabled)
+            }
+            .toggleStyle(.checkbox)
+            HStack(spacing: 10) {
+                Text("百分比")
+                    .foregroundColor(.secondary)
+                Picker("百分比", selection: $percentDisplayMode) {
+                    ForEach(UsagePercentDisplayMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+            }
         }
-        .toggleStyle(.checkbox)
         .font(.caption)
     }
 
@@ -1126,6 +1141,8 @@ struct ModuleEditorView: View {
             isNotificationEnabled: isNotificationEnabled,
             displayKeys: Array(displayKeys),
             resetTimeKeys: Array(resetTimeKeys),
+            isCollapsed: module?.isCollapsed ?? false,
+            percentDisplayMode: percentDisplayMode,
             sortOrder: module?.sortOrder ?? 0
         )
     }

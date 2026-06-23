@@ -117,6 +117,14 @@ struct CodexProvider: PlatformProvider {
         return true
     }
 
+#if CODEBAR_BEHAVIOR_TESTS
+    static func testUsageItems(from json: String) throws -> [UsageItem] {
+        let data = Data(json.utf8)
+        let response = try JSONDecoder().decode(CodexUsageResponse.self, from: data)
+        return CodexProvider().makeUsageItems(from: response)
+    }
+#endif
+
     private func makeUsageItems(from response: CodexUsageResponse) -> [UsageItem] {
         var items: [UsageItem] = []
 
@@ -146,7 +154,7 @@ struct CodexProvider: PlatformProvider {
         let seconds = window.limitWindowSeconds ?? 0
         let resetDate = window.resetAt
             .flatMap { Date(timeIntervalSince1970: TimeInterval($0)) }
-            ?? Date().addingTimeInterval(TimeInterval(max(seconds, 0)))
+            ?? Date().addingTimeInterval(TimeInterval(max(window.resetAfterSeconds ?? seconds, 0)))
         let baseKey = tierKey(for: seconds)
         let baseLabel = tierLabel(for: seconds)
 
@@ -355,6 +363,76 @@ struct CodexProvider: PlatformProvider {
         return Date().timeIntervalSince(date) > 8 * 24 * 3_600
     }
 
+    private static func decodeStringIfPresent<K: CodingKey>(_ container: KeyedDecodingContainer<K>, forKey key: K) -> String? {
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? container.decodeIfPresent(Bool.self, forKey: key) {
+            return value ? "true" : "false"
+        }
+        return nil
+    }
+
+    private static func decodeIntIfPresent<K: CodingKey>(_ container: KeyedDecodingContainer<K>, forKey key: K) -> Int? {
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return Int(value.rounded())
+        }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            if let intValue = Int(value) {
+                return intValue
+            }
+            if let doubleValue = Double(value) {
+                return Int(doubleValue.rounded())
+            }
+            if let date = ISO8601DateFormatter().date(from: value) {
+                return Int(date.timeIntervalSince1970)
+            }
+        }
+        return nil
+    }
+
+    private static func decodeDoubleIfPresent<K: CodingKey>(_ container: KeyedDecodingContainer<K>, forKey key: K) -> Double? {
+        if let value = try? container.decodeIfPresent(Double.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return Double(value)
+        }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            return Double(value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: ""))
+        }
+        return nil
+    }
+
+    private static func decodeBoolIfPresent<K: CodingKey>(_ container: KeyedDecodingContainer<K>, forKey key: K) -> Bool? {
+        if let value = try? container.decodeIfPresent(Bool.self, forKey: key) {
+            return value
+        }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
+        }
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+            return value != 0
+        }
+        return nil
+    }
+
     private struct CodexCredentials {
         enum Source {
             case keychain
@@ -431,6 +509,23 @@ struct CodexProvider: PlatformProvider {
             case referralBeacon = "referral_beacon"
             case rateLimitResetCredits = "rate_limit_reset_credits"
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            userID = CodexProvider.decodeStringIfPresent(container, forKey: .userID)
+            accountID = CodexProvider.decodeStringIfPresent(container, forKey: .accountID)
+            email = CodexProvider.decodeStringIfPresent(container, forKey: .email)
+            planType = CodexProvider.decodeStringIfPresent(container, forKey: .planType)
+            rateLimit = try? container.decodeIfPresent(CodexRateLimit.self, forKey: .rateLimit)
+            codeReviewRateLimit = try? container.decodeIfPresent(CodexRateLimit.self, forKey: .codeReviewRateLimit)
+            additionalRateLimits = try? container.decodeIfPresent([CodexAdditionalRateLimit].self, forKey: .additionalRateLimits)
+            credits = try? container.decodeIfPresent(CodexCredits.self, forKey: .credits)
+            spendControl = try? container.decodeIfPresent(CodexSpendControl.self, forKey: .spendControl)
+            rateLimitReachedType = CodexProvider.decodeStringIfPresent(container, forKey: .rateLimitReachedType)
+            promo = CodexProvider.decodeStringIfPresent(container, forKey: .promo)
+            referralBeacon = CodexProvider.decodeStringIfPresent(container, forKey: .referralBeacon)
+            rateLimitResetCredits = try? container.decodeIfPresent(CodexRateLimitResetCredits.self, forKey: .rateLimitResetCredits)
+        }
     }
 
     private struct CodexAdditionalRateLimit: Decodable {
@@ -443,6 +538,13 @@ struct CodexProvider: PlatformProvider {
             case meteredFeature = "metered_feature"
             case rateLimit = "rate_limit"
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            limitName = CodexProvider.decodeStringIfPresent(container, forKey: .limitName)
+            meteredFeature = CodexProvider.decodeStringIfPresent(container, forKey: .meteredFeature)
+            rateLimit = try? container.decodeIfPresent(CodexRateLimit.self, forKey: .rateLimit)
+        }
     }
 
     private struct CodexRateLimit: Decodable {
@@ -452,6 +554,12 @@ struct CodexProvider: PlatformProvider {
         enum CodingKeys: String, CodingKey {
             case primaryWindow = "primary_window"
             case secondaryWindow = "secondary_window"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            primaryWindow = try? container.decodeIfPresent(CodexRateLimitWindow.self, forKey: .primaryWindow)
+            secondaryWindow = try? container.decodeIfPresent(CodexRateLimitWindow.self, forKey: .secondaryWindow)
         }
     }
 
@@ -463,9 +571,24 @@ struct CodexProvider: PlatformProvider {
 
         enum CodingKeys: String, CodingKey {
             case usedPercent = "used_percent"
+            case remainingPercent = "remaining_percent"
             case limitWindowSeconds = "limit_window_seconds"
             case resetAfterSeconds = "reset_after_seconds"
             case resetAt = "reset_at"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if let usedPercent = CodexProvider.decodeDoubleIfPresent(container, forKey: .usedPercent) {
+                self.usedPercent = usedPercent
+            } else if let remainingPercent = CodexProvider.decodeDoubleIfPresent(container, forKey: .remainingPercent) {
+                self.usedPercent = 100 - remainingPercent
+            } else {
+                self.usedPercent = nil
+            }
+            limitWindowSeconds = CodexProvider.decodeIntIfPresent(container, forKey: .limitWindowSeconds)
+            resetAfterSeconds = CodexProvider.decodeIntIfPresent(container, forKey: .resetAfterSeconds)
+            resetAt = CodexProvider.decodeIntIfPresent(container, forKey: .resetAt)
         }
     }
 
@@ -493,6 +616,16 @@ struct CodexProvider: PlatformProvider {
             case approxLocalMessages = "approx_local_messages"
             case approxCloudMessages = "approx_cloud_messages"
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            hasCredits = CodexProvider.decodeBoolIfPresent(container, forKey: .hasCredits)
+            unlimited = CodexProvider.decodeBoolIfPresent(container, forKey: .unlimited)
+            overageLimitReached = CodexProvider.decodeBoolIfPresent(container, forKey: .overageLimitReached)
+            balance = CodexProvider.decodeStringIfPresent(container, forKey: .balance)
+            approxLocalMessages = try? container.decodeIfPresent([Int].self, forKey: .approxLocalMessages)
+            approxCloudMessages = try? container.decodeIfPresent([Int].self, forKey: .approxCloudMessages)
+        }
     }
 
     private struct CodexSpendControl: Decodable {
@@ -511,6 +644,12 @@ struct CodexProvider: PlatformProvider {
             case reached
             case individualLimit = "individual_limit"
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            reached = CodexProvider.decodeBoolIfPresent(container, forKey: .reached)
+            individualLimit = CodexProvider.decodeDoubleIfPresent(container, forKey: .individualLimit)
+        }
     }
 
     private struct CodexRateLimitResetCredits: Decodable {
@@ -518,6 +657,11 @@ struct CodexProvider: PlatformProvider {
 
         enum CodingKeys: String, CodingKey {
             case availableCount = "available_count"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            availableCount = CodexProvider.decodeIntIfPresent(container, forKey: .availableCount)
         }
     }
 }

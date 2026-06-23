@@ -30,6 +30,11 @@ private struct ModuleBehaviorTests {
         let storedUsage = ModuleUsageStorage.usageForModuleCache(from: usage, module: module)
         expect(storedUsage.items.map(\.key) == ["5hour", "7day"], "Module usage cache should preserve all quota items for the detail page")
 
+        expect(UsagePercentDisplayMode.used.value(for: fiveHour) == 1, "Used mode should show the consumed value")
+        expect(Int(UsagePercentDisplayMode.used.percent(for: fiveHour).rounded()) == 10, "Used mode should show consumed percent")
+        expect(UsagePercentDisplayMode.remaining.value(for: fiveHour) == 9, "Remaining mode should show the remaining value")
+        expect(Int(UsagePercentDisplayMode.remaining.percent(for: fiveHour).rounded()) == 90, "Remaining mode should show remaining percent")
+
         let providerAccount = ModuleProviderConfiguration.zenMuxAccount(for: module)
         expect(providerAccount.displayKeys == ["5hour", "7day"], "ZenMux provider should receive all quota keys so the detail page can show all items")
 
@@ -94,6 +99,64 @@ private struct ModuleBehaviorTests {
         } else {
             fatalError("Decoded config should be Gemini")
         }
+
+        let legacyModuleJSON = """
+        {
+          "id": "legacy-gemini",
+          "alias": "legacy",
+          "config": {
+            "type": "Gemini",
+            "gemini": {}
+          },
+          "isMonitoringEnabled": true,
+          "showInMenuBar": true,
+          "showInDetail": true,
+          "isNotificationEnabled": true,
+          "displayKeys": [],
+          "resetTimeKeys": [],
+          "sortOrder": 0
+        }
+        """
+        let decodedLegacyModule = try! JSONDecoder().decode(MonitorModule.self, from: Data(legacyModuleJSON.utf8))
+        expect(decodedLegacyModule.isCollapsed == false, "Legacy module JSON should default to expanded cards")
+        expect(decodedLegacyModule.percentDisplayMode == .used, "Legacy module JSON should default to used percent display")
+
+        let exhaustedCodexJSON = """
+        {
+          "plan_type": "pro",
+          "rate_limit_reached_type": "primary",
+          "rate_limit": {
+            "primary_window": {
+              "remaining_percent": "0",
+              "limit_window_seconds": "18000",
+              "reset_at": "2027-01-15T00:00:00Z"
+            },
+            "secondary_window": {
+              "used_percent": "100%",
+              "limit_window_seconds": 604800,
+              "reset_after_seconds": "3600"
+            }
+          },
+          "additional_rate_limits": { "unexpected": true },
+          "credits": {
+            "has_credits": "false",
+            "unlimited": false,
+            "overage_limit_reached": "true",
+            "balance": 0,
+            "approx_local_messages": "unexpected"
+          },
+          "spend_control": {
+            "reached": "true",
+            "individual_limit": "10.5"
+          },
+          "rate_limit_reset_credits": {
+            "available_count": "0"
+          }
+        }
+        """
+        let exhaustedCodexItems = try! CodexProvider.testUsageItems(from: exhaustedCodexJSON)
+        expect(exhaustedCodexItems.map(\.key) == ["5hour", "7day"], "Codex exhausted response should still expose primary quota windows")
+        expect(exhaustedCodexItems.allSatisfy { $0.used == 100 }, "Codex exhausted response should show fully used quota windows")
 
         print("ModuleBehaviorTests passed")
     }
