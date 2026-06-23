@@ -40,6 +40,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var rotationTimer: Timer?
     private var currentPlatformIndex: Int = 0
     private var currentModuleIndex: Int = 0
+    private var islandController: CodeBarIslandController?
+    private var isUsingIslandMode = false
     private weak var popoverAnchorButton: NSStatusBarButton?
     private var eventMonitor: Any?
     private let statusTitleFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
@@ -57,14 +59,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        rebuildStatusItems()
+        isUsingIslandMode = setupIslandMode()
+        if !isUsingIslandMode {
+            rebuildStatusItems()
 
-        // 创建弹窗视图
-        popover = NSPopover()
-        popover?.behavior = .transient
-        let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
-        hostingController.sizingOptions = [.preferredContentSize]
-        popover?.contentViewController = hostingController
+            // 创建弹窗视图
+            popover = NSPopover()
+            popover?.behavior = .transient
+            let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
+            hostingController.sizingOptions = [.preferredContentSize]
+            popover?.contentViewController = hostingController
+        }
 
         // 启动时只检查通知状态，避免无用户动作时弹出系统授权
         UsageTracker.shared.checkNotificationPermission()
@@ -86,13 +91,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(rebuildStatusItems),
+            selector: #selector(handlePresentationChanged),
             name: .moduleStatusItemsChanged,
             object: nil
         )
 
         // 设置滚动定时器 - 多平台时轮播
-        setupRotationTimer()
+        if !isUsingIslandMode {
+            setupRotationTimer()
+        }
+    }
+
+    private func setupIslandMode() -> Bool {
+        let controller = CodeBarIslandController(
+            tracker: UsageTracker.shared,
+            updateChecker: UpdateChecker.shared,
+            onSettings: { [weak self] in
+                self?.showSettingsWindow(nil)
+            }
+        )
+        guard controller.show() else { return false }
+        islandController = controller
+        return true
     }
 
     private func setupRotationTimer() {
@@ -174,6 +194,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             moduleStatusComponents[module.id] = setupStatusTitleView(for: item)
         }
         updateModuleStatusItems()
+    }
+
+    @objc private func handlePresentationChanged() {
+        if isUsingIslandMode {
+            islandController?.refreshLayout()
+        } else {
+            rebuildStatusItems()
+        }
     }
 
     private func updateModuleStatusItems() {
