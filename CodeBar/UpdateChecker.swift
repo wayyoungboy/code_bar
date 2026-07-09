@@ -56,9 +56,7 @@ class UpdateChecker: ObservableObject {
             latestVersion = tagName
             updateURL = URL(string: htmlURL)
             hasUpdate = isNewer(remote: remote, local: currentVersion)
-        } catch {
-            AppLogger.logError(error)
-        }
+        } catch {}
     }
 
     func openUpdatePage() {

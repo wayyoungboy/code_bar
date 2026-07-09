@@ -301,6 +301,5 @@ private struct ModuleBehaviorTests {
         expect(missingWindowItems.map(\.key) == ["5hour", "7day"], "Codex primary and secondary windows should keep stable keys when limit_window_seconds is missing")
         expect(missingWindowItems.map(\.used) == [90, 25], "Codex missing-window fallback should preserve used and remaining percent semantics")
 
-        print("ModuleBehaviorTests passed")
     }
 }

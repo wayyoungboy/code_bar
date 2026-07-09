@@ -96,14 +96,11 @@ struct GeminiProvider: PlatformProvider {
 
     private func send(_ request: URLRequest, context: String) async throws -> Data {
         let session = try makeSession()
-        AppLogger.logRequest(url: request.url?.absoluteString ?? context, method: request.httpMethod ?? "GET")
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))
         }
-
-        AppLogger.logResponse(url: request.url?.absoluteString ?? context, statusCode: httpResponse.statusCode)
 
         switch httpResponse.statusCode {
         case 200:

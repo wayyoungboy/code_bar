@@ -16,7 +16,6 @@
 			A1000007 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* SettingsWindow.swift */; };
 			A1000008 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* KeychainHelper.swift */; };
 			A1000009 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* Constants.swift */; };
-			A1000010 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000011 /* Logger.swift */; };
 			A1000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000012 /* Assets.xcassets */; };
 			A1000012 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* UpdateChecker.swift */; };
 			A1000038 /* MimoProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000039 /* MimoProvider.swift */; };
@@ -37,7 +36,6 @@
 			A2000008 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
 			A2000009 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 			A2000010 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
-			A2000011 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 			A2000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 			A2000013 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 			A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -82,7 +80,6 @@
 					A2000008 /* SettingsWindow.swift */,
 					A2000009 /* KeychainHelper.swift */,
 					A2000010 /* Constants.swift */,
-					A2000011 /* Logger.swift */,
 					A2000013 /* UpdateChecker.swift */,
 					A5000004 /* Providers */,
 					A2000012 /* Assets.xcassets */,
@@ -197,7 +194,6 @@
 				inputPaths = (
 					"$(SRCROOT)/CodeBarTests/run_module_behavior_tests.sh",
 					"$(SRCROOT)/CodeBar/Constants.swift",
-					"$(SRCROOT)/CodeBar/Logger.swift",
 					"$(SRCROOT)/CodeBar/KeychainHelper.swift",
 					"$(SRCROOT)/CodeBar/UsageTracker.swift",
 					"$(SRCROOT)/CodeBar/MenuBarView.swift",
@@ -240,7 +236,6 @@
 					A1000007 /* SettingsWindow.swift in Sources */,
 					A1000008 /* KeychainHelper.swift in Sources */,
 					A1000009 /* Constants.swift in Sources */,
-					A1000010 /* Logger.swift in Sources */,
 					A1000012 /* UpdateChecker.swift in Sources */,
 					A1000038 /* MimoProvider.swift in Sources */,
 					A1000039 /* CodexProvider.swift in Sources */,
@@ -391,7 +386,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.2;
+					MARKETING_VERSION = 2.2.3;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;
@@ -419,7 +414,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.2;
+					MARKETING_VERSION = 2.2.3;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;

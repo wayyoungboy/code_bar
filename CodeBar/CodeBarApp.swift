@@ -31,10 +31,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let titleStack: NSStackView
     }
 
+    private struct StatusTitleSnapshot: Equatable {
+        let top: String
+        let bottom: String
+        let alias: String
+        let platform: PlatformType?
+        let length: CGFloat
+        let tooltip: String
+
+        static func == (lhs: StatusTitleSnapshot, rhs: StatusTitleSnapshot) -> Bool {
+            lhs.top == rhs.top &&
+                lhs.bottom == rhs.bottom &&
+                lhs.alias == rhs.alias &&
+                lhs.platform?.rawValue == rhs.platform?.rawValue &&
+                lhs.length == rhs.length &&
+                lhs.tooltip == rhs.tooltip
+        }
+    }
+
     var statusItem: NSStatusItem?
     private var defaultStatusComponents: StatusItemComponents?
     private var moduleStatusItems: [String: NSStatusItem] = [:]
     private var moduleStatusComponents: [String: StatusItemComponents] = [:]
+    private var statusTitleSnapshots: [ObjectIdentifier: StatusTitleSnapshot] = [:]
     var popover: NSPopover?
     var settingsWindow: NSWindow?
     var rotationTimer: Timer?
@@ -74,14 +93,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 启动时只检查通知状态，避免无用户动作时弹出系统授权
         UsageTracker.shared.checkNotificationPermission()
 
-        // 初始加载用量信息
-        UsageTracker.shared.refresh()
-
-        // 检查更新
-        Task { @MainActor in
-            await UpdateChecker.shared.checkForUpdate()
-        }
-
         // 监听显示设置窗口通知
         NotificationCenter.default.addObserver(
             self,
@@ -95,10 +106,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .moduleStatusItemsChanged,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUsageDataUpdated),
+            name: .usageDataUpdated,
+            object: nil
+        )
 
-        // 设置滚动定时器 - 多平台时轮播
         if !isUsingIslandMode {
-            setupRotationTimer()
+            updateRotationTimer()
+        }
+
+        // 初始加载用量信息
+        UsageTracker.shared.refresh()
+
+        // 检查更新
+        Task { @MainActor in
+            await UpdateChecker.shared.checkForUpdate()
         }
     }
 
@@ -115,13 +139,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func setupRotationTimer() {
+    private func startRotationTimer() {
         rotationTimer = Timer.scheduledTimer(withTimeInterval: Constants.rotationInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.advancePlatform()
-                self?.updateStatusItemTitle()
+                guard let self else { return }
+                guard self.needsRotationTimer() else {
+                    self.updateRotationTimer()
+                    return
+                }
+                self.advancePlatform()
+                self.updateStatusItemTitle()
             }
         }
+    }
+
+    private func updateRotationTimer() {
+        guard !isUsingIslandMode, needsRotationTimer() else {
+            rotationTimer?.invalidate()
+            rotationTimer = nil
+            return
+        }
+        guard rotationTimer == nil else { return }
+        startRotationTimer()
+    }
+
+    private func needsRotationTimer() -> Bool {
+        let tracker = UsageTracker.shared
+        return tracker.hasAnyModule &&
+            tracker.menuBarDisplayMode == .rotating &&
+            tracker.menuBarModules.count > 1
     }
 
     private func advancePlatform() {
@@ -164,6 +210,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menuModules = tracker.menuBarModules
 
         for item in moduleStatusItems.values {
+            statusTitleSnapshots.removeValue(forKey: ObjectIdentifier(item))
             NSStatusBar.system.removeStatusItem(item)
         }
         moduleStatusItems = [:]
@@ -181,6 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if let statusItem {
+            statusTitleSnapshots.removeValue(forKey: ObjectIdentifier(statusItem))
             NSStatusBar.system.removeStatusItem(statusItem)
             self.statusItem = nil
             defaultStatusComponents = nil
@@ -201,6 +249,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             islandController?.refreshLayout()
         } else {
             rebuildStatusItems()
+            updateRotationTimer()
+        }
+    }
+
+    @objc private func handleUsageDataUpdated() {
+        if !isUsingIslandMode {
+            updateStatusItemTitle()
+            updateRotationTimer()
         }
     }
 
@@ -373,32 +429,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         item: NSStatusItem,
         components: StatusItemComponents
     ) {
+        let aliasText = alias?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let isSingleLine = bottom.isEmpty
+        let topFont = isSingleLine ? singleLineStatusTitleFont : statusTitleFont
+        let bottomFont = statusTitleFont
+        let titleWidth = max(
+            statusTextWidth(top, font: topFont),
+            statusTextWidth(bottom, font: bottomFont)
+        )
+        let aliasWidth = aliasText.isEmpty ? 0 : statusTextWidth(aliasText, font: components.aliasLabel.font ?? statusTitleFont) + 4
+        let length = max(40, titleWidth + aliasWidth + 32)
+        let usageTooltip = bottom.isEmpty ? top : "\(top) / \(bottom)"
+        let tooltip = aliasText.isEmpty ? usageTooltip : "\(aliasText) · \(usageTooltip)"
+        let snapshot = StatusTitleSnapshot(
+            top: top,
+            bottom: bottom,
+            alias: aliasText,
+            platform: platform,
+            length: length,
+            tooltip: tooltip
+        )
+        let snapshotKey = ObjectIdentifier(item)
+        guard statusTitleSnapshots[snapshotKey] != snapshot else { return }
+        statusTitleSnapshots[snapshotKey] = snapshot
+
         item.button?.image = nil
         item.button?.title = ""
         item.button?.attributedTitle = NSAttributedString(string: "")
         components.iconView.image = statusIcon(for: platform)
 
-        let aliasText = alias?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         components.aliasLabel.stringValue = aliasText
         components.aliasLabel.isHidden = aliasText.isEmpty
         components.topLabel.stringValue = top
         components.bottomLabel.stringValue = bottom
         components.bottomLabel.isHidden = bottom.isEmpty
 
-        let isSingleLine = bottom.isEmpty
-        components.topLabel.font = isSingleLine ? singleLineStatusTitleFont : statusTitleFont
-        components.bottomLabel.font = statusTitleFont
+        components.topLabel.font = topFont
+        components.bottomLabel.font = bottomFont
         components.titleStack.spacing = isSingleLine ? 0 : -1
 
-        let titleWidth = max(
-            statusTextWidth(top, font: components.topLabel.font ?? statusTitleFont),
-            statusTextWidth(bottom, font: components.bottomLabel.font ?? statusTitleFont)
-        )
-        let aliasWidth = aliasText.isEmpty ? 0 : statusTextWidth(aliasText, font: components.aliasLabel.font ?? statusTitleFont) + 4
-        let width = titleWidth + aliasWidth + 32
-        item.length = max(40, width)
-        let usageTooltip = bottom.isEmpty ? top : "\(top) / \(bottom)"
-        item.button?.toolTip = aliasText.isEmpty ? usageTooltip : "\(aliasText) · \(usageTooltip)"
+        item.length = length
+        item.button?.toolTip = tooltip
     }
 
     private func setupStatusTitleView() {
@@ -559,4 +630,5 @@ extension AppDelegate: NSWindowDelegate {
 extension Notification.Name {
     static let showSettings = Notification.Name("showSettings")
     static let moduleStatusItemsChanged = Notification.Name("moduleStatusItemsChanged")
+    static let usageDataUpdated = Notification.Name("usageDataUpdated")
 }

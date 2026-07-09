@@ -299,9 +299,7 @@ class UsageTracker: ObservableObject {
             if notifyStatusItemsChanged {
                 NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
             }
-        } catch {
-            AppLogger.logError(error)
-        }
+        } catch {}
     }
 
     private func normalizeModuleOrder() {
@@ -335,30 +333,25 @@ class UsageTracker: ObservableObject {
         if let data = allConfigs[PlatformType.bailian.rawValue],
            let config = try? JSONDecoder().decode(BailianConfig.self, from: data) {
             providers[.bailian] = BailianProvider(config: config)
-            AppLogger.logConfigChange(platform: "百炼", action: "加载配置")
         }
 
         if let data = allConfigs[PlatformType.zenmux.rawValue],
            let config = try? JSONDecoder().decode(ZenMuxConfig.self, from: data) {
             providers[.zenmux] = ZenMuxProvider(config: config)
-            AppLogger.logConfigChange(platform: "ZenMux", action: "加载配置")
         }
 
         if let data = allConfigs[PlatformType.mimo.rawValue],
            let config = try? JSONDecoder().decode(MimoConfig.self, from: data) {
             providers[.mimo] = MimoProvider(config: config)
-            AppLogger.logConfigChange(platform: "MiMo", action: "加载配置")
         }
 
         let codexConfig = allConfigs[PlatformType.codex.rawValue]
             .flatMap { try? JSONDecoder().decode(CodexConfig.self, from: $0) } ?? CodexConfig()
         providers[.codex] = CodexProvider(config: codexConfig)
-        AppLogger.logConfigChange(platform: "Codex", action: "加载配置")
 
         let geminiConfig = allConfigs[PlatformType.gemini.rawValue]
             .flatMap { try? JSONDecoder().decode(GeminiConfig.self, from: $0) } ?? GeminiConfig()
         providers[.gemini] = GeminiProvider(config: geminiConfig)
-        AppLogger.logConfigChange(platform: "Gemini", action: "加载配置")
     }
 
     private func loadAllConfigs() -> [String: Data] {
@@ -373,9 +366,7 @@ class UsageTracker: ObservableObject {
         do {
             let data = try JSONEncoder().encode(configs)
             try KeychainHelper.shared.save(data, for: Constants.platformConfigsKey)
-        } catch {
-            AppLogger.logError(error)
-        }
+        } catch {}
     }
 
     private func savePlatformConfig<T: Codable>(_ config: T, for platform: PlatformType) {
@@ -400,7 +391,6 @@ class UsageTracker: ObservableObject {
         let config = BailianConfig(cookies: cookies, secToken: secToken, region: region)
         providers[.bailian] = BailianProvider(config: config)
         savePlatformConfig(config, for: .bailian)
-        AppLogger.logConfigChange(platform: "百炼", action: "保存配置")
         errorMessages[.bailian] = nil
         refresh()
     }
@@ -413,7 +403,6 @@ class UsageTracker: ObservableObject {
     func saveZenMuxConfig(_ config: ZenMuxConfig) {
         providers[.zenmux] = ZenMuxProvider(config: config)
         savePlatformConfig(config, for: .zenmux)
-        AppLogger.logConfigChange(platform: "ZenMux", action: "保存配置")
         errorMessages[.zenmux] = nil
         refresh()
     }
@@ -427,7 +416,6 @@ class UsageTracker: ObservableObject {
         let config = MimoConfig(serviceToken: serviceToken, userId: userId)
         providers[.mimo] = MimoProvider(config: config)
         savePlatformConfig(config, for: .mimo)
-        AppLogger.logConfigChange(platform: "MiMo", action: "保存配置")
         errorMessages[.mimo] = nil
         refresh()
     }
@@ -442,7 +430,6 @@ class UsageTracker: ObservableObject {
         let config = CodexConfig(proxyURL: trimmed?.isEmpty == true ? nil : trimmed)
         providers[.codex] = CodexProvider(config: config)
         savePlatformConfig(config, for: .codex)
-        AppLogger.logConfigChange(platform: "Codex", action: "保存代理配置")
         errorMessages[.codex] = nil
         refresh()
     }
@@ -457,7 +444,6 @@ class UsageTracker: ObservableObject {
         let config = GeminiConfig(proxyURL: trimmed?.isEmpty == true ? nil : trimmed)
         providers[.gemini] = GeminiProvider(config: config)
         savePlatformConfig(config, for: .gemini)
-        AppLogger.logConfigChange(platform: "Gemini", action: "保存代理配置")
         errorMessages[.gemini] = nil
         refresh()
     }
@@ -478,7 +464,6 @@ class UsageTracker: ObservableObject {
         }
         platforms[platform] = nil
         errorMessages[platform] = nil
-        AppLogger.logConfigChange(platform: platform.shortName, action: "清除配置")
     }
 
     // MARK: - 启用配置
@@ -601,6 +586,7 @@ class UsageTracker: ObservableObject {
         if !modules.isEmpty {
             await refreshModules()
             lastRefreshDate = Date()
+            NotificationCenter.default.post(name: .usageDataUpdated, object: nil)
             return
         }
 
@@ -612,25 +598,22 @@ class UsageTracker: ObservableObject {
                 if platform == .zenmux && isQuotaRefreshNoticeEnabled {
                     checkZenMuxRefreshNotices(usage: usage)
                 }
-                let firstItem = usage.items.first
-                AppLogger.logUsageUpdate(platform: platform.shortName, used: firstItem?.used ?? 0, total: firstItem?.total ?? 0)
             } catch let err as PlatformError {
                 errorMessages[platform] = err.errorDescription
                 if platform == .zenmux {
                     platforms[platform] = nil
                 }
-                AppLogger.logError(err)
             } catch {
                 errorMessages[platform] = error.localizedDescription
                 if platform == .zenmux {
                     platforms[platform] = nil
                 }
-                AppLogger.logError(error)
             }
         }
 
         lastRefreshDate = Date()
         saveToStorage()
+        NotificationCenter.default.post(name: .usageDataUpdated, object: nil)
     }
 
     private func refreshModules() async {
@@ -652,16 +635,12 @@ class UsageTracker: ObservableObject {
                 if module.platform == .zenmux && isQuotaRefreshNoticeEnabled && module.isNotificationEnabled {
                     checkZenMuxRefreshNotices(usage: usage, moduleID: module.id)
                 }
-                let firstItem = usage.items.first
-                AppLogger.logUsageUpdate(platform: module.displayName, used: firstItem?.used ?? 0, total: firstItem?.total ?? 0)
             } catch let err as PlatformError {
                 moduleUsages[module.id] = nil
                 moduleErrors[module.id] = err.errorDescription
-                AppLogger.logError(err)
             } catch {
                 moduleUsages[module.id] = nil
                 moduleErrors[module.id] = error.localizedDescription
-                AppLogger.logError(error)
             }
         }
     }
@@ -825,12 +804,9 @@ class UsageTracker: ObservableObject {
     }
 
     func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
             DispatchQueue.main.async {
                 self.notificationPermissionGranted = granted
-                if let error {
-                    AppLogger.logError(error)
-                }
             }
         }
     }
@@ -848,7 +824,6 @@ class UsageTracker: ObservableObject {
             }
 
             guard authorized else {
-                AppLogger.general.info("通知权限未授权，无法发送测试通知")
                 return
             }
 
@@ -868,13 +843,7 @@ class UsageTracker: ObservableObject {
             trigger: nil
         )
 
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
-                AppLogger.general.error("发送通知失败: \(error.localizedDescription)")
-            } else {
-                AppLogger.general.info("通知已发送: \(title)")
-            }
-        }
+        UNUserNotificationCenter.current().add(request) { _ in }
     }
 
     private func checkZenMuxRefreshNotices(usage: PlatformUsageData, moduleID: String? = nil) {

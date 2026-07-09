@@ -24,7 +24,6 @@ CodeBar 是一个 macOS 菜单栏应用，用于监控多个 AI Coding 平台的
 | 数据刷新 | `UsageTracker` + `Timer` |
 | 本地配置 | macOS Keychain + UserDefaults |
 | 网络请求 | `URLSession` |
-| 日志 | `OSLog` |
 | 发布 | GitHub Actions + GitHub Releases |
 
 ## 菜单栏展示
@@ -51,7 +50,6 @@ CodeBar/
 ├── UsageTracker.swift
 ├── Constants.swift
 ├── KeychainHelper.swift
-├── Logger.swift
 ├── UpdateChecker.swift
 ├── Assets.xcassets
 └── Providers/

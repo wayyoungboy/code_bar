@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
 [![Swift](https://img.shields.io/badge/Swift-5.x-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.2-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases)
+[![Release](https://img.shields.io/badge/release-v2.2.3-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
 一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
@@ -240,7 +240,6 @@ code_bar/
 │   ├── UsageTracker.swift         # 用量追踪器（模块配置、刷新、存储、通知）
 │   ├── Constants.swift            # 应用常量配置
 │   ├── KeychainHelper.swift       # Keychain 安全存储封装
-│   ├── Logger.swift               # 日志工具
 │   ├── UpdateChecker.swift        # GitHub Release 更新检查
 │   └── Providers/
 │       ├── PlatformProvider.swift # 平台协议、数据模型和配置模型
@@ -286,8 +285,8 @@ xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Release -de
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.2 -m "CodeBar v2.2.2"
-git push origin v2.2.2
+git tag -a v2.2.3 -m "CodeBar v2.2.3"
+git push origin v2.2.3
 ```
 
 GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release。
@@ -298,7 +297,7 @@ GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release�
 - Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - Gemini OAuth 凭据只从 Gemini CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - 不会上传或分享任何凭据信息
-- 日志只记录请求 URL 和状态码，不记录 token、Cookie 或 API Key
+- 默认不写运行期请求、用量或凭据相关日志
 
 ## 商标与 Logo
 

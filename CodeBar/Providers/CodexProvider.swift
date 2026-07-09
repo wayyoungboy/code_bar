@@ -56,15 +56,11 @@ struct CodexProvider: PlatformProvider {
             request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
         }
 
-        AppLogger.logRequest(url: url.absoluteString, method: "GET")
-
         let session = try makeSession()
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))
         }
-
-        AppLogger.logResponse(url: url.absoluteString, statusCode: httpResponse.statusCode)
 
         switch httpResponse.statusCode {
         case 200:

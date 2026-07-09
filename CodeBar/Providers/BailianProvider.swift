@@ -34,16 +34,11 @@ struct BailianProvider: PlatformProvider {
         let body = buildRequestBody()
         request.httpBody = body.data(using: .utf8)
 
-        // 使用安全的日志记录
-        AppLogger.logRequest(url: url.absoluteString, method: "POST")
-
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))
         }
-
-        AppLogger.logResponse(url: url.absoluteString, statusCode: httpResponse.statusCode)
 
         switch httpResponse.statusCode {
         case 200:
@@ -73,7 +68,6 @@ struct BailianProvider: PlatformProvider {
               let instances = dataContent["codingPlanInstanceInfos"] as? [[String: Any]],
               let firstInstance = instances.first,
               let quotaInfo = firstInstance["codingPlanQuotaInfo"] as? [String: Any] else {
-            AppLogger.logParseError(message: "无用量数据 - 响应结构不匹配")
             throw PlatformError.unknown("无用量数据 - 响应结构不匹配")
         }
 
@@ -87,7 +81,6 @@ struct BailianProvider: PlatformProvider {
               let usedWeek = quotaInfo["perWeekUsedQuota"] as? Int,
               let totalWeek = quotaInfo["perWeekTotalQuota"] as? Int,
               let resetTimeWeekMs = quotaInfo["perWeekQuotaNextRefreshTime"] as? Int64 else {
-            AppLogger.logParseError(message: "用量数据字段缺失")
             throw PlatformError.unknown("用量数据字段缺失")
         }
 

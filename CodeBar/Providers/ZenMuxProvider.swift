@@ -99,16 +99,11 @@ struct ZenMuxProvider: PlatformProvider {
         request.setValue("Bearer \(account.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        // 使用安全的日志记录
-        AppLogger.logRequest(url: url.absoluteString, method: "GET")
-
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))
         }
-
-        AppLogger.logResponse(url: url.absoluteString, statusCode: httpResponse.statusCode)
 
         switch httpResponse.statusCode {
         case 200:
@@ -126,7 +121,6 @@ struct ZenMuxProvider: PlatformProvider {
 
         guard let success = rawJSON?["success"] as? Bool, success,
               let responseData = rawJSON?["data"] as? [String: Any] else {
-            AppLogger.logParseError(message: "响应格式错误")
             throw PlatformError.unknown("响应格式错误")
         }
 
@@ -134,7 +128,6 @@ struct ZenMuxProvider: PlatformProvider {
         guard let quota5Hour = responseData["quota_5_hour"] as? [String: Any],
               let quota7Day = responseData["quota_7_day"] as? [String: Any],
               let planInfo = responseData["plan"] as? [String: Any] else {
-            AppLogger.logParseError(message: "配额数据缺失")
             throw PlatformError.unknown("配额数据缺失")
         }
 
