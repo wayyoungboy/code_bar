@@ -103,7 +103,7 @@ Platform-specific storage via a unified `config.Store` interface:
 
 | Platform | Storage |
 |----------|---------|
-| macOS    | Keychain (`github.com/keybase/go-keychain`) |
+| macOS    | `~/.code_bar/` file store |
 | Linux    | libsecret over D-Bus |
 | Windows  | DPAPI via `golang.org/x/sys/windows` |
 

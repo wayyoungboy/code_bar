@@ -372,8 +372,7 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
 
 enum UsageStatusFormatting {
     static func compactPercentText(for item: UsageItem, displayMode: UsagePercentDisplayMode) -> String {
-        let prefix = displayMode == .remaining ? "剩" : ""
-        return "\(prefix)\(String(format: "%.0f%%", displayMode.percent(for: item)))"
+        String(format: "%.0f%%", displayMode.percent(for: item))
     }
 }
 

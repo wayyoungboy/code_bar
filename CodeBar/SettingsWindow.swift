@@ -21,6 +21,7 @@ struct SettingsWindowView: View {
     @State private var showMimoHelp = false
     @State private var showCodexHelp = false
     @State private var showGeminiHelp = false
+    @AppStorage(Constants.presentationModeKey) private var presentationModeRawValue = CodeBarPresentationMode.default.rawValue
 
     // Bailian config
     @State private var cookies = ""
@@ -199,6 +200,28 @@ struct SettingsWindowView: View {
             notificationSettingsView
 
             HStack {
+                Image(systemName: "rectangle.on.rectangle")
+                    .foregroundColor(.purple)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("面板样式")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text(selectedPresentationMode.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Picker("面板样式", selection: presentationModeBinding) {
+                    ForEach(CodeBarPresentationMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 132)
+                .labelsHidden()
+            }
+
+            HStack {
                 Image(systemName: "menubar.rectangle")
                     .foregroundColor(.blue)
                 VStack(alignment: .leading, spacing: 2) {
@@ -238,6 +261,20 @@ struct SettingsWindowView: View {
         .padding(16)
         .background(Color.orange.opacity(0.06))
         .cornerRadius(10)
+    }
+
+    private var selectedPresentationMode: CodeBarPresentationMode {
+        CodeBarPresentationMode(rawValue: presentationModeRawValue) ?? .default
+    }
+
+    private var presentationModeBinding: Binding<CodeBarPresentationMode> {
+        Binding(
+            get: { selectedPresentationMode },
+            set: { mode in
+                presentationModeRawValue = mode.rawValue
+                NotificationCenter.default.post(name: .codeBarPresentationModeChanged, object: nil)
+            }
+        )
     }
 
     private var footerSection: some View {
@@ -1263,8 +1300,8 @@ struct HelpWindowView: View {
     private var codexHelpSteps: some View {
         Group {
             HelpStepView(number: 1, title: "安装 Codex CLI", description: "安装并打开 OpenAI Codex CLI", icon: "terminal")
-            HelpStepView(number: 2, title: "使用 ChatGPT 登录", description: "通过 Codex CLI 登录 ChatGPT 账号，使 ~/.codex/auth.json 或 Keychain 中生成 OAuth 凭据", icon: "person.circle")
-            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 Codex Auth 或 ~/.codex/auth.json，不需要手动填写凭据", icon: "key")
+            HelpStepView(number: 2, title: "使用 ChatGPT 登录", description: "通过 Codex CLI 登录 ChatGPT 账号，使 ~/.codex/auth.json 中生成 OAuth 凭据", icon: "person.circle")
+            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 ~/.codex/auth.json，不需要手动填写凭据", icon: "key")
             HelpStepView(number: 4, title: "代理可选", description: "无法直连 chatgpt.com 时，可填写 http 或 socks5 代理地址", icon: "network")
         }
     }
@@ -1272,8 +1309,8 @@ struct HelpWindowView: View {
     private var geminiHelpSteps: some View {
         Group {
             HelpStepView(number: 1, title: "安装 Gemini CLI", description: "安装并打开 Google Gemini CLI", icon: "terminal")
-            HelpStepView(number: 2, title: "使用 Google 登录", description: "通过 Gemini CLI 登录 Google 账号，使 Keychain 或 ~/.gemini/oauth_creds.json 中生成 OAuth 凭据", icon: "person.circle")
-            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 gemini-cli-oauth 或 ~/.gemini/oauth_creds.json，不需要手动填写凭据", icon: "key")
+            HelpStepView(number: 2, title: "使用 Google 登录", description: "通过 Gemini CLI 登录 Google 账号，使 ~/.gemini/oauth_creds.json 中生成 OAuth 凭据", icon: "person.circle")
+            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 ~/.gemini/oauth_creds.json，不需要手动填写凭据", icon: "key")
             HelpStepView(number: 4, title: "代理可选", description: "无法直连 Google Code Assist 接口时，可填写 http 或 socks5 代理地址", icon: "network")
         }
     }

@@ -14,7 +14,7 @@
 			A1000005 /* BailianProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* BailianProvider.swift */; };
 			A1000006 /* ZenMuxProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* ZenMuxProvider.swift */; };
 			A1000007 /* SettingsWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* SettingsWindow.swift */; };
-			A1000008 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* KeychainHelper.swift */; };
+			A1000008 /* CodeBarFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* CodeBarFileStore.swift */; };
 			A1000009 /* Constants.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000010 /* Constants.swift */; };
 			A1000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000012 /* Assets.xcassets */; };
 			A1000012 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000013 /* UpdateChecker.swift */; };
@@ -23,7 +23,8 @@
 			A1000041 /* GeminiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000042 /* GeminiProvider.swift */; };
 			A1000042 /* IslandMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000043 /* IslandMode.swift */; };
 			A1000043 /* IslandPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000044 /* IslandPanelController.swift */; };
-			A1000040 /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000041 /* AppIntents.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+			A1000044 /* StatusBarIconRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000045 /* StatusBarIconRenderer.swift */; };
+			A1000045 /* StatusBarUsagePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000046 /* StatusBarUsagePresentation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,17 +35,18 @@
 			A2000005 /* BailianProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BailianProvider.swift; sourceTree = "<group>"; };
 			A2000007 /* ZenMuxProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZenMuxProvider.swift; sourceTree = "<group>"; };
 			A2000008 /* SettingsWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindow.swift; sourceTree = "<group>"; };
-			A2000009 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+			A2000009 /* CodeBarFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeBarFileStore.swift; sourceTree = "<group>"; };
 			A2000010 /* Constants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Constants.swift; sourceTree = "<group>"; };
 			A2000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 			A2000013 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 			A2000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 			A2000039 /* MimoProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MimoProvider.swift; sourceTree = "<group>"; };
 			A2000040 /* CodexProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexProvider.swift; sourceTree = "<group>"; };
-			A2000041 /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 			A2000042 /* GeminiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiProvider.swift; sourceTree = "<group>"; };
 			A2000043 /* IslandMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandMode.swift; sourceTree = "<group>"; };
 			A2000044 /* IslandPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandPanelController.swift; sourceTree = "<group>"; };
+			A2000045 /* StatusBarIconRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarIconRenderer.swift; sourceTree = "<group>"; };
+			A2000046 /* StatusBarUsagePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarUsagePresentation.swift; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -53,7 +55,6 @@
 				isa = PBXFrameworksBuildPhase;
 				buildActionMask = 2147483647;
 				files = (
-					A1000040 /* AppIntents.framework in Frameworks */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
@@ -76,9 +77,11 @@
 					A2000002 /* MenuBarView.swift */,
 					A2000043 /* IslandMode.swift */,
 					A2000044 /* IslandPanelController.swift */,
+					A2000045 /* StatusBarIconRenderer.swift */,
+					A2000046 /* StatusBarUsagePresentation.swift */,
 					A2000003 /* UsageTracker.swift */,
 					A2000008 /* SettingsWindow.swift */,
-					A2000009 /* KeychainHelper.swift */,
+					A2000009 /* CodeBarFileStore.swift */,
 					A2000010 /* Constants.swift */,
 					A2000013 /* UpdateChecker.swift */,
 					A5000004 /* Providers */,
@@ -112,7 +115,6 @@
 			A5000005 /* Frameworks */ = {
 				isa = PBXGroup;
 				children = (
-					A2000041 /* AppIntents.framework */,
 				);
 				name = Frameworks;
 				sourceTree = "<group>";
@@ -194,10 +196,12 @@
 				inputPaths = (
 					"$(SRCROOT)/CodeBarTests/run_module_behavior_tests.sh",
 					"$(SRCROOT)/CodeBar/Constants.swift",
-					"$(SRCROOT)/CodeBar/KeychainHelper.swift",
+					"$(SRCROOT)/CodeBar/CodeBarFileStore.swift",
 					"$(SRCROOT)/CodeBar/UsageTracker.swift",
 					"$(SRCROOT)/CodeBar/MenuBarView.swift",
 					"$(SRCROOT)/CodeBar/IslandMode.swift",
+					"$(SRCROOT)/CodeBar/StatusBarIconRenderer.swift",
+					"$(SRCROOT)/CodeBar/StatusBarUsagePresentation.swift",
 					"$(SRCROOT)/CodeBar/SettingsWindow.swift",
 					"$(SRCROOT)/CodeBar/UpdateChecker.swift",
 					"$(SRCROOT)/CodeBar/Providers/PlatformProvider.swift",
@@ -234,7 +238,7 @@
 					A1000005 /* BailianProvider.swift in Sources */,
 					A1000006 /* ZenMuxProvider.swift in Sources */,
 					A1000007 /* SettingsWindow.swift in Sources */,
-					A1000008 /* KeychainHelper.swift in Sources */,
+					A1000008 /* CodeBarFileStore.swift in Sources */,
 					A1000009 /* Constants.swift in Sources */,
 					A1000012 /* UpdateChecker.swift in Sources */,
 					A1000038 /* MimoProvider.swift in Sources */,
@@ -242,6 +246,8 @@
 					A1000041 /* GeminiProvider.swift in Sources */,
 					A1000042 /* IslandMode.swift in Sources */,
 					A1000043 /* IslandPanelController.swift in Sources */,
+					A1000044 /* StatusBarIconRenderer.swift in Sources */,
+					A1000045 /* StatusBarUsagePresentation.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};

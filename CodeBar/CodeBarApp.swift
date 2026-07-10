@@ -22,14 +22,7 @@ struct CodeBarApp: App {
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private struct StatusItemComponents {
-        let contentStack: NSStackView
-        let iconView: NSImageView
-        let aliasLabel: NSTextField
-        let topLabel: NSTextField
-        let bottomLabel: NSTextField
-        let titleStack: NSStackView
-    }
+    private struct StatusItemComponents {}
 
     private struct StatusTitleSnapshot: Equatable {
         let top: String
@@ -54,6 +47,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var moduleStatusItems: [String: NSStatusItem] = [:]
     private var moduleStatusComponents: [String: StatusItemComponents] = [:]
     private var statusTitleSnapshots: [ObjectIdentifier: StatusTitleSnapshot] = [:]
+    private var statusUsageRotation = StatusBarUsageRotation()
     var popover: NSPopover?
     var settingsWindow: NSWindow?
     var rotationTimer: Timer?
@@ -65,12 +59,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var eventMonitor: Any?
     private let statusTitleFont = NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
     private let singleLineStatusTitleFont = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-    private let statusContentStack = NSStackView()
-    private let statusIconView = NSImageView()
-    private let statusTopLabel = NSTextField(labelWithString: "Code")
-    private let statusBottomLabel = NSTextField(labelWithString: "Bar")
-    private let statusTitleStack = NSStackView()
-
     deinit {
         rotationTimer?.invalidate()
         if let monitor = eventMonitor { NSEvent.removeMonitor(monitor) }
@@ -78,17 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        isUsingIslandMode = setupIslandMode()
-        if !isUsingIslandMode {
-            rebuildStatusItems()
-
-            // 创建弹窗视图
-            popover = NSPopover()
-            popover?.behavior = .transient
-            let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
-            hostingController.sizingOptions = [.preferredContentSize]
-            popover?.contentViewController = hostingController
-        }
+        applyPresentationMode(CodeBarPresentationMode.current())
 
         // 启动时只检查通知状态，避免无用户动作时弹出系统授权
         UsageTracker.shared.checkNotificationPermission()
@@ -112,6 +90,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .usageDataUpdated,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handlePresentationModePreferenceChanged),
+            name: .codeBarPresentationModeChanged,
+            object: nil
+        )
 
         if !isUsingIslandMode {
             updateRotationTimer()
@@ -124,6 +108,72 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             await UpdateChecker.shared.checkForUpdate()
         }
+    }
+
+    private func applyPresentationMode(_ mode: CodeBarPresentationMode) {
+        switch mode {
+        case .statusBar:
+            configureStatusBarMode()
+        case .island:
+            configureIslandMode()
+        }
+    }
+
+    private func configureStatusBarMode() {
+        if isUsingIslandMode {
+            islandController?.hide()
+            islandController = nil
+            isUsingIslandMode = false
+        }
+
+        ensurePopover()
+        rebuildStatusItems()
+        updateRotationTimer()
+    }
+
+    private func configureIslandMode() {
+        guard !isUsingIslandMode else {
+            islandController?.refreshLayout()
+            return
+        }
+
+        closePopover()
+        popover = nil
+        removeStatusItems()
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+
+        if setupIslandMode() {
+            isUsingIslandMode = true
+        } else {
+            configureStatusBarMode()
+        }
+    }
+
+    private func ensurePopover() {
+        guard popover == nil else { return }
+        let popover = NSPopover()
+        popover.behavior = .transient
+        let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hostingController
+        self.popover = popover
+    }
+
+    private func removeStatusItems() {
+        for item in moduleStatusItems.values {
+            statusTitleSnapshots.removeValue(forKey: ObjectIdentifier(item))
+            NSStatusBar.system.removeStatusItem(item)
+        }
+        moduleStatusItems = [:]
+        moduleStatusComponents = [:]
+
+        if let statusItem {
+            statusTitleSnapshots.removeValue(forKey: ObjectIdentifier(statusItem))
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+        defaultStatusComponents = nil
     }
 
     private func setupIslandMode() -> Bool {
@@ -189,7 +239,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let tracker = UsageTracker.shared
         if tracker.hasAnyModule {
             guard !tracker.menuBarModules.isEmpty else {
-                setStatusTitle(top: "Code", bottom: "Bar", platform: nil)
+                setStatusTitle(top: "CodeBar", bottom: "", platform: nil)
                 return
             }
 
@@ -202,19 +252,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        setStatusTitle(top: "Code", bottom: "Bar", platform: nil)
+        setStatusTitle(top: "CodeBar", bottom: "", platform: nil)
     }
 
     @objc private func rebuildStatusItems() {
         let tracker = UsageTracker.shared
         let menuModules = tracker.menuBarModules
 
-        for item in moduleStatusItems.values {
-            statusTitleSnapshots.removeValue(forKey: ObjectIdentifier(item))
-            NSStatusBar.system.removeStatusItem(item)
-        }
-        moduleStatusItems = [:]
-        moduleStatusComponents = [:]
+        removeStatusItems()
 
         if menuModules.isEmpty || tracker.menuBarDisplayMode == .rotating {
             if statusItem == nil {
@@ -254,10 +299,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func handleUsageDataUpdated() {
+        statusUsageRotation.registerRefresh()
         if !isUsingIslandMode {
             updateStatusItemTitle()
             updateRotationTimer()
         }
+    }
+
+    @objc private func handlePresentationModePreferenceChanged() {
+        applyPresentationMode(CodeBarPresentationMode.current())
     }
 
     private func updateModuleStatusItems() {
@@ -278,8 +328,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             guard let usage = tracker.moduleUsages[module.id] else {
                 setStatusTitle(
-                    top: module.platform.shortName,
-                    bottom: "Loading",
+                    top: "Loading",
+                    bottom: "",
                     alias: module.aliasDisplayName,
                     platform: module.platform,
                     item: item,
@@ -290,15 +340,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             let visibleItems = usage.items.filter { tracker.displayKeys(for: module).contains($0.key) }
             let preferredItems = preferredStatusItems(from: visibleItems)
-            let top = preferredItems.first.map { statusLineText(for: $0, module: module) } ?? module.platform.shortName
-            let bottom = preferredItems.dropFirst().first.map { statusLineText(for: $0, module: module) } ?? ""
+            let presentation = StatusBarUsagePresentation.make(
+                lines: preferredItems.map { statusLineText(for: $0, module: module) },
+                rotationIndex: statusUsageRotation.index,
+                fallback: module.platform.shortName
+            )
             setStatusTitle(
-                top: top,
-                bottom: bottom,
+                top: presentation.title,
+                bottom: "",
                 alias: module.aliasDisplayName,
                 platform: module.platform,
                 item: item,
-                components: components
+                components: components,
+                tooltip: presentation.tooltip
             )
         }
     }
@@ -312,7 +366,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let modules = tracker.menuBarModules
         guard !modules.isEmpty else {
-            setStatusTitle(top: "Code", bottom: "Bar", platform: nil)
+            setStatusTitle(top: "CodeBar", bottom: "", platform: nil)
             return
         }
 
@@ -326,8 +380,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         guard let usage = tracker.moduleUsages[module.id] else {
             setStatusTitle(
-                top: module.platform.shortName,
-                bottom: "Loading",
+                top: "Loading",
+                bottom: "",
                 alias: module.aliasDisplayName,
                 platform: module.platform
             )
@@ -336,9 +390,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let visibleItems = usage.items.filter { tracker.displayKeys(for: module).contains($0.key) }
         let preferredItems = preferredStatusItems(from: visibleItems)
-        let top = preferredItems.first.map { statusLineText(for: $0, module: module) } ?? module.platform.shortName
-        let bottom = preferredItems.dropFirst().first.map { statusLineText(for: $0, module: module) } ?? ""
-        setStatusTitle(top: top, bottom: bottom, alias: module.aliasDisplayName, platform: module.platform)
+        let presentation = StatusBarUsagePresentation.make(
+            lines: preferredItems.map { statusLineText(for: $0, module: module) },
+            rotationIndex: statusUsageRotation.index,
+            fallback: module.platform.shortName
+        )
+        setStatusTitle(
+            top: presentation.title,
+            bottom: "",
+            alias: module.aliasDisplayName,
+            platform: module.platform,
+            tooltip: presentation.tooltip
+        )
     }
 
     private func preferredStatusItems(from items: [UsageItem]) -> [UsageItem] {
@@ -416,9 +479,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func setStatusTitle(top: String, bottom: String, alias: String? = nil, platform: PlatformType?) {
+    private func setStatusTitle(
+        top: String,
+        bottom: String,
+        alias: String? = nil,
+        platform: PlatformType?,
+        tooltip: String? = nil
+    ) {
         guard let statusItem, let components = defaultStatusComponents else { return }
-        setStatusTitle(top: top, bottom: bottom, alias: alias, platform: platform, item: statusItem, components: components)
+        setStatusTitle(
+            top: top,
+            bottom: bottom,
+            alias: alias,
+            platform: platform,
+            item: statusItem,
+            components: components,
+            tooltip: tooltip
+        )
     }
 
     private func setStatusTitle(
@@ -427,49 +504,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alias: String? = nil,
         platform: PlatformType?,
         item: NSStatusItem,
-        components: StatusItemComponents
+        components: StatusItemComponents,
+        tooltip: String? = nil
     ) {
         let aliasText = alias?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let isSingleLine = bottom.isEmpty
         let topFont = isSingleLine ? singleLineStatusTitleFont : statusTitleFont
         let bottomFont = statusTitleFont
-        let titleWidth = max(
-            statusTextWidth(top, font: topFont),
-            statusTextWidth(bottom, font: bottomFont)
-        )
-        let aliasWidth = aliasText.isEmpty ? 0 : statusTextWidth(aliasText, font: components.aliasLabel.font ?? statusTitleFont) + 4
-        let length = max(40, titleWidth + aliasWidth + 32)
-        let usageTooltip = bottom.isEmpty ? top : "\(top) / \(bottom)"
-        let tooltip = aliasText.isEmpty ? usageTooltip : "\(aliasText) · \(usageTooltip)"
+        let titleLines = statusTitleLines(top: top, bottom: bottom, alias: aliasText, topFont: topFont, bottomFont: bottomFont)
+        let titleWidth = titleLines
+            .map { statusTextWidth($0.text, font: $0.font) }
+            .max() ?? 0
+        let length = max(40, titleWidth + 30)
+        let usageTooltip = tooltip ?? (bottom.isEmpty ? top : "\(top) / \(bottom)")
+        let resolvedTooltip = aliasText.isEmpty ? usageTooltip : "\(aliasText) · \(usageTooltip)"
         let snapshot = StatusTitleSnapshot(
             top: top,
             bottom: bottom,
             alias: aliasText,
             platform: platform,
             length: length,
-            tooltip: tooltip
+            tooltip: resolvedTooltip
         )
         let snapshotKey = ObjectIdentifier(item)
         guard statusTitleSnapshots[snapshotKey] != snapshot else { return }
         statusTitleSnapshots[snapshotKey] = snapshot
 
-        item.button?.image = nil
-        item.button?.title = ""
-        item.button?.attributedTitle = NSAttributedString(string: "")
-        components.iconView.image = statusIcon(for: platform)
-
-        components.aliasLabel.stringValue = aliasText
-        components.aliasLabel.isHidden = aliasText.isEmpty
-        components.topLabel.stringValue = top
-        components.bottomLabel.stringValue = bottom
-        components.bottomLabel.isHidden = bottom.isEmpty
-
-        components.topLabel.font = topFont
-        components.bottomLabel.font = bottomFont
-        components.titleStack.spacing = isSingleLine ? 0 : -1
-
+        item.button?.image = statusIcon(for: platform)
+        item.button?.imagePosition = .imageLeft
+        item.button?.imageScaling = .scaleProportionallyDown
+        item.button?.attributedTitle = statusAttributedTitle(
+            lines: titleLines,
+            isSingleLine: isSingleLine
+        )
         item.length = length
-        item.button?.toolTip = tooltip
+        item.button?.toolTip = resolvedTooltip
     }
 
     private func setupStatusTitleView() {
@@ -484,82 +553,73 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @discardableResult
     private func setupStatusTitleView(for button: NSStatusBarButton) -> StatusItemComponents {
-        let statusContentStack = NSStackView()
-        let statusIconView = NSImageView()
-        let statusAliasLabel = NSTextField(labelWithString: "")
-        let statusTopLabel = NSTextField(labelWithString: "Code")
-        let statusBottomLabel = NSTextField(labelWithString: "Bar")
-        let statusTitleStack = NSStackView()
+        button.imagePosition = .imageLeft
+        button.imageScaling = .scaleProportionallyDown
+        button.font = statusTitleFont
+        return StatusItemComponents()
+    }
 
-        statusIconView.translatesAutoresizingMaskIntoConstraints = false
-        statusIconView.imageScaling = .scaleProportionallyDown
-        statusIconView.contentTintColor = .labelColor
-        statusIconView.setContentCompressionResistancePriority(.required, for: .horizontal)
-        NSLayoutConstraint.activate([
-            statusIconView.widthAnchor.constraint(equalToConstant: 13),
-            statusIconView.heightAnchor.constraint(equalToConstant: 13),
-        ])
-
-        statusAliasLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
-        statusAliasLabel.lineBreakMode = .byTruncatingTail
-        statusAliasLabel.textColor = .labelColor
-        statusAliasLabel.maximumNumberOfLines = 1
-        statusAliasLabel.isHidden = true
-        statusAliasLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        statusAliasLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-
-        [statusTopLabel, statusBottomLabel].forEach { label in
-            label.alignment = .center
-            label.lineBreakMode = .byClipping
-            label.textColor = .labelColor
-            label.setContentCompressionResistancePriority(.required, for: .horizontal)
+    private func statusTitleLines(
+        top: String,
+        bottom: String,
+        alias: String,
+        topFont: NSFont,
+        bottomFont: NSFont
+    ) -> [(text: String, font: NSFont)] {
+        if bottom.isEmpty {
+            let text = alias.isEmpty ? top : "\(alias) \(top)"
+            return [(text, topFont)]
         }
 
-        statusTitleStack.orientation = .vertical
-        statusTitleStack.alignment = .centerX
-        statusTitleStack.distribution = .fill
-        statusTitleStack.translatesAutoresizingMaskIntoConstraints = false
-        statusTitleStack.addArrangedSubview(statusTopLabel)
-        statusTitleStack.addArrangedSubview(statusBottomLabel)
+        let firstLine = alias.isEmpty ? top : "\(alias) \(top)"
+        return [(firstLine, topFont), (bottom, bottomFont)]
+    }
 
-        statusContentStack.orientation = .horizontal
-        statusContentStack.alignment = .centerY
-        statusContentStack.distribution = .fill
-        statusContentStack.spacing = 4
-        statusContentStack.translatesAutoresizingMaskIntoConstraints = false
-        statusContentStack.addArrangedSubview(statusIconView)
-        statusContentStack.addArrangedSubview(statusAliasLabel)
-        statusContentStack.addArrangedSubview(statusTitleStack)
+    private func statusAttributedTitle(lines: [(text: String, font: NSFont)], isSingleLine: Bool) -> NSAttributedString {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        paragraphStyle.lineBreakMode = .byClipping
+        paragraphStyle.lineSpacing = isSingleLine ? 0 : -2
 
-        button.addSubview(statusContentStack)
-        NSLayoutConstraint.activate([
-            statusContentStack.centerXAnchor.constraint(equalTo: button.centerXAnchor),
-            statusContentStack.centerYAnchor.constraint(equalTo: button.centerYAnchor, constant: 1.5),
-            statusContentStack.leadingAnchor.constraint(greaterThanOrEqualTo: button.leadingAnchor, constant: 5),
-            statusContentStack.trailingAnchor.constraint(lessThanOrEqualTo: button.trailingAnchor, constant: -5),
-        ])
-
-        return StatusItemComponents(
-            contentStack: statusContentStack,
-            iconView: statusIconView,
-            aliasLabel: statusAliasLabel,
-            topLabel: statusTopLabel,
-            bottomLabel: statusBottomLabel,
-            titleStack: statusTitleStack
-        )
+        let result = NSMutableAttributedString()
+        for (index, line) in lines.enumerated() {
+            if index > 0 {
+                result.append(NSAttributedString(string: "\n"))
+            }
+            result.append(NSAttributedString(
+                string: line.text,
+                attributes: [
+                    .font: line.font,
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paragraphStyle,
+                ]
+            ))
+        }
+        return result
     }
 
     private func statusIcon(for platform: PlatformType?) -> NSImage? {
         if let assetName = platform?.logoAssetName,
            let image = NSImage(named: assetName)?.copy() as? NSImage {
-            image.isTemplate = platform?.usesOriginalLogoColor != true
-            return image
+            let isTemplate = platform?.usesOriginalLogoColor != true
+            return StatusBarIconRenderer.render(
+                image,
+                pointSize: Constants.statusBarIconSize,
+                isTemplate: isTemplate
+            )
         }
 
         let symbolName = platform?.icon ?? "menubar.dock.rectangle"
         let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: platform?.shortName ?? "CodeBar")
         let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
-        return image?.withSymbolConfiguration(configuration)
+        guard let configuredImage = image?.withSymbolConfiguration(configuration)?.copy() as? NSImage else {
+            return nil
+        }
+        return StatusBarIconRenderer.render(
+            configuredImage,
+            pointSize: Constants.statusBarIconSize,
+            isTemplate: true
+        )
     }
 
     private func statusTextWidth(_ text: String, font: NSFont) -> CGFloat {

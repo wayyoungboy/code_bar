@@ -23,7 +23,7 @@
 | 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
 | 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
 | 配额提醒 | 5 小时、7 天、周、月等周期可按模块开启提醒 |
-| 安全存储 | CodeBar 自身配置统一写入 macOS Keychain |
+| 本地存储 | CodeBar 自身配置统一写入 `~/.code_bar/` |
 | OAuth 免配置 | 自动读取本机 Codex CLI / Gemini CLI OAuth 凭据 |
 
 ## Preview
@@ -150,12 +150,7 @@ ZenMux 5 小时或 7 天额度周期刷新时，CodeBar 可发送 macOS 系统�
 
 ### Codex
 
-在设置界面点击「添加模块」，选择「Codex」。Codex 不需要在 CodeBar 中配置 token，CodeBar 会按以下优先级自动读取本机 Codex CLI 的 ChatGPT OAuth 凭据：
-
-1. 文件：`~/.codex/auth.json`
-2. macOS Keychain：`Codex Auth`
-
-为减少 macOS 授权弹窗，Keychain fallback 在每次应用启动后最多读取一次；后续刷新会复用本次读取结果。
+在设置界面点击「添加模块」，选择「Codex」。Codex 不需要在 CodeBar 中配置 token，CodeBar 会自动读取本机 Codex CLI 的 ChatGPT OAuth 文件凭据：`~/.codex/auth.json`。
 
 要求：
 
@@ -198,10 +193,7 @@ socks5://127.0.0.1:7890
 
 ### Gemini
 
-在设置界面点击「添加模块」，选择「Gemini」。Gemini 不需要在 CodeBar 中配置 token，CodeBar 会按以下优先级自动读取本机 Gemini CLI 的 Google OAuth 凭据：
-
-1. macOS Keychain：service `gemini-cli-oauth`，account `main-account`
-2. 文件：`~/.gemini/oauth_creds.json`
+在设置界面点击「添加模块」，选择「Gemini」。Gemini 不需要在 CodeBar 中配置 token，CodeBar 会自动读取本机 Gemini CLI 的 Google OAuth 文件凭据：`~/.gemini/oauth_creds.json`。
 
 要求：
 
@@ -239,7 +231,7 @@ code_bar/
 │   ├── SettingsWindow.swift       # 设置窗口（模块管理、凭据配置、展示选项、帮助）
 │   ├── UsageTracker.swift         # 用量追踪器（模块配置、刷新、存储、通知）
 │   ├── Constants.swift            # 应用常量配置
-│   ├── KeychainHelper.swift       # Keychain 安全存储封装
+│   ├── CodeBarFileStore.swift     # ~/.code_bar 文件存储封装
 │   ├── UpdateChecker.swift        # GitHub Release 更新检查
 │   └── Providers/
 │       ├── PlatformProvider.swift # 平台协议、数据模型和配置模型
@@ -293,7 +285,7 @@ GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release�
 
 ## 安全性
 
-- CodeBar 自身配置存储在 macOS Keychain
+- CodeBar 自身配置存储在 `~/.code_bar/`
 - Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - Gemini OAuth 凭据只从 Gemini CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - 不会上传或分享任何凭据信息

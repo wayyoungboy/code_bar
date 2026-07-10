@@ -8,17 +8,17 @@
 flowchart TB
     User["用户"]
     CodeBar["CodeBar macOS 菜单栏应用"]
-    Keychain["macOS Keychain"]
+    FileStore["~/.code_bar"]
     Defaults["UserDefaults"]
     Bailian["阿里云百炼 API"]
     ZenMux["ZenMux API"]
     Mimo["小米 MiMo API"]
-    CodexAuth["Codex CLI Auth\nKeychain / ~/.codex/auth.json"]
+    CodexAuth["Codex CLI Auth\n~/.codex/auth.json"]
     ChatGPT["chatgpt.com/backend-api/wham/usage"]
     GitHub["GitHub Releases"]
 
     User -->|查看用量 / 设置| CodeBar
-    CodeBar -->|读写 CodeBar 配置| Keychain
+    CodeBar -->|读写 CodeBar 配置| FileStore
     CodeBar -->|读写 UI 状态和缓存| Defaults
     CodeBar -->|HTTPS| Bailian
     CodeBar -->|HTTPS| ZenMux
@@ -36,7 +36,7 @@ flowchart LR
     Tracker["UsageTracker"]
     Menu["MenuBarView"]
     Settings["SettingsWindow"]
-    KeychainHelper["KeychainHelper"]
+    FileStore["CodeBarFileStore"]
     UpdateChecker["UpdateChecker"]
 
     subgraph Providers
@@ -54,7 +54,7 @@ flowchart LR
     Menu --> Tracker
     Settings --> Tracker
     Tracker --> PlatformProvider
-    Tracker --> KeychainHelper
+    Tracker --> FileStore
     PlatformProvider <|-- BailianProvider
     PlatformProvider <|-- ZenMuxProvider
     PlatformProvider <|-- MimoProvider
@@ -164,16 +164,12 @@ sequenceDiagram
 sequenceDiagram
     participant Tracker as UsageTracker
     participant Codex as CodexProvider
-    participant Keychain as Keychain Codex Auth
     participant File as ~/.codex/auth.json
     participant Proxy as Optional Proxy
     participant API as chatgpt.com wham usage
 
     Tracker->>Codex: fetchUsage()
     Codex->>File: read auth.json
-    alt file missing or invalid
-        Codex->>Keychain: read Codex Auth
-    end
     Codex->>Codex: validate auth_mode == chatgpt
     Codex->>Codex: build URLSession
     alt proxy configured

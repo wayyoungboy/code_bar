@@ -283,7 +283,7 @@ class UsageTracker: ObservableObject {
     }
 
     private func loadModules() {
-        guard let data = try? KeychainHelper.shared.read(for: Constants.monitorModulesKey),
+        guard let data = try? CodeBarFileStore.shared.read(for: Constants.monitorModulesKey),
               let decoded = try? JSONDecoder().decode([MonitorModule].self, from: data) else {
             modules = []
             return
@@ -295,7 +295,7 @@ class UsageTracker: ObservableObject {
     private func saveModules(notifyStatusItemsChanged: Bool = true) {
         do {
             let data = try JSONEncoder().encode(modules)
-            try KeychainHelper.shared.save(data, for: Constants.monitorModulesKey)
+            try CodeBarFileStore.shared.save(data, for: Constants.monitorModulesKey)
             if notifyStatusItemsChanged {
                 NotificationCenter.default.post(name: .moduleStatusItemsChanged, object: nil)
             }
@@ -355,7 +355,7 @@ class UsageTracker: ObservableObject {
     }
 
     private func loadAllConfigs() -> [String: Data] {
-        guard let data = try? KeychainHelper.shared.read(for: Constants.platformConfigsKey),
+        guard let data = try? CodeBarFileStore.shared.read(for: Constants.platformConfigsKey),
               let dict = try? JSONDecoder().decode([String: Data].self, from: data) else {
             return [:]
         }
@@ -365,7 +365,7 @@ class UsageTracker: ObservableObject {
     private func saveAllConfigs(_ configs: [String: Data]) {
         do {
             let data = try JSONEncoder().encode(configs)
-            try KeychainHelper.shared.save(data, for: Constants.platformConfigsKey)
+            try CodeBarFileStore.shared.save(data, for: Constants.platformConfigsKey)
         } catch {}
     }
 
@@ -381,7 +381,7 @@ class UsageTracker: ObservableObject {
         var allConfigs = loadAllConfigs()
         allConfigs.removeValue(forKey: platform.rawValue)
         if allConfigs.isEmpty {
-            try? KeychainHelper.shared.delete(Constants.platformConfigsKey)
+            try? CodeBarFileStore.shared.delete(Constants.platformConfigsKey)
         } else {
             saveAllConfigs(allConfigs)
         }

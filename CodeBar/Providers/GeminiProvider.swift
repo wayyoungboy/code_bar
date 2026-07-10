@@ -297,11 +297,6 @@ struct GeminiProvider: PlatformProvider {
     }
 
     private func readCredentials() -> GeminiCredentials {
-        if let keychainContent = KeychainHelper.readExternalItem(service: "gemini-cli-oauth", account: "main-account"),
-           let credentials = parseKeychainCredentialsJSON(keychainContent) {
-            return credentials
-        }
-
         let authPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".gemini")
             .appendingPathComponent("oauth_creds.json")
@@ -337,31 +332,6 @@ struct GeminiProvider: PlatformProvider {
                 message: "读取 Gemini oauth_creds.json 失败：\(error.localizedDescription)"
             )
         }
-    }
-
-    private func parseKeychainCredentialsJSON(_ content: String) -> GeminiCredentials? {
-        guard let data = content.data(using: .utf8),
-              let json = try? JSONDecoder().decode(GeminiKeychainCredentials.self, from: data) else {
-            return parseFileCredentialsJSON(content)
-        }
-
-        guard let accessToken = json.token.accessToken, !accessToken.isEmpty else {
-            return GeminiCredentials(
-                accessToken: nil,
-                refreshToken: json.token.refreshToken,
-                source: .keychain,
-                isExpired: false,
-                message: "Gemini Keychain accessToken 缺失"
-            )
-        }
-
-        return GeminiCredentials(
-            accessToken: accessToken,
-            refreshToken: json.token.refreshToken,
-            source: .keychain,
-            isExpired: isExpired(expiryMilliseconds: json.token.expiresAt),
-            message: nil
-        )
     }
 
     private func parseFileCredentialsJSON(_ content: String) -> GeminiCredentials? {
@@ -446,12 +416,10 @@ struct GeminiProvider: PlatformProvider {
 
     private struct GeminiCredentials {
         enum Source {
-            case keychain
             case file
 
             var displayName: String {
                 switch self {
-                case .keychain: return "Keychain"
                 case .file: return "~/.gemini/oauth_creds.json"
                 }
             }
@@ -474,16 +442,6 @@ struct GeminiProvider: PlatformProvider {
             case refreshToken = "refresh_token"
             case expiryDate = "expiry_date"
         }
-    }
-
-    private struct GeminiKeychainCredentials: Decodable {
-        let token: GeminiKeychainToken
-    }
-
-    private struct GeminiKeychainToken: Decodable {
-        let accessToken: String?
-        let refreshToken: String?
-        let expiresAt: Int64?
     }
 
     private struct GeminiTokenRefreshResponse: Decodable {

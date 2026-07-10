@@ -48,6 +48,7 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     private var outsideMonitor: Any?
     private var localMonitor: Any?
     private var maxContentHeight = Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
+    private var displayGeometry: CodeBarIslandDisplayGeometry?
     private var pendingLayoutRefresh: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -99,6 +100,7 @@ final class CodeBarIslandController: NSObject, ObservableObject {
 
     func show() -> Bool {
         guard let screen = targetScreen() else { return false }
+        updateScreenMetrics(for: screen)
         let panel = CodeBarIslandPanel(contentRect: frame(for: .closed, screen: screen, contentHeight: nil))
         self.panel = panel
         NotificationCenter.default.addObserver(
@@ -110,6 +112,17 @@ final class CodeBarIslandController: NSObject, ObservableObject {
         rebuildRootView()
         panel.orderFrontRegardless()
         return true
+    }
+
+    func hide() {
+        removeOutsideMonitors()
+        pendingLayoutRefresh?.cancel()
+        pendingLayoutRefresh = nil
+        panel?.orderOut(nil)
+        panel?.close()
+        panel = nil
+        hostingController = nil
+        state = .closed
     }
 
     func open() {
@@ -138,13 +151,14 @@ final class CodeBarIslandController: NSObject, ObservableObject {
 
     func refreshLayout() {
         guard let screen = targetScreen() else { return }
+        updateScreenMetrics(for: screen)
         pendingLayoutRefresh?.cancel()
         pendingLayoutRefresh = nil
         let contentHeight = state.isOpened ? measuredContentHeight(for: screen) : nil
         let nextFrame = frame(for: state, screen: screen, contentHeight: contentHeight)
         maxContentHeight = state.isOpened
             ? CodeBarIslandLayout.openedContentHeight(panelHeight: nextFrame.height)
-            : Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
+            : CodeBarIslandLayout.openedContentHeight(panelHeight: Constants.islandOpenedMaximumHeight)
         rebuildRootView()
         panel?.setFrame(nextFrame, display: true, animate: true)
     }
@@ -171,7 +185,8 @@ final class CodeBarIslandController: NSObject, ObservableObject {
                 self?.onSettings()
             },
             onQuit: { NSApplication.shared.terminate(nil) },
-            maxContentHeight: maxContentHeight
+            maxContentHeight: maxContentHeight,
+            notchGapWidth: displayGeometry?.notchGapWidth ?? 0
         )
 
         if let hostingController {
@@ -198,18 +213,12 @@ final class CodeBarIslandController: NSObject, ObservableObject {
     }
 
     private func frame(for state: CodeBarIslandState, screen: NSScreen, contentHeight: CGFloat?) -> CGRect {
+        let geometry = displayGeometry ?? makeDisplayGeometry(for: screen)
         if state.isOpened {
-            return CodeBarIslandLayout.openedFrame(
-                screenFrame: screen.frame,
-                visibleFrame: screen.visibleFrame,
-                contentHeight: contentHeight ?? Constants.islandOpenedMaximumHeight
-            )
+            return geometry.openedFrame(contentHeight: contentHeight ?? Constants.islandOpenedMaximumHeight)
         }
 
-        return CodeBarIslandLayout.frame(
-            screenFrame: screen.frame,
-            size: CGSize(width: Constants.islandClosedWidth, height: Constants.islandClosedHeight)
-        )
+        return geometry.closedFrame
     }
 
     private func measuredContentHeight(for screen: NSScreen) -> CGFloat {
@@ -224,6 +233,19 @@ final class CodeBarIslandController: NSObject, ObservableObject {
         view.frame.size = CGSize(width: Constants.islandOpenedWidth, height: maximumPanelHeight)
         view.layoutSubtreeIfNeeded()
         return view.fittingSize.height
+    }
+
+    private func updateScreenMetrics(for screen: NSScreen) {
+        displayGeometry = makeDisplayGeometry(for: screen)
+    }
+
+    private func makeDisplayGeometry(for screen: NSScreen) -> CodeBarIslandDisplayGeometry {
+        CodeBarIslandDisplayGeometry(
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            auxiliaryTopLeftArea: screen.auxiliaryTopLeftArea,
+            auxiliaryTopRightArea: screen.auxiliaryTopRightArea
+        )
     }
 
     private func installOutsideMonitors() {

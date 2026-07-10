@@ -11,10 +11,12 @@ TEST_BINARY="${DERIVED_FILE_DIR:-/tmp}/codebar-module-behavior-tests"
 swiftc \
   -D CODEBAR_BEHAVIOR_TESTS \
   "$SRCROOT/CodeBar/Constants.swift" \
-  "$SRCROOT/CodeBar/KeychainHelper.swift" \
+  "$SRCROOT/CodeBar/CodeBarFileStore.swift" \
   "$SRCROOT/CodeBar/UsageTracker.swift" \
   "$SRCROOT/CodeBar/MenuBarView.swift" \
   "$SRCROOT/CodeBar/IslandMode.swift" \
+  "$SRCROOT/CodeBar/StatusBarIconRenderer.swift" \
+  "$SRCROOT/CodeBar/StatusBarUsagePresentation.swift" \
   "$SRCROOT/CodeBar/SettingsWindow.swift" \
   "$SRCROOT/CodeBar/UpdateChecker.swift" \
   "$SRCROOT/CodeBar/Providers/PlatformProvider.swift" \

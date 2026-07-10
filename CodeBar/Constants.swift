@@ -24,6 +24,9 @@ struct Constants {
     /// Island 收起状态宽度
     static let islandClosedWidth: CGFloat = 210
 
+    /// Island 刘海左侧延伸宽度
+    static let islandClosedLeftExtensionWidth: CGFloat = 160
+
     /// Island 收起状态高度
     static let islandClosedHeight: CGFloat = 36
 
@@ -39,13 +42,16 @@ struct Constants {
     /// 设置窗口高度
     static let settingsWindowHeight: CGFloat = 620
 
+    /// 状态栏图标尺寸
+    static let statusBarIconSize: CGFloat = 13
+
     /// 帮助窗口宽度
     static let helpWindowWidth: CGFloat = 450
 
     /// 帮助窗口高度
     static let helpWindowHeight: CGFloat = 400
 
-    // MARK: - Keychain 键名
+    // MARK: - File storage keys
     /// 统一平台配置存储键（所有平台共用一个条目）
     static let platformConfigsKey = "PlatformConfigs"
 
@@ -67,6 +73,9 @@ struct Constants {
 
     /// 菜单栏多模块展示模式键
     static let menuBarDisplayModeKey = "MenuBarDisplayMode"
+
+    /// 面板样式配置键
+    static let presentationModeKey = "CodeBarPresentationMode"
 
     // MARK: - 通知
     /// ZenMux 5 小时额度刷新通知缓存键

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @main
@@ -34,7 +35,50 @@ private struct ModuleBehaviorTests {
         expect(Int(UsagePercentDisplayMode.used.percent(for: fiveHour).rounded()) == 10, "Used mode should show consumed percent")
         expect(UsagePercentDisplayMode.remaining.value(for: fiveHour) == 9, "Remaining mode should show the remaining value")
         expect(Int(UsagePercentDisplayMode.remaining.percent(for: fiveHour).rounded()) == 90, "Remaining mode should show remaining percent")
-        expect(UsageStatusFormatting.compactPercentText(for: fiveHour, displayMode: .remaining) == "剩90%", "Menu bar compact text should label remaining percent")
+        expect(UsageStatusFormatting.compactPercentText(for: fiveHour, displayMode: .used) == "10%", "Used compact text should omit text prefixes")
+        expect(UsageStatusFormatting.compactPercentText(for: fiveHour, displayMode: .remaining) == "90%", "Remaining compact text should omit text prefixes")
+
+        var statusUsageRotation = StatusBarUsageRotation()
+        statusUsageRotation.registerRefresh()
+        expect(statusUsageRotation.index == 0, "First refresh should retain the first quota")
+        statusUsageRotation.registerRefresh()
+        expect(statusUsageRotation.index == 1, "Second refresh should select the second quota")
+        statusUsageRotation.registerRefresh()
+        expect(statusUsageRotation.index == 0, "Third refresh should cycle back to the first quota")
+
+        let firstStatusUsage = StatusBarUsagePresentation.make(
+            lines: ["5h 45%", "7d 11%"],
+            rotationIndex: 0,
+            fallback: "Codex"
+        )
+        expect(firstStatusUsage.title == "5h 45%", "First cycle should show one usage line")
+        expect(firstStatusUsage.tooltip == "5h 45% / 7d 11%", "Status tooltip should retain both quotas")
+        let secondStatusUsage = StatusBarUsagePresentation.make(
+            lines: ["5h 45%", "7d 11%"],
+            rotationIndex: 1,
+            fallback: "Codex"
+        )
+        expect(secondStatusUsage.title == "7d 11%", "Second cycle should show the next usage line")
+        expect(
+            StatusBarUsagePresentation.make(lines: ["5h 45%"], rotationIndex: 1, fallback: "Codex").title == "5h 45%",
+            "Single quota should remain visible across refreshes"
+        )
+        expect(
+            StatusBarUsagePresentation.make(lines: [], rotationIndex: 0, fallback: "Codex").title == "Codex",
+            "Empty quotas should use the platform fallback"
+        )
+
+        let oversizedIcon = NSImage(size: NSSize(width: 196, height: 196))
+        let statusIcon = StatusBarIconRenderer.render(
+            oversizedIcon,
+            pointSize: Constants.statusBarIconSize,
+            scale: 2,
+            isTemplate: false
+        )
+        expect(statusIcon.size == NSSize(width: Constants.statusBarIconSize, height: Constants.statusBarIconSize), "Status bar renderer should expose a compact point size")
+        let renderedRep = statusIcon.representations.first as? NSBitmapImageRep
+        expect(renderedRep?.pixelsWide == Int(Constants.statusBarIconSize * 2), "Status bar renderer should rasterize oversized icons to the requested pixel width")
+        expect(renderedRep?.pixelsHigh == Int(Constants.statusBarIconSize * 2), "Status bar renderer should rasterize oversized icons to the requested pixel height")
 
         let depletedSoon = UsageItem(
             key: "depleted",
@@ -69,7 +113,7 @@ private struct ModuleBehaviorTests {
             errors: [:]
         )
         expect(compactStatus.title == "Gemini", "Island compact status should use the module platform short name")
-        expect(compactStatus.detail == "剩5%", "Island compact status should show the most constrained remaining quota")
+        expect(compactStatus.detail == "5%", "Island compact status should omit percentage text prefixes")
         expect(compactStatus.tone == .warning, "Island compact status should warn for near-limit quota")
 
         let errorStatus = CodeBarIslandCompactStatusBuilder.status(
@@ -79,6 +123,15 @@ private struct ModuleBehaviorTests {
         )
         expect(errorStatus.tone == .error, "Island compact status should surface module errors")
         expect(errorStatus.detail == "刷新异常", "Island compact status should use compact error text")
+        expect(CodeBarPresentationMode.default == .statusBar, "CodeBar should default to the classic status bar presentation")
+        let presentationDefaultsName = "codebar-presentation-mode-\(UUID().uuidString)"
+        let presentationDefaults = UserDefaults(suiteName: presentationDefaultsName)!
+        defer { presentationDefaults.removePersistentDomain(forName: presentationDefaultsName) }
+        expect(CodeBarPresentationMode.current(in: presentationDefaults) == .statusBar, "Missing panel selection should use status bar mode")
+        CodeBarPresentationMode.save(.island, in: presentationDefaults)
+        expect(CodeBarPresentationMode.current(in: presentationDefaults) == .island, "Saved panel selection should be loaded from UserDefaults")
+        presentationDefaults.set("unknown-mode", forKey: Constants.presentationModeKey)
+        expect(CodeBarPresentationMode.current(in: presentationDefaults) == .statusBar, "Unknown panel selection should fall back to status bar mode")
 
         let hiddenIslandModule = MonitorModule(
             alias: "hidden",
@@ -118,6 +171,42 @@ private struct ModuleBehaviorTests {
         )
         expect(Int(closedFrame.origin.x) == 620, "Island closed frame should be horizontally centered")
         expect(Int(closedFrame.origin.y) == 864, "Island closed frame should be pinned to the top edge")
+        let notchedGeometry = CodeBarIslandDisplayGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 949),
+            auxiliaryTopLeftArea: CGRect(x: 0, y: 950, width: 663, height: 32),
+            auxiliaryTopRightArea: CGRect(x: 848, y: 950, width: 664, height: 32)
+        )
+        expect(notchedGeometry.hasNotch, "MacBook auxiliary areas should enable notch wings")
+        expect(notchedGeometry.notchGapWidth == 185, "Notch gap should match the auxiliary-area separation")
+        expect(notchedGeometry.closedSize == CGSize(width: 345, height: 36), "Collapsed notch should add one 160-point left extension")
+        expect(notchedGeometry.closedFrame.minX == 503, "Collapsed panel should begin 160 points before the hardware notch")
+        expect(notchedGeometry.closedFrame.maxX == 848, "Collapsed panel should end at the hardware notch right edge")
+        expect(notchedGeometry.closedFrame.maxY == 982, "Collapsed panel should remain attached to the screen top")
+        expect(
+            notchedGeometry.closedLeftExtensionFrame.maxX == notchedGeometry.closedNotchGapFrame.minX,
+            "Left content should stop before the hardware notch"
+        )
+        let notchedOpenedFrame = notchedGeometry.openedFrame(contentHeight: 40)
+        expect(notchedOpenedFrame.midX == 755.5, "Expanded panel should stay centered on the hardware notch")
+        expect(notchedOpenedFrame.height == 40, "Expanded panel should not add a second notch-height header")
+
+        let externalGeometry = CodeBarIslandDisplayGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1056),
+            auxiliaryTopLeftArea: nil,
+            auxiliaryTopRightArea: nil
+        )
+        expect(!externalGeometry.hasNotch, "Display without auxiliary areas should use fallback layout")
+        expect(externalGeometry.closedSize == CGSize(width: 210, height: 36), "Fallback compact pill should keep its existing size")
+
+        let malformedGeometry = CodeBarIslandDisplayGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 949),
+            auxiliaryTopLeftArea: CGRect(x: 0, y: 950, width: 900, height: 32),
+            auxiliaryTopRightArea: CGRect(x: 800, y: 950, width: 712, height: 32)
+        )
+        expect(!malformedGeometry.hasNotch, "Overlapping auxiliary areas should use fallback layout")
         let smallScreenVisibleFrame = CGRect(x: 0, y: 24, width: 1440, height: 280)
         let cappedOpenedFrame = CodeBarIslandLayout.openedFrame(
             screenFrame: CGRect(x: 0, y: 0, width: 1440, height: 304),
@@ -129,6 +218,19 @@ private struct ModuleBehaviorTests {
         expect(Constants.islandClosedWidth > 0, "Island closed width should be configured")
         expect(Constants.islandOpenedWidth >= Constants.popoverWidth, "Island opened width should fit existing usage content")
         expect(Constants.islandClosedHeight < Constants.islandOpenedMaximumHeight, "Island closed height should be smaller than opened maximum height")
+        expect(Constants.statusBarIconSize == 13, "Status bar platform icons should stay compact")
+
+        let tempStoreRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codebar-file-store-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempStoreRoot) }
+        let fileStore = CodeBarFileStore(rootDirectory: tempStoreRoot)
+        let storedPayload = Data(#"{"modules":[]}"#.utf8)
+        try! fileStore.save(storedPayload, for: Constants.monitorModulesKey)
+        let storedPayloadURL = tempStoreRoot.appendingPathComponent("\(Constants.monitorModulesKey).json")
+        expect(FileManager.default.fileExists(atPath: storedPayloadURL.path), "CodeBar data should be written under the configured file-store directory")
+        expect((try? fileStore.read(for: Constants.monitorModulesKey)) == storedPayload, "CodeBar file store should read back saved data")
+        try! fileStore.delete(Constants.monitorModulesKey)
+        expect(!FileManager.default.fileExists(atPath: storedPayloadURL.path), "CodeBar file store should delete persisted data files")
 
         let providerAccount = ModuleProviderConfiguration.zenMuxAccount(for: module)
         expect(providerAccount.displayKeys == ["5hour", "7day"], "ZenMux provider should receive all quota keys so the detail page can show all items")

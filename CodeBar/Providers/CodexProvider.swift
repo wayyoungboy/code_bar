@@ -1,28 +1,5 @@
 import Foundation
 
-private final class CodexKeychainCredentialCache {
-    static let shared = CodexKeychainCredentialCache()
-
-    private let lock = NSLock()
-    private var didRead = false
-    private var cachedContent: String?
-
-    private init() {}
-
-    func readCodexAuth() -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if didRead {
-            return cachedContent
-        }
-
-        cachedContent = KeychainHelper.readExternalItem(service: "Codex Auth")
-        didRead = true
-        return cachedContent
-    }
-}
-
 /// Codex CLI / ChatGPT OAuth 订阅额度提供者
 struct CodexProvider: PlatformProvider {
     let platformName = "Codex"
@@ -265,17 +242,12 @@ struct CodexProvider: PlatformProvider {
             }
         }
 
-        if let keychainContent = CodexKeychainCredentialCache.shared.readCodexAuth(),
-           let credentials = parseCredentialsJSON(keychainContent, source: .keychain) {
-            return credentials
-        }
-
         return CodexCredentials(
             accessToken: nil,
             accountID: nil,
             source: .file,
             isStale: false,
-            message: "未找到可用的 Codex ChatGPT OAuth 凭据，请先使用 Codex CLI 登录 ChatGPT"
+            message: "未找到可用的 Codex ChatGPT OAuth 凭据，请先使用 Codex CLI 登录 ChatGPT，并确认 ~/.codex/auth.json 存在"
         )
     }
 
@@ -436,12 +408,10 @@ struct CodexProvider: PlatformProvider {
 
     private struct CodexCredentials {
         enum Source {
-            case keychain
             case file
 
             var displayName: String {
                 switch self {
-                case .keychain: return "Keychain"
                 case .file: return "~/.codex/auth.json"
                 }
             }

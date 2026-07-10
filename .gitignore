@@ -40,4 +40,8 @@ CodeBar.dmg
 # Temporary files
 *.tmp
 *.temp
+*.log
 claude.txt
+
+# Local Codex workspace metadata
+.codex/

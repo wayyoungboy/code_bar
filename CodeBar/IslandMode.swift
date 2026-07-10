@@ -1,5 +1,47 @@
 import SwiftUI
 
+enum CodeBarPresentationMode: String, CaseIterable, Identifiable {
+    case statusBar
+    case island
+
+    var id: String { rawValue }
+    static let `default`: CodeBarPresentationMode = .statusBar
+
+    var title: String {
+        switch self {
+        case .statusBar:
+            return "状态栏"
+        case .island:
+            return "刘海"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .statusBar:
+            return "使用菜单栏状态项和弹出面板"
+        case .island:
+            return "使用屏幕顶部刘海面板"
+        }
+    }
+
+    static func current(in defaults: UserDefaults = .standard) -> CodeBarPresentationMode {
+        guard let rawValue = defaults.string(forKey: Constants.presentationModeKey),
+              let mode = CodeBarPresentationMode(rawValue: rawValue) else {
+            return .default
+        }
+        return mode
+    }
+
+    static func save(_ mode: CodeBarPresentationMode, in defaults: UserDefaults = .standard) {
+        defaults.set(mode.rawValue, forKey: Constants.presentationModeKey)
+    }
+}
+
+extension Notification.Name {
+    static let codeBarPresentationModeChanged = Notification.Name("codeBarPresentationModeChanged")
+}
+
 enum CodeBarIslandState: Equatable {
     case closed
     case opened
@@ -117,9 +159,97 @@ enum CodeBarIslandCompactStatusBuilder {
     }
 }
 
+struct CodeBarIslandDisplayGeometry: Equatable {
+    let screenFrame: CGRect
+    let visibleFrame: CGRect
+    let hasNotch: Bool
+    let notchGapWidth: CGFloat
+    let notchMinX: CGFloat
+    let notchMaxX: CGFloat
+    let notchCenterX: CGFloat
+
+    init(
+        screenFrame: CGRect,
+        visibleFrame: CGRect,
+        auxiliaryTopLeftArea: CGRect?,
+        auxiliaryTopRightArea: CGRect?
+    ) {
+        self.screenFrame = screenFrame
+        self.visibleFrame = visibleFrame
+
+        if let left = auxiliaryTopLeftArea,
+           let right = auxiliaryTopRightArea,
+           left.maxX < right.minX,
+           left.width >= Constants.islandClosedLeftExtensionWidth,
+           right.width > 0 {
+            hasNotch = true
+            notchGapWidth = right.minX - left.maxX
+            notchMinX = left.maxX
+            notchMaxX = right.minX
+            notchCenterX = (left.maxX + right.minX) / 2
+        } else {
+            hasNotch = false
+            notchGapWidth = 0
+            notchMinX = screenFrame.midX
+            notchMaxX = screenFrame.midX
+            notchCenterX = screenFrame.midX
+        }
+    }
+
+    var closedSize: CGSize {
+        CGSize(
+            width: hasNotch
+                ? notchGapWidth + Constants.islandClosedLeftExtensionWidth
+                : Constants.islandClosedWidth,
+            height: Constants.islandClosedHeight
+        )
+    }
+
+    var closedFrame: CGRect {
+        guard hasNotch else {
+            return CodeBarIslandLayout.frame(screenFrame: screenFrame, size: closedSize)
+        }
+        return CGRect(
+            x: notchMinX - Constants.islandClosedLeftExtensionWidth,
+            y: screenFrame.maxY - closedSize.height,
+            width: closedSize.width,
+            height: closedSize.height
+        )
+    }
+
+    var closedLeftExtensionFrame: CGRect {
+        CGRect(
+            x: 0,
+            y: 0,
+            width: hasNotch ? Constants.islandClosedLeftExtensionWidth : closedSize.width,
+            height: closedSize.height
+        )
+    }
+
+    var closedNotchGapFrame: CGRect {
+        CGRect(
+            x: closedLeftExtensionFrame.maxX,
+            y: 0,
+            width: notchGapWidth,
+            height: closedSize.height
+        )
+    }
+
+    func openedFrame(contentHeight: CGFloat) -> CGRect {
+        CodeBarIslandLayout.openedFrame(
+            screenFrame: screenFrame,
+            visibleFrame: visibleFrame,
+            contentHeight: contentHeight,
+            centerX: notchCenterX
+        )
+    }
+}
+
 enum CodeBarIslandLayout {
-    static func frame(screenFrame: CGRect, size: CGSize) -> CGRect {
-        let originX = screenFrame.minX + max(0, (screenFrame.width - size.width) / 2)
+    static func frame(screenFrame: CGRect, size: CGSize, centerX: CGFloat? = nil) -> CGRect {
+        let desiredOriginX = (centerX ?? screenFrame.midX) - size.width / 2
+        let maximumOriginX = screenFrame.maxX - size.width
+        let originX = min(max(desiredOriginX, screenFrame.minX), maximumOriginX)
         let originY = screenFrame.maxY - size.height
         return CGRect(origin: CGPoint(x: originX, y: originY), size: size)
     }
@@ -127,18 +257,22 @@ enum CodeBarIslandLayout {
     static func openedFrame(
         screenFrame: CGRect,
         visibleFrame: CGRect,
-        contentHeight: CGFloat
+        contentHeight: CGFloat,
+        centerX: CGFloat? = nil
     ) -> CGRect {
         let cappedHeight = openedHeight(contentHeight: contentHeight, visibleFrame: visibleFrame)
         let size = CGSize(width: Constants.islandOpenedWidth, height: cappedHeight)
-        let frame = frame(screenFrame: screenFrame, size: size)
+        let frame = frame(screenFrame: screenFrame, size: size, centerX: centerX)
         if frame.minY < visibleFrame.minY {
             return frame.offsetBy(dx: 0, dy: visibleFrame.minY - frame.minY)
         }
         return frame
     }
 
-    static func openedHeight(contentHeight: CGFloat, visibleFrame: CGRect) -> CGFloat {
+    static func openedHeight(
+        contentHeight: CGFloat,
+        visibleFrame: CGRect
+    ) -> CGFloat {
         let desiredHeight = max(Constants.islandClosedHeight, contentHeight)
         let maximumHeight = min(Constants.islandOpenedMaximumHeight, visibleFrame.height)
         return min(desiredHeight, maximumHeight)
@@ -201,6 +335,7 @@ struct CodeBarIslandView: View {
     let onSettings: () -> Void
     let onQuit: () -> Void
     var maxContentHeight: CGFloat = Constants.islandOpenedMaximumHeight - Constants.islandClosedHeight - 16
+    var notchGapWidth: CGFloat = 0
 
     private var isOpened: Bool {
         state.isOpened
@@ -227,7 +362,7 @@ struct CodeBarIslandView: View {
         .padding(.horizontal, isOpened ? 18 : 14)
         .padding(.bottom, isOpened ? 16 : 0)
         .frame(
-            width: isOpened ? Constants.islandOpenedWidth : Constants.islandClosedWidth,
+            width: isOpened ? Constants.islandOpenedWidth : compactWidth,
             alignment: .top
         )
         .background(Color.black)
@@ -243,7 +378,46 @@ struct CodeBarIslandView: View {
         .animation(.spring(response: 0.42, dampingFraction: 0.86), value: state)
     }
 
+    private var compactWidth: CGFloat {
+        notchGapWidth > 0
+            ? notchGapWidth + Constants.islandClosedLeftExtensionWidth
+            : Constants.islandClosedWidth
+    }
+
+    @ViewBuilder
     private var header: some View {
+        if notchGapWidth > 0, isOpened {
+            HStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    platformIdentity
+                    compactDetail
+                    closeButton
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Color.clear
+                    .frame(width: notchGapWidth)
+
+                Color.clear
+                    .frame(maxWidth: .infinity)
+            }
+        } else if notchGapWidth > 0 {
+            HStack(spacing: 8) {
+                platformIdentity
+                compactDetail
+                Spacer(minLength: 0)
+            }
+        } else {
+            HStack(spacing: 8) {
+                platformIdentity
+                compactDetail
+                Spacer(minLength: 0)
+                if isOpened { closeButton }
+            }
+        }
+    }
+
+    private var platformIdentity: some View {
         HStack(spacing: 8) {
             if let platform = compactStatus.platform {
                 PlatformLogoView(platform: platform, size: 14)
@@ -256,27 +430,28 @@ struct CodeBarIslandView: View {
             Text(compactStatus.title)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .lineLimit(1)
-
-            if !compactStatus.detail.isEmpty {
-                Text(compactStatus.detail)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(toneColor)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            if isOpened {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .buttonStyle(.plain)
-                .help("关闭")
-            }
         }
         .foregroundColor(.white)
-        .contentShape(Rectangle())
+    }
+
+    @ViewBuilder
+    private var compactDetail: some View {
+        if !compactStatus.detail.isEmpty {
+            Text(compactStatus.detail)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundColor(toneColor)
+                .lineLimit(1)
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .bold))
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.white)
+        .help("关闭")
     }
 
     private var toneColor: Color {

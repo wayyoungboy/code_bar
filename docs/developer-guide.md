@@ -126,9 +126,9 @@ case .yourPlatform(let config):
 Codex 与其他平台不同：
 
 - 不在 CodeBar 中保存 access token
-- 自动读取 `~/.codex/auth.json`，文件不可用时 fallback 到 Keychain `Codex Auth`
+- 自动读取 `~/.codex/auth.json`
 - 仅支持 `auth_mode == "chatgpt"`
-- 代理配置可选，保存到 CodeBar Keychain
+- 代理配置可选，保存到 `~/.code_bar/`
 - 请求 `chatgpt.com/backend-api/wham/usage`
 
 新增 Codex 字段时，应优先保持与接口原始字段名对应的 `CodingKeys`，再映射成 UI 需要的 `UsageItem` 或 `extraInfo`。
@@ -137,8 +137,9 @@ Codex 与其他平台不同：
 
 | 数据 | 存储位置 |
 | --- | --- |
-| 监控模块、模块凭据、展示项、排序 | Keychain `MonitorModules` |
-| Codex OAuth | Codex CLI Keychain / `~/.codex/auth.json` |
+| 监控模块、模块凭据、展示项、排序 | `~/.code_bar/MonitorModules.json` |
+| 平台代理等配置 | `~/.code_bar/PlatformConfigs.json` |
+| Codex OAuth | `~/.codex/auth.json` |
 | 用量缓存 | UserDefaults |
 
 ## UI 约定

@@ -22,7 +22,7 @@ CodeBar 是一个 macOS 菜单栏应用，用于监控多个 AI Coding 平台的
 | 应用框架 | SwiftUI + AppKit |
 | 菜单栏 | `NSStatusItem` + `NSPopover` |
 | 数据刷新 | `UsageTracker` + `Timer` |
-| 本地配置 | macOS Keychain + UserDefaults |
+| 本地配置 | `~/.code_bar/` + UserDefaults |
 | 网络请求 | `URLSession` |
 | 发布 | GitHub Actions + GitHub Releases |
 
@@ -49,7 +49,7 @@ CodeBar/
 ├── SettingsWindow.swift
 ├── UsageTracker.swift
 ├── Constants.swift
-├── KeychainHelper.swift
+├── CodeBarFileStore.swift
 ├── UpdateChecker.swift
 ├── Assets.xcassets
 └── Providers/
@@ -110,7 +110,7 @@ struct PlatformUsageData {
 ## 刷新流程
 
 1. `CodeBarApp` 启动并创建共享的 `UsageTracker`
-2. `UsageTracker.loadModules()` 从 Keychain 加载监控模块
+2. `UsageTracker.loadModules()` 从 `~/.code_bar/MonitorModules.json` 加载监控模块
 3. 用户在设置页添加或编辑模块后，`refresh()` 按模块创建 Provider 并调用 `fetchUsage()`
 4. 成功结果写入 `moduleUsages[module.id]`
 5. 失败信息写入 `moduleErrors[module.id]`
@@ -121,19 +121,14 @@ struct PlatformUsageData {
 
 | Provider | 凭据来源 | 主要用量 |
 | --- | --- | --- |
-| BailianProvider | CodeBar Keychain 配置 | 账单月、5 小时、周 |
-| ZenMuxProvider | CodeBar Keychain 多账号配置 | 5 小时、7 天 |
-| MimoProvider | CodeBar Keychain 配置 | 月用量、总用量 |
-| CodexProvider | Codex CLI Keychain / `~/.codex/auth.json` | 5 小时、7 天、额外 rate limits |
+| BailianProvider | CodeBar `~/.code_bar/` 配置 | 账单月、5 小时、周 |
+| ZenMuxProvider | CodeBar `~/.code_bar/` 多账号配置 | 5 小时、7 天 |
+| MimoProvider | CodeBar `~/.code_bar/` 配置 | 月用量、总用量 |
+| CodexProvider | `~/.codex/auth.json` | 5 小时、7 天、额外 rate limits |
 
 ## Codex 设计
 
-Codex 不在 CodeBar 中保存 token。Provider 按优先级读取已有 Codex CLI OAuth：
-
-1. 文件：`~/.codex/auth.json`
-2. macOS Keychain service：`Codex Auth`
-
-Keychain fallback 使用进程级缓存，每次应用启动后最多读取一次，避免定时刷新反复触发 macOS 授权弹窗。
+Codex 不在 CodeBar 中保存 token。Provider 只读取已有 Codex CLI OAuth 文件：`~/.codex/auth.json`。
 
 仅 `auth_mode == "chatgpt"` 时可查询用量。请求接口：
 
@@ -154,11 +149,12 @@ Codex 支持可选代理。未配置代理时直接请求；配置 `http://host:
 
 ## 配置存储
 
-- 监控模块配置存储在 Keychain 条目 `MonitorModules`
+- 监控模块配置存储在 `~/.code_bar/MonitorModules.json`
+- 平台配置存储在 `~/.code_bar/PlatformConfigs.json`
 - 模块内包含供应商凭据、别名、展示开关、模块级通知开关、显示项、重置时间项和排序
 - 用量缓存存储在 UserDefaults
 - ZenMux 的别名、API Key、展示项和重置时间项都是模块级配置
-- Codex OAuth token 不复制到 CodeBar 配置，只读取 Codex CLI 已存在的凭据
+- Codex OAuth token 不复制到 CodeBar 配置，只读取 Codex CLI 已存在的文件凭据
 
 ## 发布流程
 
