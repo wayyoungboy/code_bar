@@ -5,6 +5,7 @@ struct CodexProvider: PlatformProvider {
     let platformName = "Codex"
     private let config: CodexConfig
     private let usageURL = "https://chatgpt.com/backend-api/wham/usage"
+    private let resetCreditsURL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
 
     init(config: CodexConfig = CodexConfig()) {
         self.config = config
@@ -62,6 +63,11 @@ struct CodexProvider: PlatformProvider {
         guard !items.isEmpty else {
             throw PlatformError.unknown("无 Codex 额度数据")
         }
+        let resetCreditsResult = await fetchResetCredits(
+            accessToken: accessToken,
+            accountID: credentials.accountID,
+            session: session
+        )
 
         var extra: [(label: String, value: String)] = []
         let planType = displayPlanType(from: usageResponse.planType)
@@ -69,13 +75,13 @@ struct CodexProvider: PlatformProvider {
             extra.append((label: "套餐", value: planType))
         }
         extra.append((label: "凭据来源", value: credentials.source.displayName))
-        if let accountID = credentials.accountID, !accountID.isEmpty {
+        if let accountID = maskedUniqueID(credentials.accountID) {
             extra.append((label: "账号 ID", value: accountID))
         }
         if credentials.isStale {
             extra.append((label: "提示", value: "Token 可能已超过 8 天未刷新"))
         }
-        appendAdditionalInfo(from: usageResponse, to: &extra)
+        appendAdditionalInfo(from: usageResponse, resetCreditsResult: resetCreditsResult, to: &extra)
 
         return PlatformUsageData(
             platformName: platformName,
@@ -95,6 +101,16 @@ struct CodexProvider: PlatformProvider {
         let data = Data(json.utf8)
         let response = try JSONDecoder().decode(CodexUsageResponse.self, from: data)
         return CodexProvider().makeUsageItems(from: response)
+    }
+
+    static func testResetCreditsExtraInfo(from json: String, timeZone: TimeZone) throws -> [(label: String, value: String)] {
+        let data = Data(json.utf8)
+        let response = try JSONDecoder().decode(CodexResetCreditsResponse.self, from: data)
+        return CodexProvider().resetCreditsExtraInfo(
+            from: .success(response),
+            fallbackAvailableCount: nil,
+            timeZone: timeZone
+        )
     }
 #endif
 
@@ -205,19 +221,165 @@ struct CodexProvider: PlatformProvider {
         }
     }
 
-    private func appendAdditionalInfo(from response: CodexUsageResponse, to extra: inout [(label: String, value: String)]) {
+    private func appendAdditionalInfo(
+        from response: CodexUsageResponse,
+        resetCreditsResult: ResetCreditsFetchResult,
+        to extra: inout [(label: String, value: String)]
+    ) {
         if let credits = response.credits {
             extra.append((label: "Credits", value: credits.summary))
         }
         if let spendControl = response.spendControl {
             extra.append((label: "消费限制", value: spendControl.summary))
         }
-        if let resetCredits = response.rateLimitResetCredits?.availableCount {
-            extra.append((label: "可用重置次数", value: "\(resetCredits)"))
-        }
+        extra.append(contentsOf: resetCreditsExtraInfo(
+            from: resetCreditsResult,
+            fallbackAvailableCount: response.rateLimitResetCredits?.availableCount
+        ))
         if let reachedType = response.rateLimitReachedType, !reachedType.isEmpty {
             extra.append((label: "限制类型", value: reachedType))
         }
+    }
+
+    private func fetchResetCredits(accessToken: String, accountID: String?, session: URLSession) async -> ResetCreditsFetchResult {
+        guard let url = URL(string: resetCreditsURL) else {
+            return .unavailable
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("codex-cli", forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let accountID, !accountID.isEmpty {
+            request.setValue(accountID, forHTTPHeaderField: "ChatGPT-Account-Id")
+        }
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return .unavailable
+            }
+
+            switch httpResponse.statusCode {
+            case 200:
+                do {
+                    return .success(try JSONDecoder().decode(CodexResetCreditsResponse.self, from: data))
+                } catch {
+                    return .unavailable
+                }
+            case 401:
+                return .unauthorized
+            default:
+                return .unavailable
+            }
+        } catch {
+            return .unavailable
+        }
+    }
+
+    private func resetCreditsExtraInfo(
+        from result: ResetCreditsFetchResult,
+        fallbackAvailableCount: Int?,
+        timeZone: TimeZone = .current
+    ) -> [(label: String, value: String)] {
+        var info: [(label: String, value: String)] = []
+
+        switch result {
+        case .success(let response):
+            if let availableCount = response.availableCount ?? fallbackAvailableCount {
+                info.append((label: "可用重置次数", value: "\(availableCount)"))
+            }
+
+            for (index, credit) in response.credits.enumerated() {
+                if let summary = resetCreditSummary(for: credit, index: index, timeZone: timeZone) {
+                    info.append(summary)
+                }
+            }
+        case .unauthorized:
+            if let fallbackAvailableCount {
+                info.append((label: "可用重置次数", value: "\(fallbackAvailableCount)"))
+            }
+            info.append((label: "重置卡", value: "凭据失效或 Authorization header 缺失"))
+        case .unavailable:
+            if let fallbackAvailableCount {
+                info.append((label: "可用重置次数", value: "\(fallbackAvailableCount)"))
+            }
+        }
+
+        return info
+    }
+
+    private func resetCreditSummary(
+        for credit: CodexResetCredit,
+        index: Int,
+        timeZone: TimeZone
+    ) -> (label: String, value: String)? {
+        var parts: [String] = []
+
+        if let title = trimmedNonEmpty(credit.title) {
+            parts.append(title)
+        }
+        if let status = trimmedNonEmpty(credit.status) {
+            parts.append(status)
+        }
+        if let grantedAt = localDateTimeText(from: credit.grantedAt, timeZone: timeZone) {
+            parts.append("发放 \(grantedAt)")
+        }
+        if let expiresAt = localDateTimeText(from: credit.expiresAt, timeZone: timeZone) {
+            parts.append("过期 \(expiresAt)")
+        }
+
+        guard !parts.isEmpty else { return nil }
+        return (label: "重置卡 \(index + 1)", value: parts.joined(separator: " · "))
+    }
+
+    private func localDateTimeText(from rawValue: String?, timeZone: TimeZone) -> String? {
+        guard let rawValue = trimmedNonEmpty(rawValue),
+              let date = parseAPIDate(rawValue) else {
+            return nil
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
+    }
+
+    private func parseAPIDate(_ value: String) -> Date? {
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractionalFormatter.date(from: value) {
+            return date
+        }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        if let date = formatter.date(from: value) {
+            return date
+        }
+
+        if let timestamp = Double(value) {
+            let seconds = timestamp > 10_000_000_000 ? timestamp / 1_000 : timestamp
+            return Date(timeIntervalSince1970: seconds)
+        }
+
+        return nil
+    }
+
+    private func trimmedNonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private func maskedUniqueID(_ value: String?) -> String? {
+        guard let trimmed = trimmedNonEmpty(value) else { return nil }
+        guard trimmed.count > 12 else { return trimmed }
+        return "\(trimmed.prefix(8))...\(trimmed.suffix(4))"
     }
 
     private func readCredentials() -> CodexCredentials {
@@ -422,6 +584,12 @@ struct CodexProvider: PlatformProvider {
         let source: Source
         let isStale: Bool
         let message: String?
+    }
+
+    private enum ResetCreditsFetchResult {
+        case success(CodexResetCreditsResponse)
+        case unauthorized
+        case unavailable
     }
 
     private struct CodexAuthJSON: Decodable {
@@ -633,6 +801,88 @@ struct CodexProvider: PlatformProvider {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             availableCount = CodexProvider.decodeIntIfPresent(container, forKey: .availableCount)
+        }
+    }
+
+    private struct CodexResetCreditsResponse: Decodable {
+        let availableCount: Int?
+        let credits: [CodexResetCredit]
+
+        enum CodingKeys: String, CodingKey {
+            case availableCount = "available_count"
+            case credits
+            case data
+            case items
+            case resetCredits = "reset_credits"
+            case rateLimitResetCredits = "rate_limit_reset_credits"
+        }
+
+        init(from decoder: Decoder) throws {
+            if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+                var availableCount = CodexProvider.decodeIntIfPresent(container, forKey: .availableCount)
+                var credits = Self.decodeCredits(from: container)
+
+                if credits == nil,
+                   let nested = Self.decodeNestedResponse(from: container) {
+                    availableCount = availableCount ?? nested.availableCount
+                    credits = nested.credits
+                }
+
+                self.availableCount = availableCount
+                self.credits = credits ?? []
+                return
+            }
+
+            let container = try decoder.singleValueContainer()
+            availableCount = nil
+            credits = (try? container.decode([CodexResetCredit].self)) ?? []
+        }
+
+        private static func decodeCredits(from container: KeyedDecodingContainer<CodingKeys>) -> [CodexResetCredit]? {
+            if let credits = try? container.decodeIfPresent([CodexResetCredit].self, forKey: .credits) {
+                return credits
+            }
+            if let credits = try? container.decodeIfPresent([CodexResetCredit].self, forKey: .data) {
+                return credits
+            }
+            if let credits = try? container.decodeIfPresent([CodexResetCredit].self, forKey: .items) {
+                return credits
+            }
+            if let credits = try? container.decodeIfPresent([CodexResetCredit].self, forKey: .resetCredits) {
+                return credits
+            }
+            return nil
+        }
+
+        private static func decodeNestedResponse(from container: KeyedDecodingContainer<CodingKeys>) -> CodexResetCreditsResponse? {
+            for key in [CodingKeys.data, .items, .resetCredits, .rateLimitResetCredits] {
+                if let nested = try? container.decodeIfPresent(CodexResetCreditsResponse.self, forKey: key) {
+                    return nested
+                }
+            }
+            return nil
+        }
+    }
+
+    private struct CodexResetCredit: Decodable {
+        let status: String?
+        let title: String?
+        let grantedAt: String?
+        let expiresAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case status
+            case title
+            case grantedAt = "granted_at"
+            case expiresAt = "expires_at"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            status = CodexProvider.decodeStringIfPresent(container, forKey: .status)
+            title = CodexProvider.decodeStringIfPresent(container, forKey: .title)
+            grantedAt = CodexProvider.decodeStringIfPresent(container, forKey: .grantedAt)
+            expiresAt = CodexProvider.decodeStringIfPresent(container, forKey: .expiresAt)
         }
     }
 }

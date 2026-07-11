@@ -403,5 +403,31 @@ private struct ModuleBehaviorTests {
         expect(missingWindowItems.map(\.key) == ["5hour", "7day"], "Codex primary and secondary windows should keep stable keys when limit_window_seconds is missing")
         expect(missingWindowItems.map(\.used) == [90, 25], "Codex missing-window fallback should preserve used and remaining percent semantics")
 
+        let resetCreditsJSON = """
+        {
+          "available_count": "2",
+          "credits": [
+            {
+              "status": "available",
+              "title": "Rate limit reset",
+              "granted_at": "2026-07-10T12:00:00Z",
+              "expires_at": "2026-07-17T12:00:00Z"
+            }
+          ]
+        }
+        """
+        let resetCreditInfo = try! CodexProvider.testResetCreditsExtraInfo(
+            from: resetCreditsJSON,
+            timeZone: TimeZone(secondsFromGMT: 8 * 3_600)!
+        )
+        expect(resetCreditInfo.count == 2, "Codex reset credit info should include count and one credit summary")
+        expect(resetCreditInfo[0].label == "可用重置次数", "Codex reset credit info should label available_count")
+        expect(resetCreditInfo[0].value == "2", "Codex reset credit info should preserve available_count")
+        expect(resetCreditInfo[1].label == "重置卡 1", "Codex reset credit info should label individual reset cards")
+        expect(
+            resetCreditInfo[1].value == "Rate limit reset · available · 发放 2026-07-10 20:00 · 过期 2026-07-17 20:00",
+            "Codex reset credit info should convert granted_at and expires_at from UTC to local time"
+        )
+
     }
 }
