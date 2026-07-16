@@ -418,13 +418,23 @@ struct MenuBarView: View {
                     .foregroundColor(.secondary)
             } else if let usage {
                 let visibleItems = DetailUsagePresentation.items(from: usage, module: module)
-                ForEach(visibleItems, id: \.key) { item in
-                    usageRow(
-                        item: item,
-                        displayMode: module.percentDisplayMode,
-                        resetDate: DetailUsagePresentation.resetDate(for: item, module: module),
-                        compact: module.isCollapsed
-                    )
+                if visibleItems.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "minus.circle")
+                        Text(module.isCollapsed ? "暂无额度数据" : "当前未返回限额数据")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .help("请求成功，但当前没有返回可展示的限额数据")
+                } else {
+                    ForEach(visibleItems, id: \.key) { item in
+                        usageRow(
+                            item: item,
+                            displayMode: module.percentDisplayMode,
+                            resetDate: DetailUsagePresentation.resetDate(for: item, module: module),
+                            compact: module.isCollapsed
+                        )
+                    }
                 }
 
                 if !module.isCollapsed, !usage.extraInfo.isEmpty {

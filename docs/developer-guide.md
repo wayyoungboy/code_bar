@@ -137,7 +137,7 @@ Codex 与其他平台不同：
 
 | 数据 | 存储位置 |
 | --- | --- |
-| 监控模块、模块凭据、展示项、排序 | `~/.code_bar/MonitorModules.json` |
+| 监控模块、模块凭据、指标选择策略、排序 | `~/.code_bar/MonitorModules.json` |
 | 平台代理等配置 | `~/.code_bar/PlatformConfigs.json` |
 | Codex OAuth | `~/.codex/auth.json` |
 | 用量缓存 | UserDefaults |
@@ -148,8 +148,10 @@ Codex 与其他平台不同：
 - Provider 不直接操作 UI
 - `UsageItem.key` 必须稳定，避免用户展示配置失效
 - `extraInfo` 用于展示套餐、账号状态、余额、到期时间等非进度条信息
-- 模块级 `displayKeys` 决定详情页和菜单栏显示哪些用量项
-- 模块级 `resetTimeKeys` 决定用量项是否显示重置时间
+- 模块级 `metricSelectionMode` 决定菜单栏使用自动发现还是自定义指标
+- 自定义模式下，模块级 `displayKeys` 决定菜单栏轮换哪些用量项；缺失项保留配置并由可用项临时补位
+- 详情页始终展示 Provider 当前实际返回的全部用量项
+- 模块级 `resetTimeKeys` 决定菜单栏指标是否附带重置倒计时
 - `showInMenuBar` 为 true 的模块会创建独立 `NSStatusItem`
 - 按钮、开关、拖动排序和帮助内容放在 `SettingsWindow`
 

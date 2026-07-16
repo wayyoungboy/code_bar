@@ -60,9 +60,6 @@ struct CodexProvider: PlatformProvider {
         }
 
         let items = makeUsageItems(from: usageResponse)
-        guard !items.isEmpty else {
-            throw PlatformError.unknown("无 Codex 额度数据")
-        }
         let resetCreditsResult = await fetchResetCredits(
             accessToken: accessToken,
             accountID: credentials.accountID,
@@ -119,18 +116,66 @@ struct CodexProvider: PlatformProvider {
 
         if let rateLimit = response.rateLimit {
             items.append(contentsOf: [
-                rateLimit.primaryWindow.flatMap { makeUsageItem(from: $0, fallbackSeconds: 18_000) },
-                rateLimit.secondaryWindow.flatMap { makeUsageItem(from: $0, fallbackSeconds: 604_800) },
+                rateLimit.primaryWindow.flatMap {
+                    makeUsageItem(
+                        from: $0,
+                        key: CodexQuotaKey.primary,
+                        fallbackLabel: CodexQuotaKey.fallbackLabel(for: CodexQuotaKey.primary)
+                    )
+                },
+                rateLimit.secondaryWindow.flatMap {
+                    makeUsageItem(
+                        from: $0,
+                        key: CodexQuotaKey.secondary,
+                        fallbackLabel: CodexQuotaKey.fallbackLabel(for: CodexQuotaKey.secondary)
+                    )
+                },
+            ].compactMap { $0 })
+        }
+
+        if let codeReviewRateLimit = response.codeReviewRateLimit {
+            items.append(contentsOf: [
+                codeReviewRateLimit.primaryWindow.flatMap {
+                    makeUsageItem(
+                        from: $0,
+                        key: CodexQuotaKey.codeReviewPrimary,
+                        fallbackLabel: CodexQuotaKey.fallbackLabel(for: CodexQuotaKey.codeReviewPrimary),
+                        labelPrefix: "代码审查"
+                    )
+                },
+                codeReviewRateLimit.secondaryWindow.flatMap {
+                    makeUsageItem(
+                        from: $0,
+                        key: CodexQuotaKey.codeReviewSecondary,
+                        fallbackLabel: CodexQuotaKey.fallbackLabel(for: CodexQuotaKey.codeReviewSecondary),
+                        labelPrefix: "代码审查"
+                    )
+                },
             ].compactMap { $0 })
         }
 
         for additionalLimit in response.additionalRateLimits ?? [] {
             guard let rateLimit = additionalLimit.rateLimit else { continue }
-            let keyPrefix = "additional-\(stableKey(from: additionalLimit.limitName ?? additionalLimit.meteredFeature ?? "limit"))"
+            let stableLimitKey = stableKey(from: additionalLimit.limitName ?? additionalLimit.meteredFeature ?? "limit")
+            let keyPrefix = "codex.additional.\(stableLimitKey.isEmpty ? "limit" : stableLimitKey)"
             let labelPrefix = additionalLimit.limitName ?? additionalLimit.meteredFeature ?? "额外额度"
             items.append(contentsOf: [
-                rateLimit.primaryWindow.flatMap { makeUsageItem(from: $0, keyPrefix: keyPrefix, labelPrefix: labelPrefix) },
-                rateLimit.secondaryWindow.flatMap { makeUsageItem(from: $0, keyPrefix: keyPrefix, labelPrefix: labelPrefix) },
+                rateLimit.primaryWindow.flatMap {
+                    makeUsageItem(
+                        from: $0,
+                        key: "\(keyPrefix).primary",
+                        fallbackLabel: "\(labelPrefix)短周期",
+                        labelPrefix: labelPrefix
+                    )
+                },
+                rateLimit.secondaryWindow.flatMap {
+                    makeUsageItem(
+                        from: $0,
+                        key: "\(keyPrefix).secondary",
+                        fallbackLabel: "\(labelPrefix)长期",
+                        labelPrefix: labelPrefix
+                    )
+                },
             ].compactMap { $0 })
         }
 
@@ -139,40 +184,31 @@ struct CodexProvider: PlatformProvider {
 
     private func makeUsageItem(
         from window: CodexRateLimitWindow,
-        keyPrefix: String? = nil,
-        labelPrefix: String? = nil,
-        fallbackSeconds: Int? = nil
+        key: String,
+        fallbackLabel: String,
+        labelPrefix: String? = nil
     ) -> UsageItem? {
         guard let usedPercent = window.usedPercent else { return nil }
         let used = max(0, min(100, Int(usedPercent.rounded())))
-        guard let seconds = window.limitWindowSeconds ?? fallbackSeconds else { return nil }
         let resetDate = window.resetAt
             .flatMap { Date(timeIntervalSince1970: TimeInterval($0)) }
-            ?? Date().addingTimeInterval(TimeInterval(max(window.resetAfterSeconds ?? seconds, 0)))
-        let baseKey = tierKey(for: seconds)
-        let baseLabel = tierLabel(for: seconds)
+            ?? window.resetAfterSeconds.map { Date().addingTimeInterval(TimeInterval(max($0, 0))) }
+        let label: String
+        if let seconds = window.limitWindowSeconds {
+            let baseLabel = tierLabel(for: seconds)
+            label = labelPrefix.map { "\($0) \(baseLabel)" } ?? baseLabel
+        } else {
+            label = fallbackLabel
+        }
 
         return UsageItem(
-            key: keyPrefix.map { "\($0)-\(baseKey)" } ?? baseKey,
-            label: labelPrefix.map { "\($0) \(baseLabel)" } ?? baseLabel,
+            key: key,
+            label: label,
             used: used,
             total: 100,
             unit: "%",
             resetDate: resetDate
         )
-    }
-
-    private func tierKey(for seconds: Int) -> String {
-        switch seconds {
-        case 18_000: return "5hour"
-        case 604_800: return "7day"
-        default:
-            let hours = seconds / 3_600
-            if hours >= 24 {
-                return "\(hours / 24)day"
-            }
-            return "\(max(hours, 1))hour"
-        }
     }
 
     private func tierLabel(for seconds: Int) -> String {

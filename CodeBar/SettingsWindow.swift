@@ -57,7 +57,11 @@ struct SettingsWindowView: View {
             .padding(20)
         }
         .sheet(item: $moduleEditorSession) { session in
-            ModuleEditorView(module: session.module, existingModules: tracker.modules) { module in
+            ModuleEditorView(
+                module: session.module,
+                existingModules: tracker.modules,
+                currentUsage: session.module.flatMap { tracker.moduleUsages[$0.id] }
+            ) { module in
                 if session.module == nil {
                     tracker.addModule(module)
                 } else {
@@ -828,10 +832,25 @@ struct ZenMuxAccountEditorView: View {
     }
 }
 
+private enum ModuleQuotaAvailability: Equatable {
+    case available
+    case unavailable
+    case unknown
+}
+
+private struct ModuleQuotaOption: Identifiable {
+    let key: String
+    let label: String
+    let availability: ModuleQuotaAvailability
+
+    var id: String { key }
+}
+
 struct ModuleEditorView: View {
     @Environment(\.dismiss) private var dismiss
     let module: MonitorModule?
     let existingModules: [MonitorModule]
+    let currentUsage: PlatformUsageData?
     let onSave: (MonitorModule) -> Void
 
     @State private var provider: PlatformType
@@ -844,6 +863,7 @@ struct ModuleEditorView: View {
     @State private var mimoUserId: String
     @State private var codexProxyURL: String
     @State private var geminiProxyURL: String
+    @State private var metricSelectionMode: MetricSelectionMode
     @State private var displayKeys: Set<String>
     @State private var resetTimeKeys: Set<String>
     @State private var isMonitoringEnabled: Bool
@@ -852,14 +872,25 @@ struct ModuleEditorView: View {
     @State private var isNotificationEnabled: Bool
     @State private var percentDisplayMode: UsagePercentDisplayMode
 
-    init(module: MonitorModule?, existingModules: [MonitorModule] = [], onSave: @escaping (MonitorModule) -> Void) {
+    init(
+        module: MonitorModule?,
+        existingModules: [MonitorModule] = [],
+        currentUsage: PlatformUsageData? = nil,
+        onSave: @escaping (MonitorModule) -> Void
+    ) {
         self.module = module
         self.existingModules = existingModules
+        self.currentUsage = currentUsage
         self.onSave = onSave
 
         let initialProvider = module?.platform ?? .zenmux
         _provider = State(initialValue: initialProvider)
         _alias = State(initialValue: module?.editorAlias ?? "")
+        _metricSelectionMode = State(
+            initialValue: initialProvider == .codex
+                ? (module?.metricSelectionMode ?? .automatic)
+                : .custom
+        )
         let initialDisplayKeys = module?.editorDisplayKeys ?? ModuleEditorView.defaultDisplayKeys(for: initialProvider)
         _displayKeys = State(initialValue: Set(initialDisplayKeys.isEmpty ? ModuleEditorView.defaultDisplayKeys(for: initialProvider) : initialDisplayKeys))
         _resetTimeKeys = State(initialValue: Set(module?.editorResetTimeKeys ?? []))
@@ -920,6 +951,7 @@ struct ModuleEditorView: View {
                     get: { provider },
                     set: { newValue in
                         provider = newValue
+                        metricSelectionMode = Self.defaultMetricSelectionMode(for: newValue)
                         displayKeys = Set(Self.defaultDisplayKeys(for: newValue))
                         resetTimeKeys = []
                     }
@@ -946,7 +978,9 @@ struct ModuleEditorView: View {
 
             moduleOptions
 
-            if !quotaOptions.isEmpty {
+            if provider == .codex {
+                codexMetricSelection
+            } else if !quotaOptions.isEmpty {
                 quotaSelection
             }
 
@@ -1096,21 +1130,189 @@ struct ModuleEditorView: View {
         .font(.caption)
     }
 
-    private var quotaOptions: [(key: String, label: String)] {
+    private var codexMetricSelection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("菜单栏指标")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text(metricSelectionMode == .automatic ? codexAutomaticSummary : "最多选择 2 项，按列表顺序轮换")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Picker("菜单栏指标", selection: codexMetricSelectionModeBinding) {
+                    ForEach(MetricSelectionMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+                .labelsHidden()
+            }
+
+            if metricSelectionMode == .custom {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(quotaOptions) { option in
+                        HStack(spacing: 10) {
+                            Toggle(option.label, isOn: codexDisplayBinding(for: option))
+                                .toggleStyle(.checkbox)
+                                .disabled(!displayKeys.contains(option.key) && displayKeys.count >= ModuleUsageSelection.maximumStatusItemCount)
+
+                            Spacer()
+
+                            codexAvailabilityLabel(option.availability)
+
+                            Toggle("倒计时", isOn: codexResetTimeBinding(for: option))
+                                .toggleStyle(.checkbox)
+                                .disabled(!displayKeys.contains(option.key))
+                        }
+                    }
+                }
+
+                Text("已选择但暂时无数据的指标会保留；菜单栏会临时使用其他可用指标补位。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(10)
+        .background(Color.green.opacity(0.06))
+        .cornerRadius(8)
+    }
+
+    private var quotaOptions: [ModuleQuotaOption] {
         switch provider {
         case .bailian:
-            return [("billMonth", "账单月"), ("5hour", "5小时"), ("week", "周")]
+            return [
+                ModuleQuotaOption(key: "billMonth", label: "账单月", availability: .available),
+                ModuleQuotaOption(key: "5hour", label: "5小时", availability: .available),
+                ModuleQuotaOption(key: "week", label: "周", availability: .available),
+            ]
         case .zenmux:
-            return [("5hour", "5小时"), ("7day", "7天")]
+            return [
+                ModuleQuotaOption(key: "5hour", label: "5小时", availability: .available),
+                ModuleQuotaOption(key: "7day", label: "7天", availability: .available),
+            ]
         case .gemini:
-            return [("gemini_pro", "Pro"), ("gemini_flash", "Flash"), ("gemini_flash_lite", "Flash Lite")]
-        case .mimo, .codex:
+            return [
+                ModuleQuotaOption(key: "gemini_pro", label: "Pro", availability: .available),
+                ModuleQuotaOption(key: "gemini_flash", label: "Flash", availability: .available),
+                ModuleQuotaOption(key: "gemini_flash_lite", label: "Flash Lite", availability: .available),
+            ]
+        case .codex:
+            return codexQuotaOptions
+        case .mimo:
             return []
+        }
+    }
+
+    private var codexQuotaOptions: [ModuleQuotaOption] {
+        let missingAvailability: ModuleQuotaAvailability = currentUsage == nil ? .unknown : .unavailable
+        let availableItems = ModuleUsageSelection.prioritizedItems(currentUsage?.items ?? [], for: .codex)
+        var result: [ModuleQuotaOption] = []
+
+        func appendOption(key: String, fallbackLabel: String) {
+            let canonicalKey = CodexQuotaKey.canonical(key)
+            guard !result.contains(where: { $0.key == canonicalKey }) else { return }
+            if let item = availableItems.first(where: { CodexQuotaKey.canonical($0.key) == canonicalKey }) {
+                result.append(ModuleQuotaOption(key: canonicalKey, label: item.label, availability: .available))
+            } else {
+                result.append(ModuleQuotaOption(key: canonicalKey, label: fallbackLabel, availability: missingAvailability))
+            }
+        }
+
+        appendOption(key: CodexQuotaKey.primary, fallbackLabel: CodexQuotaKey.fallbackLabel(for: CodexQuotaKey.primary))
+        appendOption(key: CodexQuotaKey.secondary, fallbackLabel: CodexQuotaKey.fallbackLabel(for: CodexQuotaKey.secondary))
+
+        for item in availableItems {
+            appendOption(key: item.key, fallbackLabel: item.label)
+        }
+        for key in displayKeys {
+            appendOption(key: key, fallbackLabel: CodexQuotaKey.fallbackLabel(for: key))
+        }
+
+        return result
+    }
+
+    private var codexAutomaticSummary: String {
+        guard let currentUsage else {
+            return "保存并刷新后自动发现当前可用额度"
+        }
+        let items = ModuleUsageSelection.prioritizedItems(currentUsage.items, for: .codex)
+        guard !items.isEmpty else {
+            return "当前没有限额数据，菜单栏将显示 Codex"
+        }
+        return "当前展示：\(items.prefix(ModuleUsageSelection.maximumStatusItemCount).map(\.label).joined(separator: "、"))"
+    }
+
+    private var codexMetricSelectionModeBinding: Binding<MetricSelectionMode> {
+        Binding(
+            get: { metricSelectionMode },
+            set: { mode in
+                metricSelectionMode = mode
+                guard mode == .custom, displayKeys.isEmpty else { return }
+                let availableKeys = codexQuotaOptions
+                    .filter { $0.availability == .available }
+                    .map(\.key)
+                let initialKeys = availableKeys.isEmpty
+                    ? [CodexQuotaKey.primary, CodexQuotaKey.secondary]
+                    : Array(availableKeys.prefix(ModuleUsageSelection.maximumStatusItemCount))
+                displayKeys = Set(initialKeys)
+            }
+        )
+    }
+
+    private func codexDisplayBinding(for option: ModuleQuotaOption) -> Binding<Bool> {
+        Binding(
+            get: { displayKeys.contains(option.key) },
+            set: { enabled in
+                if enabled {
+                    guard displayKeys.count < ModuleUsageSelection.maximumStatusItemCount else { return }
+                    displayKeys.insert(option.key)
+                } else {
+                    displayKeys.remove(option.key)
+                    resetTimeKeys.remove(option.key)
+                }
+            }
+        )
+    }
+
+    private func codexResetTimeBinding(for option: ModuleQuotaOption) -> Binding<Bool> {
+        Binding(
+            get: { resetTimeKeys.contains(option.key) },
+            set: { enabled in
+                if enabled {
+                    displayKeys.insert(option.key)
+                    resetTimeKeys.insert(option.key)
+                } else {
+                    resetTimeKeys.remove(option.key)
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func codexAvailabilityLabel(_ availability: ModuleQuotaAvailability) -> some View {
+        switch availability {
+        case .available:
+            Label("可用", systemImage: "checkmark.circle.fill")
+                .foregroundColor(.green)
+        case .unavailable:
+            Label("当前无数据", systemImage: "minus.circle")
+                .foregroundColor(.secondary)
+        case .unknown:
+            Label("等待刷新", systemImage: "clock")
+                .foregroundColor(.secondary)
         }
     }
 
     private var canSave: Bool {
         guard canSelectProvider(provider) else {
+            return false
+        }
+
+        if provider == .codex, metricSelectionMode == .custom, displayKeys.isEmpty {
             return false
         }
 
@@ -1176,12 +1378,34 @@ struct ModuleEditorView: View {
             showInMenuBar: showInMenuBar,
             showInDetail: showInDetail,
             isNotificationEnabled: isNotificationEnabled,
-            displayKeys: Array(displayKeys),
-            resetTimeKeys: Array(resetTimeKeys),
+            metricSelectionMode: metricSelectionMode,
+            displayKeys: orderedDisplayKeys,
+            resetTimeKeys: orderedResetTimeKeys,
             isCollapsed: module?.isCollapsed ?? false,
             percentDisplayMode: percentDisplayMode,
             sortOrder: module?.sortOrder ?? 0
         )
+    }
+
+    private var orderedDisplayKeys: [String] {
+        let optionKeys = quotaOptions.map(\.key)
+        var result = optionKeys.filter(displayKeys.contains)
+        for key in displayKeys where !result.contains(key) {
+            result.append(key)
+        }
+        if provider == .codex {
+            return Array(result.prefix(ModuleUsageSelection.maximumStatusItemCount))
+        }
+        return result
+    }
+
+    private var orderedResetTimeKeys: [String] {
+        let optionKeys = quotaOptions.map(\.key)
+        var result = optionKeys.filter(resetTimeKeys.contains)
+        for key in resetTimeKeys where !result.contains(key) {
+            result.append(key)
+        }
+        return result.filter(orderedDisplayKeys.contains)
     }
 
     static func defaultDisplayKeys(for provider: PlatformType) -> [String] {
@@ -1195,6 +1419,10 @@ struct ModuleEditorView: View {
         case .mimo, .codex:
             return []
         }
+    }
+
+    static func defaultMetricSelectionMode(for provider: PlatformType) -> MetricSelectionMode {
+        provider == .codex ? .automatic : .custom
     }
 }
 

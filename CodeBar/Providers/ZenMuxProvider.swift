@@ -206,7 +206,7 @@ struct ZenMuxProvider: PlatformProvider {
             guard let items = grouped[key], let first = items.first else { return nil }
             let used = items.reduce(0) { $0 + $1.used }
             let total = items.reduce(0) { $0 + $1.total }
-            let resetDate = items.map(\.resetDate).min() ?? first.resetDate
+            let resetDate = items.compactMap(\.resetDate).min()
             return UsageItem(
                 key: first.key,
                 label: first.label,

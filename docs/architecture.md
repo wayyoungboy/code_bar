@@ -72,6 +72,7 @@ struct MonitorModule {
     var isMonitoringEnabled: Bool
     var showInMenuBar: Bool
     var showInDetail: Bool
+    var metricSelectionMode: MetricSelectionMode
     var displayKeys: [String]
     var resetTimeKeys: [String]
     var sortOrder: Int
@@ -103,7 +104,7 @@ struct PlatformUsageData {
 }
 ```
 
-每个平台可以返回任意数量的 `UsageItem`，例如 5 小时、7 天、月用量或总用量。UI 不关心平台 API 细节，只按统一结构渲染进度条和额外信息。
+每个平台可以返回任意数量的 `UsageItem`，例如 5 小时、7 天、月用量或总用量。详情页渲染 Provider 当前实际返回的全部项目；菜单栏通过 `metricSelectionMode` 和 `displayKeys` 选择最多两项，并在已选项目暂时缺失时使用其他可用项目补位。
 
 `AccountUsageData` 仍保留给 Provider 表达子账号明细，但当前主 UI 以 `MonitorModule` 为展示边界。ZenMux 在模块模式下是一账号一模块，详情页不会再按平台聚合多个账号。
 

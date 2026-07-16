@@ -338,8 +338,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 continue
             }
 
-            let visibleItems = usage.items.filter { tracker.displayKeys(for: module).contains($0.key) }
-            let preferredItems = preferredStatusItems(from: visibleItems)
+            let preferredItems = ModuleUsageSelection.menuBarItems(from: usage, module: module)
             let presentation = StatusBarUsagePresentation.make(
                 lines: preferredItems.map { statusLineText(for: $0, module: module) },
                 rotationIndex: statusUsageRotation.index,
@@ -388,8 +387,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let visibleItems = usage.items.filter { tracker.displayKeys(for: module).contains($0.key) }
-        let preferredItems = preferredStatusItems(from: visibleItems)
+        let preferredItems = ModuleUsageSelection.menuBarItems(from: usage, module: module)
         let presentation = StatusBarUsagePresentation.make(
             lines: preferredItems.map { statusLineText(for: $0, module: module) },
             rotationIndex: statusUsageRotation.index,
@@ -404,29 +402,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func preferredStatusItems(from items: [UsageItem]) -> [UsageItem] {
-        let preferredKeys = ["5hour", "7day"]
-        var result: [UsageItem] = []
-
-        for key in preferredKeys {
-            if let item = items.first(where: { $0.key == key }) {
-                result.append(item)
-            }
-        }
-
-        for item in items where !result.contains(where: { $0.key == item.key }) {
-            result.append(item)
-            if result.count >= 2 { break }
-        }
-
-        return Array(result.prefix(2))
-    }
-
     private func statusLineText(for item: UsageItem, platform: PlatformType) -> String {
         var text = "\(compactLabel(for: item)) \(String(format: "%.0f%%", item.percent))"
 
         if UsageTracker.shared.isResetTimeEnabled(item.key, for: platform),
-           let resetText = compactResetText(until: item.resetDate) {
+           let resetDate = item.resetDate,
+           let resetText = compactResetText(until: resetDate) {
             text += "(\(resetText))"
         }
 
@@ -437,7 +418,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var text = "\(compactLabel(for: item)) \(UsageStatusFormatting.compactPercentText(for: item, displayMode: module.percentDisplayMode))"
 
         if UsageTracker.shared.isResetTimeEnabled(item.key, for: module),
-           let resetText = compactResetText(until: item.resetDate) {
+           let resetDate = item.resetDate,
+           let resetText = compactResetText(until: resetDate) {
             text += "(\(resetText))"
         }
 
@@ -468,6 +450,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return "5h"
         case "7day":
             return "7d"
+        case CodexQuotaKey.primary:
+            if item.label.contains("小时") {
+                return item.label.replacingOccurrences(of: "小时", with: "h")
+            }
+            if item.label.contains("天") {
+                return item.label.replacingOccurrences(of: "天", with: "d")
+            }
+            return "短期"
+        case CodexQuotaKey.secondary:
+            if item.label.contains("小时") {
+                return item.label.replacingOccurrences(of: "小时", with: "h")
+            }
+            if item.label.contains("天") {
+                return item.label.replacingOccurrences(of: "天", with: "d")
+            }
+            return "长期"
+        case CodexQuotaKey.codeReviewPrimary:
+            if item.label.contains("小时") || item.label.contains("天") {
+                return item.label
+                    .replacingOccurrences(of: "代码审查 ", with: "审查")
+                    .replacingOccurrences(of: "小时", with: "h")
+                    .replacingOccurrences(of: "天", with: "d")
+            }
+            return "审查短期"
+        case CodexQuotaKey.codeReviewSecondary:
+            if item.label.contains("小时") || item.label.contains("天") {
+                return item.label
+                    .replacingOccurrences(of: "代码审查 ", with: "审查")
+                    .replacingOccurrences(of: "小时", with: "h")
+                    .replacingOccurrences(of: "天", with: "d")
+            }
+            return "审查长期"
         default:
             if item.label.contains("小时") {
                 return item.label.replacingOccurrences(of: "小时", with: "h")

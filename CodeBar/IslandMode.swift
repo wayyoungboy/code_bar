@@ -139,8 +139,7 @@ enum CodeBarIslandCompactStatusBuilder {
     }
 
     private static func visibleUsageItems(from usage: PlatformUsageData, module: MonitorModule) -> [UsageItem] {
-        guard !module.displayKeys.isEmpty else { return usage.items }
-        return usage.items.filter { module.displayKeys.contains($0.key) }
+        ModuleUsageSelection.menuBarItems(from: usage, module: module)
     }
 
     private static func mostConstrainedItem(from items: [UsageItem], displayMode: UsagePercentDisplayMode) -> UsageItem? {

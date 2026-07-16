@@ -31,11 +31,58 @@ struct UsageItem {
     let used: Int
     let total: Int
     let unit: String
-    let resetDate: Date
+    let resetDate: Date?
 
     var percent: Double {
         guard total > 0 else { return 0 }
         return Double(used) / Double(total) * 100
+    }
+}
+
+enum MetricSelectionMode: String, CaseIterable, Codable, Identifiable, Equatable {
+    case automatic
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: return "自动"
+        case .custom: return "自定义"
+        }
+    }
+}
+
+enum CodexQuotaKey {
+    static let primary = "codex.primary"
+    static let secondary = "codex.secondary"
+    static let codeReviewPrimary = "codex.code-review.primary"
+    static let codeReviewSecondary = "codex.code-review.secondary"
+
+    static func canonical(_ key: String) -> String {
+        switch key {
+        case "5hour":
+            return primary
+        case "7day":
+            return secondary
+        default:
+            return key
+        }
+    }
+
+    static func fallbackLabel(for key: String) -> String {
+        switch canonical(key) {
+        case primary:
+            return "短周期额度"
+        case secondary:
+            return "长期额度"
+        case codeReviewPrimary:
+            return "代码审查短周期"
+        case codeReviewSecondary:
+            return "代码审查长期"
+        default:
+            return "其他额度"
+        }
     }
 }
 
@@ -176,6 +223,7 @@ struct MonitorModule: Codable, Identifiable {
     var showInMenuBar: Bool
     var showInDetail: Bool
     var isNotificationEnabled: Bool
+    var metricSelectionMode: MetricSelectionMode
     var displayKeys: [String]
     var resetTimeKeys: [String]
     var isCollapsed: Bool
@@ -190,6 +238,7 @@ struct MonitorModule: Codable, Identifiable {
         case showInMenuBar
         case showInDetail
         case isNotificationEnabled
+        case metricSelectionMode
         case displayKeys
         case resetTimeKeys
         case isCollapsed
@@ -205,6 +254,7 @@ struct MonitorModule: Codable, Identifiable {
         showInMenuBar: Bool = true,
         showInDetail: Bool = true,
         isNotificationEnabled: Bool = true,
+        metricSelectionMode: MetricSelectionMode? = nil,
         displayKeys: [String] = [],
         resetTimeKeys: [String] = [],
         isCollapsed: Bool = false,
@@ -218,8 +268,16 @@ struct MonitorModule: Codable, Identifiable {
         self.showInMenuBar = showInMenuBar
         self.showInDetail = showInDetail
         self.isNotificationEnabled = isNotificationEnabled
-        self.displayKeys = displayKeys
-        self.resetTimeKeys = resetTimeKeys
+        let normalizedDisplayKeys = config.platform == .codex
+            ? Self.normalizedCodexKeys(displayKeys)
+            : displayKeys
+        let normalizedResetTimeKeys = config.platform == .codex
+            ? Self.normalizedCodexKeys(resetTimeKeys)
+            : resetTimeKeys
+        self.metricSelectionMode = metricSelectionMode
+            ?? (normalizedDisplayKeys.isEmpty ? .automatic : .custom)
+        self.displayKeys = normalizedDisplayKeys
+        self.resetTimeKeys = normalizedResetTimeKeys
         self.isCollapsed = isCollapsed
         self.percentDisplayMode = percentDisplayMode
         self.sortOrder = sortOrder
@@ -236,6 +294,12 @@ struct MonitorModule: Codable, Identifiable {
         isNotificationEnabled = try container.decodeIfPresent(Bool.self, forKey: .isNotificationEnabled) ?? true
         displayKeys = try container.decodeIfPresent([String].self, forKey: .displayKeys) ?? []
         resetTimeKeys = try container.decodeIfPresent([String].self, forKey: .resetTimeKeys) ?? []
+        if config.platform == .codex {
+            displayKeys = Self.normalizedCodexKeys(displayKeys)
+            resetTimeKeys = Self.normalizedCodexKeys(resetTimeKeys)
+        }
+        metricSelectionMode = (try? container.decodeIfPresent(MetricSelectionMode.self, forKey: .metricSelectionMode))
+            ?? (displayKeys.isEmpty ? .automatic : .custom)
         isCollapsed = Self.decodeBoolIfPresent(container, forKey: .isCollapsed) ?? false
         percentDisplayMode = (try? container.decodeIfPresent(UsagePercentDisplayMode.self, forKey: .percentDisplayMode)) ?? .used
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
@@ -250,6 +314,7 @@ struct MonitorModule: Codable, Identifiable {
         try container.encode(showInMenuBar, forKey: .showInMenuBar)
         try container.encode(showInDetail, forKey: .showInDetail)
         try container.encode(isNotificationEnabled, forKey: .isNotificationEnabled)
+        try container.encode(metricSelectionMode, forKey: .metricSelectionMode)
         try container.encode(displayKeys, forKey: .displayKeys)
         try container.encode(resetTimeKeys, forKey: .resetTimeKeys)
         try container.encode(isCollapsed, forKey: .isCollapsed)
@@ -326,6 +391,85 @@ struct MonitorModule: Codable, Identifiable {
             return value != 0
         }
         return nil
+    }
+
+    private static func normalizedCodexKeys(_ keys: [String]) -> [String] {
+        var result: [String] = []
+        for key in keys.map(CodexQuotaKey.canonical) where !result.contains(key) {
+            result.append(key)
+        }
+        return result
+    }
+}
+
+enum ModuleUsageSelection {
+    static let maximumStatusItemCount = 2
+
+    static func menuBarItems(from usage: PlatformUsageData, module: MonitorModule) -> [UsageItem] {
+        let availableItems = prioritizedItems(usage.items, for: module.platform)
+
+        guard module.metricSelectionMode == .custom else {
+            return Array(availableItems.prefix(maximumStatusItemCount))
+        }
+
+        let selectedKeys = canonicalDisplayKeys(for: module)
+        guard !selectedKeys.isEmpty else {
+            return Array(availableItems.prefix(maximumStatusItemCount))
+        }
+
+        var result: [UsageItem] = []
+        for key in selectedKeys.prefix(maximumStatusItemCount) {
+            if let item = availableItems.first(where: { canonicalKey($0.key, for: module.platform) == key }),
+               !result.contains(where: { $0.key == item.key }) {
+                result.append(item)
+            }
+        }
+
+        let targetCount = min(selectedKeys.count, maximumStatusItemCount)
+        for item in availableItems where result.count < targetCount {
+            guard !result.contains(where: { $0.key == item.key }) else { continue }
+            result.append(item)
+        }
+
+        return result
+    }
+
+    static func prioritizedItems(_ items: [UsageItem], for platform: PlatformType) -> [UsageItem] {
+        let preferredKeys: [String]
+        switch platform {
+        case .codex:
+            preferredKeys = [
+                CodexQuotaKey.primary,
+                CodexQuotaKey.secondary,
+                CodexQuotaKey.codeReviewPrimary,
+                CodexQuotaKey.codeReviewSecondary,
+            ]
+        default:
+            preferredKeys = ["5hour", "7day"]
+        }
+
+        var result: [UsageItem] = []
+        for key in preferredKeys {
+            if let item = items.first(where: { canonicalKey($0.key, for: platform) == key }) {
+                result.append(item)
+            }
+        }
+        for item in items where !result.contains(where: { $0.key == item.key }) {
+            result.append(item)
+        }
+        return result
+    }
+
+    static func canonicalKey(_ key: String, for platform: PlatformType) -> String {
+        platform == .codex ? CodexQuotaKey.canonical(key) : key
+    }
+
+    private static func canonicalDisplayKeys(for module: MonitorModule) -> [String] {
+        var result: [String] = []
+        for key in module.displayKeys.map({ canonicalKey($0, for: module.platform) }) where !result.contains(key) {
+            result.append(key)
+        }
+        return result
     }
 }
 

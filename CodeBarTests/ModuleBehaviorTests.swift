@@ -68,6 +68,88 @@ private struct ModuleBehaviorTests {
             "Empty quotas should use the platform fallback"
         )
 
+        let codexPrimary = UsageItem(
+            key: CodexQuotaKey.primary,
+            label: "5小时",
+            used: 45,
+            total: 100,
+            unit: "%",
+            resetDate: fiveHourReset
+        )
+        let codexSecondary = UsageItem(
+            key: CodexQuotaKey.secondary,
+            label: "7天",
+            used: 11,
+            total: 100,
+            unit: "%",
+            resetDate: sevenDayReset
+        )
+        let codexReview = UsageItem(
+            key: CodexQuotaKey.codeReviewPrimary,
+            label: "代码审查 1天",
+            used: 20,
+            total: 100,
+            unit: "%",
+            resetDate: sevenDayReset
+        )
+        let codexUsage = PlatformUsageData(
+            platformName: "Codex",
+            planType: "Pro",
+            items: [codexReview, codexSecondary, codexPrimary]
+        )
+        let automaticCodexModule = MonitorModule(
+            alias: "auto",
+            config: .codex(CodexConfig()),
+            metricSelectionMode: .automatic,
+            sortOrder: 0
+        )
+        expect(
+            ModuleUsageSelection.menuBarItems(from: codexUsage, module: automaticCodexModule).map(\.key)
+                == [CodexQuotaKey.primary, CodexQuotaKey.secondary],
+            "Codex automatic selection should prefer the primary and secondary windows"
+        )
+
+        let singleCustomCodexModule = MonitorModule(
+            alias: "custom",
+            config: .codex(CodexConfig()),
+            metricSelectionMode: .custom,
+            displayKeys: [CodexQuotaKey.primary],
+            sortOrder: 0
+        )
+        expect(
+            ModuleUsageSelection.menuBarItems(from: codexUsage, module: singleCustomCodexModule).map(\.key)
+                == [CodexQuotaKey.primary],
+            "Codex custom selection should not add a second item while the chosen item is available"
+        )
+
+        let codexUsageWithoutPrimary = PlatformUsageData(
+            platformName: "Codex",
+            planType: "Pro",
+            items: [codexSecondary, codexReview]
+        )
+        expect(
+            ModuleUsageSelection.menuBarItems(from: codexUsageWithoutPrimary, module: singleCustomCodexModule).map(\.key)
+                == [CodexQuotaKey.secondary],
+            "Codex custom selection should temporarily fall back when the selected window has no data"
+        )
+        expect(
+            singleCustomCodexModule.displayKeys == [CodexQuotaKey.primary],
+            "Codex fallback should not erase the user's stored selection"
+        )
+
+        let twoItemCustomCodexModule = MonitorModule(
+            alias: "custom-two",
+            config: .codex(CodexConfig()),
+            metricSelectionMode: .custom,
+            displayKeys: [CodexQuotaKey.primary, CodexQuotaKey.codeReviewPrimary],
+            sortOrder: 0
+        )
+        expect(
+            ModuleUsageSelection.menuBarItems(from: codexUsageWithoutPrimary, module: twoItemCustomCodexModule).map(\.key)
+                == [CodexQuotaKey.codeReviewPrimary, CodexQuotaKey.secondary],
+            "Codex custom selection should preserve available selections and fill missing slots"
+        )
+
         let oversizedIcon = NSImage(size: NSSize(width: 196, height: 196))
         let statusIcon = StatusBarIconRenderer.render(
             oversizedIcon,
@@ -317,6 +399,31 @@ private struct ModuleBehaviorTests {
         let decodedLegacyModule = try! JSONDecoder().decode(MonitorModule.self, from: Data(legacyModuleJSON.utf8))
         expect(decodedLegacyModule.isCollapsed == false, "Legacy module JSON should default to expanded cards")
         expect(decodedLegacyModule.percentDisplayMode == .used, "Legacy module JSON should default to used percent display")
+        expect(decodedLegacyModule.metricSelectionMode == .automatic, "Legacy modules with empty display keys should migrate to automatic selection")
+
+        let legacyCodexModuleJSON = """
+        {
+          "id": "legacy-codex",
+          "alias": "legacy",
+          "config": {
+            "type": "Codex",
+            "codex": {}
+          },
+          "displayKeys": ["5hour", "7day"],
+          "resetTimeKeys": ["5hour"],
+          "sortOrder": 0
+        }
+        """
+        let decodedLegacyCodexModule = try! JSONDecoder().decode(MonitorModule.self, from: Data(legacyCodexModuleJSON.utf8))
+        expect(decodedLegacyCodexModule.metricSelectionMode == .custom, "Legacy Codex selections should migrate to custom mode")
+        expect(
+            decodedLegacyCodexModule.displayKeys == [CodexQuotaKey.primary, CodexQuotaKey.secondary],
+            "Legacy Codex display keys should migrate to source-stable keys"
+        )
+        expect(
+            decodedLegacyCodexModule.resetTimeKeys == [CodexQuotaKey.primary],
+            "Legacy Codex reset keys should migrate with their display keys"
+        )
 
         let lenientModuleJSON = """
         {
@@ -369,7 +476,10 @@ private struct ModuleBehaviorTests {
         }
         """
         let exhaustedCodexItems = try! CodexProvider.testUsageItems(from: exhaustedCodexJSON)
-        expect(exhaustedCodexItems.map(\.key) == ["5hour", "7day"], "Codex exhausted response should still expose primary quota windows")
+        expect(
+            exhaustedCodexItems.map(\.key) == [CodexQuotaKey.primary, CodexQuotaKey.secondary],
+            "Codex exhausted response should still expose primary quota windows"
+        )
         expect(exhaustedCodexItems.allSatisfy { $0.used == 100 }, "Codex exhausted response should show fully used quota windows")
         let expectedCodexReset = ISO8601DateFormatter().date(from: "2027-01-15T00:00:00Z")!
         expect(exhaustedCodexItems.first?.resetDate == expectedCodexReset, "Codex ISO reset_at should decode into the quota reset date")
@@ -400,8 +510,58 @@ private struct ModuleBehaviorTests {
         }
         """
         let missingWindowItems = try! CodexProvider.testUsageItems(from: missingWindowSecondsCodexJSON)
-        expect(missingWindowItems.map(\.key) == ["5hour", "7day"], "Codex primary and secondary windows should keep stable keys when limit_window_seconds is missing")
-        expect(missingWindowItems.map(\.used) == [90, 25], "Codex missing-window fallback should preserve used and remaining percent semantics")
+        expect(
+            missingWindowItems.map(\.key) == [
+                CodexQuotaKey.primary,
+                CodexQuotaKey.secondary,
+                "codex.additional.mystery.primary",
+            ],
+            "Codex primary and secondary windows should keep source-stable keys when limit_window_seconds is missing"
+        )
+        expect(missingWindowItems.map(\.used) == [90, 25, 10], "Codex missing-window fallback should preserve used and remaining percent semantics")
+        expect(
+            missingWindowItems.map(\.label) == ["短周期额度", "长期额度", "Mystery短周期"],
+            "Codex should use generic labels instead of guessing 5-hour and 7-day durations"
+        )
+
+        let secondaryOnlyCodexJSON = """
+        {
+          "rate_limit": {
+            "secondary_window": {
+              "used_percent": 30,
+              "limit_window_seconds": 604800,
+              "reset_after_seconds": 120
+            }
+          }
+        }
+        """
+        let secondaryOnlyItems = try! CodexProvider.testUsageItems(from: secondaryOnlyCodexJSON)
+        expect(
+            secondaryOnlyItems.map(\.key) == [CodexQuotaKey.secondary],
+            "Codex should omit a removed primary window instead of fabricating zero usage"
+        )
+        expect(secondaryOnlyItems.map(\.label) == ["7天"], "Codex should preserve the real duration of remaining windows")
+
+        let codeReviewCodexJSON = """
+        {
+          "code_review_rate_limit": {
+            "primary_window": {
+              "used_percent": 12,
+              "limit_window_seconds": 86400
+            }
+          }
+        }
+        """
+        let codeReviewItems = try! CodexProvider.testUsageItems(from: codeReviewCodexJSON)
+        expect(
+            codeReviewItems.map(\.key) == [CodexQuotaKey.codeReviewPrimary],
+            "Codex should expose code review rate limits as selectable metrics"
+        )
+        expect(codeReviewItems.first?.label == "代码审查 1天", "Codex should label code review metrics with their real duration")
+        expect(codeReviewItems.first?.resetDate == nil, "Codex metrics without reset metadata should remain usable without a fake reset time")
+
+        let emptyCodexItems = try! CodexProvider.testUsageItems(from: #"{"plan_type":"pro"}"#)
+        expect(emptyCodexItems.isEmpty, "A successful Codex response may legitimately contain no quota windows")
 
         let resetCreditsJSON = """
         {

@@ -272,14 +272,17 @@ class UsageTracker: ObservableObject {
     }
 
     func displayKeys(for module: MonitorModule) -> [String] {
-        if !module.displayKeys.isEmpty {
+        guard let usage = moduleUsages[module.id] else {
             return module.displayKeys
         }
-        return moduleUsages[module.id]?.items.map(\.key) ?? []
+        return ModuleUsageSelection.menuBarItems(from: usage, module: module).map(\.key)
     }
 
     func isResetTimeEnabled(_ key: String, for module: MonitorModule) -> Bool {
-        module.resetTimeKeys.contains(key)
+        let canonicalKey = ModuleUsageSelection.canonicalKey(key, for: module.platform)
+        return module.resetTimeKeys.contains {
+            ModuleUsageSelection.canonicalKey($0, for: module.platform) == canonicalKey
+        }
     }
 
     private func loadModules() {
@@ -657,28 +660,34 @@ class UsageTracker: ObservableObject {
         var data: [String: [String: Any]] = [:]
         for (platform, usage) in platforms {
             let itemsArray = usage.items.map { item -> [String: Any] in
-                [
+                var itemData: [String: Any] = [
                     "key": item.key,
                     "label": item.label,
                     "used": item.used,
                     "total": item.total,
                     "unit": item.unit,
-                    "resetDate": item.resetDate,
                 ]
+                if let resetDate = item.resetDate {
+                    itemData["resetDate"] = resetDate
+                }
+                return itemData
             }
             let extraArray = usage.extraInfo.map { info -> [String: String] in
                 ["label": info.label, "value": info.value]
             }
             let accountArray = usage.accountBreakdowns.map { account -> [String: Any] in
                 let accountItems = account.items.map { item -> [String: Any] in
-                    [
+                    var itemData: [String: Any] = [
                         "key": item.key,
                         "label": item.label,
                         "used": item.used,
                         "total": item.total,
                         "unit": item.unit,
-                        "resetDate": item.resetDate,
                     ]
+                    if let resetDate = item.resetDate {
+                        itemData["resetDate"] = resetDate
+                    }
+                    return itemData
                 }
                 let accountExtra = account.extraInfo.map { info -> [String: String] in
                     ["label": info.label, "value": info.value]
@@ -726,10 +735,10 @@ class UsageTracker: ObservableObject {
                       let label = itemDict["label"] as? String,
                       let used = itemDict["used"] as? Int,
                       let total = itemDict["total"] as? Int,
-                      let unit = itemDict["unit"] as? String,
-                      let resetDate = itemDict["resetDate"] as? Date else {
+                      let unit = itemDict["unit"] as? String else {
                     return nil
                 }
+                let resetDate = itemDict["resetDate"] as? Date
                 return UsageItem(key: key, label: label, used: used, total: total, unit: unit, resetDate: resetDate)
             }
 
@@ -756,10 +765,10 @@ class UsageTracker: ObservableObject {
                               let label = itemDict["label"] as? String,
                               let used = itemDict["used"] as? Int,
                               let total = itemDict["total"] as? Int,
-                              let unit = itemDict["unit"] as? String,
-                              let resetDate = itemDict["resetDate"] as? Date else {
+                              let unit = itemDict["unit"] as? String else {
                             return nil
                         }
+                        let resetDate = itemDict["resetDate"] as? Date
                         return UsageItem(key: key, label: label, used: used, total: total, unit: unit, resetDate: resetDate)
                     }
 
@@ -849,7 +858,7 @@ class UsageTracker: ObservableObject {
     private func checkZenMuxRefreshNotices(usage: PlatformUsageData, moduleID: String? = nil) {
         for item in usage.items {
             guard let cacheKey = noticeCacheKey(for: item.key, moduleID: moduleID) else { continue }
-            let newResetDate = item.resetDate
+            guard let newResetDate = item.resetDate else { continue }
 
             // resetDate 变化超过 1 小时才算真正进入新周期
             let isSignificantChange: Bool
