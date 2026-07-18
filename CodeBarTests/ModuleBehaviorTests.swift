@@ -316,11 +316,9 @@ private struct ModuleBehaviorTests {
             MenuBarPopoverLayout.maximumContentHeight(for: 12) == 0,
             "Popover content height should never become negative"
         )
-        let popoverContent = MenuBarPopoverView(
-            tracker: UsageTracker.shared,
-            updateChecker: UpdateChecker.shared,
-            maximumHeight: tallScreenPopoverHeight
-        )
+        let popoverContent = MenuBarPopoverView(maximumHeight: tallScreenPopoverHeight) {
+            Text("Scrollable details")
+        }
         expect(
             String(reflecting: type(of: popoverContent.body)).contains("ScrollView"),
             "Classic status-bar details should be hosted in a vertical scroll view"

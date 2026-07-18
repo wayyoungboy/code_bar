@@ -154,10 +154,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard popover == nil else { return }
         let popover = NSPopover()
         popover.behavior = .transient
-        let hostingController = NSHostingController(rootView: MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared))
+        let hostingController = NSHostingController(
+            rootView: makePopoverView(maximumHeight: Constants.popoverMaximumHeight)
+        )
         hostingController.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hostingController
         self.popover = popover
+    }
+
+    private func makePopoverView(maximumHeight: CGFloat) -> MenuBarPopoverView<MenuBarView> {
+        MenuBarPopoverView(maximumHeight: maximumHeight) {
+            MenuBarView(tracker: UsageTracker.shared, updateChecker: UpdateChecker.shared)
+        }
+    }
+
+    private func updatePopoverHeight(for button: NSStatusBarButton) {
+        guard let hostingController = popover?.contentViewController as? NSHostingController<MenuBarPopoverView<MenuBarView>> else {
+            return
+        }
+        let visibleScreenHeight = button.window?.screen?.visibleFrame.height
+            ?? NSScreen.main?.visibleFrame.height
+            ?? Constants.popoverMaximumHeight
+        let maximumHeight = MenuBarPopoverLayout.maximumContentHeight(for: visibleScreenHeight)
+        hostingController.rootView = makePopoverView(maximumHeight: maximumHeight)
     }
 
     private func removeStatusItems() {
@@ -648,6 +667,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             closePopover()
         } else {
+            updatePopoverHeight(for: button)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
                 self?.closePopover()

@@ -22,6 +22,34 @@ struct PlatformLogoView: View {
     }
 }
 
+enum MenuBarPopoverLayout {
+    private static let screenEdgeAllowance: CGFloat = 24
+
+    static func maximumContentHeight(for visibleScreenHeight: CGFloat) -> CGFloat {
+        min(
+            Constants.popoverMaximumHeight,
+            max(0, visibleScreenHeight - screenEdgeAllowance)
+        )
+    }
+}
+
+struct MenuBarPopoverView<Content: View>: View {
+    let maximumHeight: CGFloat
+    private let content: Content
+
+    init(maximumHeight: CGFloat, @ViewBuilder content: () -> Content) {
+        self.maximumHeight = maximumHeight
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            content
+        }
+        .frame(maxHeight: maximumHeight, alignment: .top)
+    }
+}
+
 struct MenuBarView: View {
     enum Chrome {
         case popover

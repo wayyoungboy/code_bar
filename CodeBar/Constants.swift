@@ -21,6 +21,9 @@ struct Constants {
     /// 弹出窗口宽度
     static let popoverWidth: CGFloat = 420
 
+    /// 弹出窗口内容最大高度；超出后由详情页滚动显示
+    static let popoverMaximumHeight: CGFloat = 620
+
     /// Island 收起状态宽度
     static let islandClosedWidth: CGFloat = 210
 
