@@ -2,6 +2,11 @@ import AppKit
 import Foundation
 import SwiftUI
 
+private final class FakeStatusItem: StatusItemVisibilityRepresenting {
+    var autosaveName: String?
+    var isVisible = false
+}
+
 @main
 private struct ModuleBehaviorTests {
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
@@ -162,6 +167,27 @@ private struct ModuleBehaviorTests {
         let renderedRep = statusIcon.representations.first as? NSBitmapImageRep
         expect(renderedRep?.pixelsWide == Int(Constants.statusBarIconSize * 2), "Status bar renderer should rasterize oversized icons to the requested pixel width")
         expect(renderedRep?.pixelsHigh == Int(Constants.statusBarIconSize * 2), "Status bar renderer should rasterize oversized icons to the requested pixel height")
+
+        let primaryStatusItem = FakeStatusItem()
+        StatusItemConfiguration.restore(
+            primaryStatusItem,
+            autosaveName: StatusItemConfiguration.primaryAutosaveName
+        )
+        expect(
+            primaryStatusItem.autosaveName == "com.codebar.status.primary",
+            "Primary status item should use a stable autosave identity"
+        )
+        expect(primaryStatusItem.isVisible, "A status item restored from hidden preferences should become visible")
+        expect(
+            StatusItemConfiguration.moduleAutosaveName(for: "module-a")
+                == StatusItemConfiguration.moduleAutosaveName(for: "module-a"),
+            "A module status item should keep the same identity across rebuilds"
+        )
+        expect(
+            StatusItemConfiguration.moduleAutosaveName(for: "module-a")
+                != StatusItemConfiguration.moduleAutosaveName(for: "module-b"),
+            "Independent module status items should not share an autosave identity"
+        )
 
         let depletedSoon = UsageItem(
             key: "depleted",
