@@ -5,6 +5,14 @@ import SwiftUI
 private final class FakeStatusItem: StatusItemVisibilityRepresenting {
     var autosaveName: String?
     var isVisible = false
+
+    func applyAutosaveName(_ autosaveName: String) {
+        self.autosaveName = autosaveName
+    }
+
+    func applyVisibility(_ isVisible: Bool) {
+        self.isVisible = isVisible
+    }
 }
 
 @main

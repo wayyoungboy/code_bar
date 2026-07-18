@@ -2,7 +2,15 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
-extension NSStatusItem: StatusItemVisibilityRepresenting {}
+extension NSStatusItem: StatusItemVisibilityRepresenting {
+    func applyAutosaveName(_ autosaveName: String) {
+        self.autosaveName = autosaveName
+    }
+
+    func applyVisibility(_ isVisible: Bool) {
+        self.isVisible = isVisible
+    }
+}
 
 @main
 struct CodeBarApp: App {

@@ -1,8 +1,8 @@
 import Foundation
 
 protocol StatusItemVisibilityRepresenting: AnyObject {
-    var autosaveName: String? { get set }
-    var isVisible: Bool { get set }
+    func applyAutosaveName(_ autosaveName: String)
+    func applyVisibility(_ isVisible: Bool)
 }
 
 enum StatusItemConfiguration {
@@ -16,8 +16,8 @@ enum StatusItemConfiguration {
         _ statusItem: StatusItemVisibilityRepresenting,
         autosaveName: String
     ) {
-        statusItem.autosaveName = autosaveName
-        statusItem.isVisible = true
+        statusItem.applyAutosaveName(autosaveName)
+        statusItem.applyVisibility(true)
     }
 }
 
