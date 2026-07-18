@@ -323,6 +323,19 @@ private struct ModuleBehaviorTests {
             String(reflecting: type(of: popoverContent.body)).contains("ScrollView"),
             "Classic status-bar details should be hosted in a vertical scroll view"
         )
+        let constrainedPopover = MenuBarPopoverView(maximumHeight: 120) {
+            VStack {
+                ForEach(0..<40, id: \.self) { index in
+                    Text("Detail row \(index)")
+                }
+            }
+        }
+        let popoverHost = NSHostingController(rootView: constrainedPopover)
+        popoverHost.view.layoutSubtreeIfNeeded()
+        expect(
+            popoverHost.view.fittingSize.height <= 120,
+            "Overflowing detail content should stay within the scroll viewport height"
+        )
 
         let tempStoreRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("codebar-file-store-\(UUID().uuidString)", isDirectory: true)
