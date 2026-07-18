@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 @main
 private struct ModuleBehaviorTests {
@@ -301,6 +302,29 @@ private struct ModuleBehaviorTests {
         expect(Constants.islandOpenedWidth >= Constants.popoverWidth, "Island opened width should fit existing usage content")
         expect(Constants.islandClosedHeight < Constants.islandOpenedMaximumHeight, "Island closed height should be smaller than opened maximum height")
         expect(Constants.statusBarIconSize == 13, "Status bar platform icons should stay compact")
+
+        let tallScreenPopoverHeight = MenuBarPopoverLayout.maximumContentHeight(for: 900)
+        expect(
+            tallScreenPopoverHeight == Constants.popoverMaximumHeight,
+            "Popover content should stop growing at its configured maximum height"
+        )
+        expect(
+            MenuBarPopoverLayout.maximumContentHeight(for: 400) == 376,
+            "Popover content should leave room for its arrow and screen edges on short displays"
+        )
+        expect(
+            MenuBarPopoverLayout.maximumContentHeight(for: 12) == 0,
+            "Popover content height should never become negative"
+        )
+        let popoverContent = MenuBarPopoverView(
+            tracker: UsageTracker.shared,
+            updateChecker: UpdateChecker.shared,
+            maximumHeight: tallScreenPopoverHeight
+        )
+        expect(
+            String(reflecting: type(of: popoverContent.body)).contains("ScrollView"),
+            "Classic status-bar details should be hosted in a vertical scroll view"
+        )
 
         let tempStoreRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("codebar-file-store-\(UUID().uuidString)", isDirectory: true)
