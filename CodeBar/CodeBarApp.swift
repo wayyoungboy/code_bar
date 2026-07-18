@@ -1,5 +1,8 @@
+import AppKit
 import SwiftUI
 import UserNotifications
+
+extension NSStatusItem: StatusItemVisibilityRepresenting {}
 
 @main
 struct CodeBarApp: App {
@@ -282,9 +285,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if menuModules.isEmpty || tracker.menuBarDisplayMode == .rotating {
             if statusItem == nil {
-                statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-                statusItem?.button?.action = #selector(togglePopover(_:))
-                statusItem?.button?.target = self
+                statusItem = makeStatusItem(autosaveName: StatusItemConfiguration.primaryAutosaveName)
                 setupStatusTitleView()
             }
             updateStatusItemTitle()
@@ -299,13 +300,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         for module in menuModules {
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            item.button?.action = #selector(togglePopover(_:))
-            item.button?.target = self
+            let item = makeStatusItem(
+                autosaveName: StatusItemConfiguration.moduleAutosaveName(for: module.id)
+            )
             moduleStatusItems[module.id] = item
             moduleStatusComponents[module.id] = setupStatusTitleView(for: item)
         }
         updateModuleStatusItems()
+    }
+
+    private func makeStatusItem(autosaveName: String) -> NSStatusItem {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        StatusItemConfiguration.restore(item, autosaveName: autosaveName)
+        item.button?.action = #selector(togglePopover(_:))
+        item.button?.target = self
+        return item
     }
 
     @objc private func handlePresentationChanged() {

@@ -1,5 +1,26 @@
 import Foundation
 
+protocol StatusItemVisibilityRepresenting: AnyObject {
+    var autosaveName: String? { get set }
+    var isVisible: Bool { get set }
+}
+
+enum StatusItemConfiguration {
+    static let primaryAutosaveName = "com.codebar.status.primary"
+
+    static func moduleAutosaveName(for moduleID: String) -> String {
+        "com.codebar.status.module.\(moduleID)"
+    }
+
+    static func restore(
+        _ statusItem: StatusItemVisibilityRepresenting,
+        autosaveName: String
+    ) {
+        statusItem.autosaveName = autosaveName
+        statusItem.isVisible = true
+    }
+}
+
 struct StatusBarUsageRotation {
     private(set) var index = 0
     private var hasRegisteredRefresh = false
