@@ -73,9 +73,9 @@ enum CodexQuotaKey {
     static func fallbackLabel(for key: String) -> String {
         switch canonical(key) {
         case primary:
-            return "短周期额度"
+            return "5小时"
         case secondary:
-            return "长期额度"
+            return "7天"
         case codeReviewPrimary:
             return "代码审查短周期"
         case codeReviewSecondary:

@@ -589,8 +589,8 @@ private struct ModuleBehaviorTests {
         )
         expect(missingWindowItems.map(\.used) == [90, 25, 10], "Codex missing-window fallback should preserve used and remaining percent semantics")
         expect(
-            missingWindowItems.map(\.label) == ["短周期额度", "长期额度", "Mystery短周期"],
-            "Codex should use generic labels instead of guessing 5-hour and 7-day durations"
+            missingWindowItems.map(\.label) == ["5小时", "7天", "Mystery短周期"],
+            "Codex should retain the documented 5-hour and 7-day labels when window metadata is temporarily absent"
         )
 
         let secondaryOnlyCodexJSON = """
