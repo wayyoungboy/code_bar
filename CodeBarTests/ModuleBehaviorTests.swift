@@ -448,6 +448,27 @@ private struct ModuleBehaviorTests {
             fatalError("Decoded config should be Gemini")
         }
 
+        let grokConfig = GrokConfig(homeDirectory: " /tmp/custom-grok-home ")
+        let grokModule = MonitorModule(
+            alias: "grok",
+            config: .grok(grokConfig),
+            displayKeys: ModuleEditorView.defaultDisplayKeys(for: .grok),
+            resetTimeKeys: ["grok.weekly"],
+            sortOrder: 0
+        )
+
+        expect(grokModule.platform == .grok, "Grok module should report the Grok platform")
+        expect(grokModule.isValid, "Grok module should be valid without copying local OAuth tokens")
+        expect(ModuleEditorView.defaultDisplayKeys(for: .grok) == ["grok.weekly"], "Grok should default to its weekly quota")
+
+        let encodedGrok = try! JSONEncoder().encode(grokModule.config)
+        let decodedGrok = try! JSONDecoder().decode(MonitorModuleConfig.self, from: encodedGrok)
+        if case .grok(let decodedConfig) = decodedGrok {
+            expect(decodedConfig.homeDirectory == " /tmp/custom-grok-home ", "Grok config should preserve a custom home directory through Codable")
+        } else {
+            fatalError("Decoded config should be Grok")
+        }
+
         let legacyModuleJSON = """
         {
           "id": "legacy-gemini",
@@ -657,6 +678,39 @@ private struct ModuleBehaviorTests {
             resetCreditInfo[1].value == "Rate limit reset · available · 发放 2026-07-10 20:00 · 过期 2026-07-17 20:00",
             "Codex reset credit info should convert granted_at and expires_at from UTC to local time"
         )
+
+        let grokBillingLog = """
+        {"ts":"2026-08-24T12:00:00.000Z","src":"shell","msg":"unrelated event"}
+        {"ts":"2026-08-24T13:00:00.000Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":12,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-24T12:00:00Z","end":"2026-08-31T12:00:00Z"},"subscriptionTier":"SuperGrok"}}}
+        {not valid json}
+        {"ts":"2026-08-25T15:13:54.512Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":6.4,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-25T12:22:17.580519+00:00","end":"2026-09-01T12:22:17.580519+00:00"},"billingPeriodStart":"2026-08-25T12:22:17.580519+00:00","billingPeriodEnd":"2026-09-01T12:22:17.580519+00:00","subscriptionTier":"SuperGrok"}}}
+        """
+        let grokUsage = try! GrokProvider.testUsage(from: grokBillingLog)
+        expect(grokUsage.platformName == "Grok", "Grok local billing data should map to the Grok platform")
+        expect(grokUsage.planType == "SuperGrok", "Grok should preserve the subscription tier from its local billing cache")
+        expect(grokUsage.items.map(\.key) == ["grok.weekly"], "Grok should expose its weekly quota with a stable key")
+        expect(grokUsage.items.map(\.label) == ["周额度"], "Grok weekly usage should use a user-facing label")
+        expect(grokUsage.items.map(\.used) == [6], "Grok usage percent should round and clamp into a percentage item")
+        expect(
+            grokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-09-01T12:22:17Z"),
+            "Grok should decode fractional ISO-8601 billing reset timestamps"
+        )
+        expect(
+            grokUsage.extraInfo.contains(where: { $0.label == "Grok 同步时间" && $0.value.contains("2026-08-25") }),
+            "Grok details should expose the timestamp of the cached billing snapshot"
+        )
+
+        do {
+            _ = try GrokProvider.testUsage(from: #"{"msg":"no billing data"}"#)
+            fatalError("Missing Grok billing data should fail")
+        } catch let error as PlatformError {
+            expect(
+                error.errorDescription?.contains("/usage") == true,
+                "Missing Grok billing data should explain how to generate a fresh local snapshot"
+            )
+        } catch {
+            fatalError("Missing Grok billing data should use PlatformError")
+        }
 
     }
 }
