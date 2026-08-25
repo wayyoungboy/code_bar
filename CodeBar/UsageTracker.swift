@@ -31,13 +31,13 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .mimo: return "XiaomiLogo"
         case .codex: return "CodexLogo"
         case .gemini: return "GeminiLogo"
-        case .grok: return nil
+        case .grok: return "GrokLogo"
         }
     }
 
     var usesOriginalLogoColor: Bool {
         switch self {
-        case .mimo, .gemini: return true
+        case .mimo, .gemini, .grok: return true
         default: return false
         }
     }
