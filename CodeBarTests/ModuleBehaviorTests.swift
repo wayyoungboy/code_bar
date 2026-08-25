@@ -15,6 +15,26 @@ private final class FakeStatusItem: StatusItemVisibilityRepresenting {
     }
 }
 
+private struct FakeGrokUsageRefresher: GrokUsageRefreshing {
+    let outcome: GrokRefreshOutcome
+    var replacementLog: String?
+
+    func refresh(
+        logURL: URL,
+        grokHomeURL: URL,
+        previousSnapshotDate: Date?
+    ) async -> GrokRefreshOutcome {
+        if let replacementLog {
+            try? FileManager.default.createDirectory(
+                at: logURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? Data(replacementLog.utf8).write(to: logURL, options: .atomic)
+        }
+        return outcome
+    }
+}
+
 @main
 private struct ModuleBehaviorTests {
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
@@ -23,7 +43,7 @@ private struct ModuleBehaviorTests {
         }
     }
 
-    static func main() {
+    static func main() async {
         let fiveHourReset = Date(timeIntervalSince1970: 1_800_000_000)
         let sevenDayReset = Date(timeIntervalSince1970: 1_800_100_000)
         let fiveHour = UsageItem(key: "5hour", label: "5小时", used: 1, total: 10, unit: "flows", resetDate: fiveHourReset)
@@ -701,6 +721,63 @@ private struct ModuleBehaviorTests {
             grokUsage.extraInfo.contains(where: { $0.label == "Grok 同步时间" && $0.value.contains("2026-08-25") }),
             "Grok details should expose the timestamp of the cached billing snapshot"
         )
+
+        let temporaryGrokHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codebar-grok-tests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temporaryGrokHome) }
+        let temporaryGrokLog = temporaryGrokHome
+            .appendingPathComponent("logs", isDirectory: true)
+            .appendingPathComponent("unified.jsonl")
+        try! FileManager.default.createDirectory(
+            at: temporaryGrokLog.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try! Data(grokBillingLog.utf8).write(to: temporaryGrokLog)
+
+        let refreshedGrokLog = """
+        {"ts":"2026-08-26T02:30:00.000Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":9.2,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-09-01T12:22:17Z"}},"subscriptionTier":"SuperGrok"}}
+        """
+        let activeProvider = GrokProvider(
+            config: GrokConfig(homeDirectory: temporaryGrokHome.path),
+            refresher: FakeGrokUsageRefresher(outcome: .refreshed, replacementLog: refreshedGrokLog)
+        )
+        let activelyRefreshedUsage = try! await activeProvider.fetchUsage()
+        expect(activelyRefreshedUsage.items.first?.used == 9, "Grok active refresh should replace an older cached snapshot")
+        expect(
+            activelyRefreshedUsage.extraInfo.contains(where: { $0.label == "刷新状态" && $0.value == "主动刷新成功" }),
+            "Grok details should confirm a successful active refresh"
+        )
+
+        try! Data(grokBillingLog.utf8).write(to: temporaryGrokLog, options: .atomic)
+        let fallbackProvider = GrokProvider(
+            config: GrokConfig(homeDirectory: temporaryGrokHome.path),
+            refresher: FakeGrokUsageRefresher(outcome: .timedOut, replacementLog: nil)
+        )
+        let fallbackUsage = try! await fallbackProvider.fetchUsage()
+        expect(fallbackUsage.items.first?.used == 6, "Grok should preserve its last cached usage when active refresh times out")
+        expect(
+            fallbackUsage.extraInfo.contains(where: { $0.label == "刷新状态" && $0.value.contains("已显示上次缓存") }),
+            "Grok details should disclose when cached data is used as a fallback"
+        )
+
+        let missingGrokHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codebar-missing-grok-\(UUID().uuidString)", isDirectory: true)
+        let missingProvider = GrokProvider(
+            config: GrokConfig(homeDirectory: missingGrokHome.path),
+            refresher: FakeGrokUsageRefresher(outcome: .unavailable, replacementLog: nil)
+        )
+        do {
+            _ = try await missingProvider.fetchUsage()
+            fatalError("Grok without a CLI or cached snapshot should fail")
+        } catch let error as PlatformError {
+            expect(
+                error.errorDescription?.contains("未找到 Grok CLI") == true
+                    && error.errorDescription?.contains("/usage") == true,
+                "Grok missing-state error should explain both the CLI problem and the manual fallback"
+            )
+        } catch {
+            fatalError("Grok missing-state should use PlatformError")
+        }
 
         do {
             _ = try GrokProvider.testUsage(from: #"{"msg":"no billing data"}"#)
