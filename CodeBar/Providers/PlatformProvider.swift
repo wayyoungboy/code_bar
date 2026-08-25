@@ -145,6 +145,7 @@ enum MonitorModuleConfig: Codable {
     case mimo(MimoConfig)
     case codex(CodexConfig)
     case gemini(GeminiConfig)
+    case grok(GrokConfig)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -153,6 +154,7 @@ enum MonitorModuleConfig: Codable {
         case mimo
         case codex
         case gemini
+        case grok
     }
 
     var platform: PlatformType {
@@ -162,6 +164,7 @@ enum MonitorModuleConfig: Codable {
         case .mimo: return .mimo
         case .codex: return .codex
         case .gemini: return .gemini
+        case .grok: return .grok
         }
     }
 
@@ -176,6 +179,8 @@ enum MonitorModuleConfig: Codable {
         case .codex(let config):
             return config.isValid
         case .gemini(let config):
+            return config.isValid
+        case .grok(let config):
             return config.isValid
         }
     }
@@ -194,6 +199,8 @@ enum MonitorModuleConfig: Codable {
             self = .codex(try container.decode(CodexConfig.self, forKey: .codex))
         case .gemini:
             self = .gemini(try container.decode(GeminiConfig.self, forKey: .gemini))
+        case .grok:
+            self = .grok(try container.decode(GrokConfig.self, forKey: .grok))
         }
     }
 
@@ -211,6 +218,8 @@ enum MonitorModuleConfig: Codable {
             try container.encode(config, forKey: .codex)
         case .gemini(let config):
             try container.encode(config, forKey: .gemini)
+        case .grok(let config):
+            try container.encode(config, forKey: .grok)
         }
     }
 }
@@ -692,6 +701,24 @@ struct GeminiConfig: PlatformConfig, Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(proxyURL, forKey: .proxyURL)
+    }
+}
+
+/// Grok CLI 本地用量缓存配置
+struct GrokConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .grok
+    var homeDirectory: String?
+
+    init(homeDirectory: String? = nil) {
+        self.homeDirectory = homeDirectory
+    }
+
+    var isValid: Bool {
+        true
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case homeDirectory = "grok_home_directory"
     }
 }
 

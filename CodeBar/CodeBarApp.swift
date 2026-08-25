@@ -518,6 +518,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     .replacingOccurrences(of: "天", with: "d")
             }
             return "审查长期"
+        case "grok.weekly":
+            return "周"
         default:
             if item.label.contains("小时") {
                 return item.label.replacingOccurrences(of: "小时", with: "h")

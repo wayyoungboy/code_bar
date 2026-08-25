@@ -9,6 +9,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     case mimo = "小米 MiMo"
     case codex = "Codex"
     case gemini = "Gemini"
+    case grok = "Grok"
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .mimo: return "m.circle.fill"
         case .codex: return "circle.hexagongrid.fill"
         case .gemini: return "sparkles"
+        case .grok: return "bolt.circle.fill"
         }
     }
 
@@ -29,6 +31,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .mimo: return "XiaomiLogo"
         case .codex: return "CodexLogo"
         case .gemini: return "GeminiLogo"
+        case .grok: return nil
         }
     }
 
@@ -46,6 +49,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .mimo: return "MiMo"
         case .codex: return "Codex"
         case .gemini: return "Gemini"
+        case .grok: return "Grok"
         }
     }
 
@@ -56,6 +60,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .mimo: return "#FF6900"
         case .codex: return "#10A37F"
         case .gemini: return "#4285F4"
+        case .grok: return "#6B7280"
         }
     }
 }
@@ -327,6 +332,8 @@ class UsageTracker: ObservableObject {
             return CodexProvider(config: config)
         case .gemini(let config):
             return GeminiProvider(config: config)
+        case .grok(let config):
+            return GrokProvider(config: config)
         }
     }
 
@@ -355,6 +362,10 @@ class UsageTracker: ObservableObject {
         let geminiConfig = allConfigs[PlatformType.gemini.rawValue]
             .flatMap { try? JSONDecoder().decode(GeminiConfig.self, from: $0) } ?? GeminiConfig()
         providers[.gemini] = GeminiProvider(config: geminiConfig)
+
+        let grokConfig = allConfigs[PlatformType.grok.rawValue]
+            .flatMap { try? JSONDecoder().decode(GrokConfig.self, from: $0) } ?? GrokConfig()
+        providers[.grok] = GrokProvider(config: grokConfig)
     }
 
     private func loadAllConfigs() -> [String: Data] {

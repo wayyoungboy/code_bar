@@ -683,7 +683,7 @@ private struct ModuleBehaviorTests {
         {"ts":"2026-08-24T12:00:00.000Z","src":"shell","msg":"unrelated event"}
         {"ts":"2026-08-24T13:00:00.000Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":12,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-24T12:00:00Z","end":"2026-08-31T12:00:00Z"},"subscriptionTier":"SuperGrok"}}}
         {not valid json}
-        {"ts":"2026-08-25T15:13:54.512Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":6.4,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-25T12:22:17.580519+00:00","end":"2026-09-01T12:22:17.580519+00:00"},"billingPeriodStart":"2026-08-25T12:22:17.580519+00:00","billingPeriodEnd":"2026-09-01T12:22:17.580519+00:00","subscriptionTier":"SuperGrok"}}}
+        {"ts":"2026-08-25T15:13:54.512Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":6.4,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-25T12:22:17.580519+00:00","end":"2026-09-01T12:22:17.580519+00:00"},"billingPeriodStart":"2026-08-25T12:22:17.580519+00:00","billingPeriodEnd":"2026-09-01T12:22:17.580519+00:00"},"subscriptionTier":"SuperGrok"}}
         """
         let grokUsage = try! GrokProvider.testUsage(from: grokBillingLog)
         expect(grokUsage.platformName == "Grok", "Grok local billing data should map to the Grok platform")

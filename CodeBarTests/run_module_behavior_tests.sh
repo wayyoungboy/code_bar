@@ -25,6 +25,7 @@ swiftc \
   "$SRCROOT/CodeBar/Providers/MimoProvider.swift" \
   "$SRCROOT/CodeBar/Providers/CodexProvider.swift" \
   "$SRCROOT/CodeBar/Providers/GeminiProvider.swift" \
+  "$SRCROOT/CodeBar/Providers/GrokProvider.swift" \
   "$SRCROOT/CodeBarTests/TestNotifications.swift" \
   "$SRCROOT/CodeBarTests/ModuleBehaviorTests.swift" \
   -o "$TEST_BINARY"

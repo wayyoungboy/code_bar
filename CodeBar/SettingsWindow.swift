@@ -863,6 +863,7 @@ struct ModuleEditorView: View {
     @State private var mimoUserId: String
     @State private var codexProxyURL: String
     @State private var geminiProxyURL: String
+    @State private var grokHomeDirectory: String
     @State private var metricSelectionMode: MetricSelectionMode
     @State private var displayKeys: Set<String>
     @State private var resetTimeKeys: Set<String>
@@ -908,6 +909,7 @@ struct ModuleEditorView: View {
         var initialMimoUserId = ""
         var initialCodexProxyURL = ""
         var initialGeminiProxyURL = ""
+        var initialGrokHomeDirectory = ""
 
         if let module {
             switch module.config {
@@ -924,6 +926,8 @@ struct ModuleEditorView: View {
                 initialCodexProxyURL = config.proxyURL ?? ""
             case .gemini(let config):
                 initialGeminiProxyURL = config.proxyURL ?? ""
+            case .grok(let config):
+                initialGrokHomeDirectory = config.homeDirectory ?? ""
             }
         }
 
@@ -935,6 +939,7 @@ struct ModuleEditorView: View {
         _mimoUserId = State(initialValue: initialMimoUserId)
         _codexProxyURL = State(initialValue: initialCodexProxyURL)
         _geminiProxyURL = State(initialValue: initialGeminiProxyURL)
+        _grokHomeDirectory = State(initialValue: initialGrokHomeDirectory)
     }
 
     var body: some View {
@@ -1061,6 +1066,17 @@ struct ModuleEditorView: View {
                     .foregroundColor(.secondary)
                 TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $geminiProxyURL)
                     .textFieldStyle(.roundedBorder)
+            }
+        case .grok:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("读取 Grok CLI 的本地额度缓存，不会读取登录令牌")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("Grok 目录（可选，默认 ~/.grok）", text: $grokHomeDirectory)
+                    .textFieldStyle(.roundedBorder)
+                Text("首次使用请在 Grok 中运行 /usage；之后启动 Grok 或再次运行 /usage 可更新数据")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -1200,6 +1216,10 @@ struct ModuleEditorView: View {
                 ModuleQuotaOption(key: "gemini_flash", label: "Flash", availability: .available),
                 ModuleQuotaOption(key: "gemini_flash_lite", label: "Flash Lite", availability: .available),
             ]
+        case .grok:
+            return [
+                ModuleQuotaOption(key: "grok.weekly", label: "周额度", availability: .available),
+            ]
         case .codex:
             return codexQuotaOptions
         case .mimo:
@@ -1323,7 +1343,7 @@ struct ModuleEditorView: View {
             return !zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .mimo:
             return !mimoServiceToken.isEmpty && !mimoUserId.isEmpty
-        case .codex, .gemini:
+        case .codex, .gemini, .grok:
             return true
         }
     }
@@ -1368,6 +1388,9 @@ struct ModuleEditorView: View {
         case .gemini:
             let trimmed = geminiProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
             config = .gemini(GeminiConfig(proxyURL: trimmed.isEmpty ? nil : trimmed))
+        case .grok:
+            let trimmed = grokHomeDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+            config = .grok(GrokConfig(homeDirectory: trimmed.isEmpty ? nil : trimmed))
         }
 
         return MonitorModule(
@@ -1416,6 +1439,8 @@ struct ModuleEditorView: View {
             return ZenMuxAccountConfig.defaultDisplayKeys
         case .gemini:
             return ["gemini_pro", "gemini_flash", "gemini_flash_lite"]
+        case .grok:
+            return ["grok.weekly"]
         case .mimo, .codex:
             return []
         }
@@ -1453,6 +1478,8 @@ struct HelpWindowView: View {
                         codexHelpSteps
                     case .gemini:
                         geminiHelpSteps
+                    case .grok:
+                        grokHelpSteps
                     }
                 }
             }
@@ -1476,6 +1503,7 @@ struct HelpWindowView: View {
         case .mimo: return "获取小米 MiMo 凭据帮助"
         case .codex: return "获取 Codex 用量凭据帮助"
         case .gemini: return "获取 Gemini 用量凭据帮助"
+        case .grok: return "获取 Grok 用量帮助"
         }
     }
 
@@ -1540,6 +1568,15 @@ struct HelpWindowView: View {
             HelpStepView(number: 2, title: "使用 Google 登录", description: "通过 Gemini CLI 登录 Google 账号，使 ~/.gemini/oauth_creds.json 中生成 OAuth 凭据", icon: "person.circle")
             HelpStepView(number: 3, title: "自动检测", description: "CodeBar 会自动读取 ~/.gemini/oauth_creds.json，不需要手动填写凭据", icon: "key")
             HelpStepView(number: 4, title: "代理可选", description: "无法直连 Google Code Assist 接口时，可填写 http 或 socks5 代理地址", icon: "network")
+        }
+    }
+
+    private var grokHelpSteps: some View {
+        Group {
+            HelpStepView(number: 1, title: "安装并登录 Grok CLI", description: "CodeBar 使用本机 Grok CLI 已生成的数据，不需要复制任何登录凭据", icon: "terminal")
+            HelpStepView(number: 2, title: "生成额度快照", description: "在 Grok 中运行 /usage，确认能看到 Weekly limit", icon: "chart.bar")
+            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 只读取 ~/.grok/logs/unified.jsonl 中的额度快照，不读取 auth.json", icon: "lock.shield")
+            HelpStepView(number: 4, title: "保持数据新鲜", description: "启动 Grok 或再次运行 /usage 后，在 CodeBar 中刷新即可看到最新数据", icon: "arrow.clockwise")
         }
     }
 }
