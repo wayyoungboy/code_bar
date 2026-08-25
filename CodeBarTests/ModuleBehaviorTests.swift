@@ -460,6 +460,8 @@ private struct ModuleBehaviorTests {
         expect(grokModule.platform == .grok, "Grok module should report the Grok platform")
         expect(grokModule.isValid, "Grok module should be valid without copying local OAuth tokens")
         expect(ModuleEditorView.defaultDisplayKeys(for: .grok) == ["grok.weekly"], "Grok should default to its weekly quota")
+        expect(PlatformType.grok.logoAssetName == "GrokLogo", "Grok should use its branded logo asset instead of a generic system icon")
+        expect(PlatformType.grok.usesOriginalLogoColor, "Grok should preserve the official black and white icon colors")
 
         let encodedGrok = try! JSONEncoder().encode(grokModule.config)
         let decodedGrok = try! JSONDecoder().decode(MonitorModuleConfig.self, from: encodedGrok)
