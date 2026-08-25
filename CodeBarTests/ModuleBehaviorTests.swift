@@ -21,8 +21,7 @@ private struct FakeGrokUsageRefresher: GrokUsageRefreshing {
 
     func refresh(
         logURL: URL,
-        grokHomeURL: URL,
-        previousSnapshotDate: Date?
+        grokHomeURL: URL
     ) async -> GrokRefreshOutcome {
         if let replacementLog {
             try? FileManager.default.createDirectory(

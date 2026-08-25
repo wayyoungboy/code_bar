@@ -1069,12 +1069,12 @@ struct ModuleEditorView: View {
             }
         case .grok:
             VStack(alignment: .leading, spacing: 6) {
-                Text("读取 Grok CLI 的本地额度缓存，不会读取登录令牌")
+                Text("通过本机 Grok CLI 主动刷新；失败时显示最近缓存，不会读取登录令牌")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 TextField("Grok 目录（可选，默认 ~/.grok）", text: $grokHomeDirectory)
                     .textFieldStyle(.roundedBorder)
-                Text("首次使用请在 Grok 中运行 /usage；之后启动 Grok 或再次运行 /usage 可更新数据")
+                Text("首次使用请确保 Grok CLI 已登录；CodeBar 刷新时会在后台自动获取额度")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -1576,7 +1576,7 @@ struct HelpWindowView: View {
             HelpStepView(number: 1, title: "安装并登录 Grok CLI", description: "CodeBar 使用本机 Grok CLI 已生成的数据，不需要复制任何登录凭据", icon: "terminal")
             HelpStepView(number: 2, title: "生成额度快照", description: "在 Grok 中运行 /usage，确认能看到 Weekly limit", icon: "chart.bar")
             HelpStepView(number: 3, title: "自动检测", description: "CodeBar 只读取 ~/.grok/logs/unified.jsonl 中的额度快照，不读取 auth.json", icon: "lock.shield")
-            HelpStepView(number: 4, title: "保持数据新鲜", description: "启动 Grok 或再次运行 /usage 后，在 CodeBar 中刷新即可看到最新数据", icon: "arrow.clockwise")
+            HelpStepView(number: 4, title: "主动刷新与兜底", description: "CodeBar 会通过本机 Grok CLI 主动刷新；网络或 CLI 异常时继续显示最近缓存", icon: "arrow.clockwise")
         }
     }
 }

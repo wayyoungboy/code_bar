@@ -1,16 +1,197 @@
 import Foundation
 
+enum GrokRefreshOutcome: Equatable {
+    case refreshed
+    case unavailable
+    case timedOut
+    case failed
+}
+
+protocol GrokUsageRefreshing {
+    func refresh(
+        logURL: URL,
+        grokHomeURL: URL
+    ) async -> GrokRefreshOutcome
+}
+
+/// 通过官方 Grok CLI 主动刷新额度，避免 CodeBar 接触 OAuth 凭据或私有 HTTP 接口。
+actor GrokCLIUsageRefresher: GrokUsageRefreshing {
+    static let shared = GrokCLIUsageRefresher()
+
+    private let pollDelayNanoseconds: UInt64 = 200_000_000
+    private let startupTimeout: TimeInterval = 6
+    private let timeout: TimeInterval = 8
+
+    func refresh(
+        logURL: URL,
+        grokHomeURL: URL
+    ) async -> GrokRefreshOutcome {
+        guard let executableURL = findExecutable(grokHomeURL: grokHomeURL) else {
+            return .unavailable
+        }
+
+        let previousMarker = latestBillingMarker(at: logURL)
+        let previousStartupMarker = latestLogMarker(at: logURL, message: "startup timing")
+        let process = Process()
+        let inputPipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        process.arguments = [
+            "-q",
+            "/dev/null",
+            executableURL.path,
+            "--no-alt-screen",
+            "--no-subagents",
+            "--cwd",
+            FileManager.default.homeDirectoryForCurrentUser.path,
+        ]
+        process.standardInput = inputPipe
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        var environment = ProcessInfo.processInfo.environment
+        environment["GROK_HOME"] = grokHomeURL.path
+        process.environment = environment
+
+        do {
+            try process.run()
+        } catch {
+            return .failed
+        }
+
+        let startupDeadline = Date().addingTimeInterval(startupTimeout)
+        while Date() < startupDeadline, process.isRunning {
+            if Task.isCancelled {
+                await stop(process: process, inputPipe: inputPipe)
+                return .failed
+            }
+            if let marker = latestLogMarker(at: logURL, message: "startup timing"),
+               marker != previousStartupMarker {
+                break
+            }
+            try? await Task.sleep(nanoseconds: pollDelayNanoseconds)
+        }
+
+        do {
+            guard process.isRunning else {
+                await stop(process: process, inputPipe: inputPipe)
+                return .failed
+            }
+            try inputPipe.fileHandleForWriting.write(contentsOf: Data("/usage\r".utf8))
+        } catch {
+            await stop(process: process, inputPipe: inputPipe)
+            return .failed
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        var exitedBeforeRefresh = false
+        while Date() < deadline {
+            if Task.isCancelled {
+                await stop(process: process, inputPipe: inputPipe)
+                return .failed
+            }
+            if let marker = latestBillingMarker(at: logURL), marker != previousMarker {
+                await stop(process: process, inputPipe: inputPipe)
+                return .refreshed
+            }
+            if !process.isRunning {
+                exitedBeforeRefresh = true
+                break
+            }
+            try? await Task.sleep(nanoseconds: pollDelayNanoseconds)
+        }
+
+        await stop(process: process, inputPipe: inputPipe)
+        return exitedBeforeRefresh ? .failed : .timedOut
+    }
+
+    private func findExecutable(grokHomeURL: URL) -> URL? {
+        var candidates: [URL] = []
+        if let customPath = ProcessInfo.processInfo.environment["GROK_CLI_PATH"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !customPath.isEmpty {
+            candidates.append(URL(fileURLWithPath: (customPath as NSString).expandingTildeInPath))
+        }
+        candidates.append(grokHomeURL.appendingPathComponent("bin/grok"))
+        candidates.append(
+            FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".grok/bin/grok")
+        )
+
+        if let path = ProcessInfo.processInfo.environment["PATH"] {
+            candidates.append(contentsOf: path.split(separator: ":").map {
+                URL(fileURLWithPath: String($0), isDirectory: true).appendingPathComponent("grok")
+            })
+        }
+
+        return candidates.first {
+            FileManager.default.isExecutableFile(atPath: $0.path)
+        }
+    }
+
+    private func latestBillingMarker(at logURL: URL) -> String? {
+        guard let log = try? readGrokLogTail(at: logURL, maximumBytes: 1_024 * 1_024) else {
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        for rawLine in log.split(whereSeparator: \.isNewline).reversed() {
+            guard let data = String(rawLine).data(using: .utf8),
+                  let entry = try? decoder.decode(GrokLogEntry.self, from: data),
+                  entry.message == "billing: fetched credits config",
+                  entry.context?.config?.creditUsagePercent != nil else {
+                continue
+            }
+            return entry.timestamp
+        }
+        return nil
+    }
+
+    private func latestLogMarker(at logURL: URL, message: String) -> String? {
+        guard let log = try? readGrokLogTail(at: logURL, maximumBytes: 1_024 * 1_024) else {
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        for rawLine in log.split(whereSeparator: \.isNewline).reversed() {
+            guard let data = String(rawLine).data(using: .utf8),
+                  let entry = try? decoder.decode(GrokLogEntry.self, from: data),
+                  entry.message == message else {
+                continue
+            }
+            return entry.timestamp
+        }
+        return nil
+    }
+
+    private func stop(process: Process, inputPipe: Pipe) async {
+        if process.isRunning {
+            try? inputPipe.fileHandleForWriting.write(contentsOf: Data("/quit\r".utf8))
+            for _ in 0..<5 where process.isRunning {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+        try? inputPipe.fileHandleForWriting.close()
+        if process.isRunning {
+            process.terminate()
+        }
+    }
+}
+
 /// Grok CLI 的本地周额度提供者。
 ///
-/// Grok CLI 暂未向第三方暴露 billing RPC，因此这里只读取 CLI 自己写入的
-/// `logs/unified.jsonl` 用量快照，绝不读取或复制 `auth.json` 中的登录令牌。
+/// CodeBar 通过官方 CLI 主动刷新，再读取 CLI 自己写入的 `logs/unified.jsonl`
+/// 用量快照；刷新失败时保留最近缓存，且绝不读取或复制登录令牌。
 struct GrokProvider: PlatformProvider {
     let platformName = "Grok"
     private let config: GrokConfig
+    private let refresher: any GrokUsageRefreshing
     private let maximumLogBytes = 8 * 1_024 * 1_024
 
-    init(config: GrokConfig = GrokConfig()) {
+    init(
+        config: GrokConfig = GrokConfig(),
+        refresher: any GrokUsageRefreshing = GrokCLIUsageRefresher.shared
+    ) {
         self.config = config
+        self.refresher = refresher
     }
 
     var isConfigured: Bool {
@@ -18,16 +199,25 @@ struct GrokProvider: PlatformProvider {
     }
 
     func fetchUsage() async throws -> PlatformUsageData {
-        guard FileManager.default.fileExists(atPath: billingLogURL.path) else {
-            throw PlatformError.unknown(missingSnapshotMessage)
-        }
+        let refreshOutcome = await refresher.refresh(
+            logURL: billingLogURL,
+            grokHomeURL: grokHomeURL
+        )
 
         do {
             let log = try readLogTail()
-            return try Self.makeUsage(from: log, sourcePath: abbreviatedLogPath)
+            var usage = try Self.makeUsage(from: log, sourcePath: abbreviatedLogPath)
+            usage.extraInfo.append((label: "刷新状态", value: Self.refreshStatus(refreshOutcome)))
+            return usage
         } catch let error as PlatformError {
+            if !FileManager.default.fileExists(atPath: billingLogURL.path) {
+                throw PlatformError.unknown(missingSnapshotMessage(for: refreshOutcome))
+            }
             throw error
         } catch {
+            if !FileManager.default.fileExists(atPath: billingLogURL.path) {
+                throw PlatformError.unknown(missingSnapshotMessage(for: refreshOutcome))
+            }
             throw PlatformError.parseError(error)
         }
     }
@@ -73,50 +263,25 @@ struct GrokProvider: PlatformProvider {
         return billingLogURL.path
     }
 
-    private var missingSnapshotMessage: String {
-        "未找到 Grok 额度缓存。请先启动 Grok 并运行 /usage，然后在 CodeBar 中刷新。"
+    private func missingSnapshotMessage(for outcome: GrokRefreshOutcome) -> String {
+        switch outcome {
+        case .unavailable:
+            return "未找到 Grok CLI，且没有可用额度缓存。请安装并登录 Grok，运行 /usage 后重试。"
+        case .timedOut:
+            return "Grok 主动刷新超时，且没有可用额度缓存。请在 Grok 中运行 /usage 后重试。"
+        case .failed:
+            return "Grok 主动刷新失败，且没有可用额度缓存。请在 Grok 中运行 /usage 后重试。"
+        case .refreshed:
+            return "Grok 已主动刷新，但没有生成可用额度数据。请在 Grok 中运行 /usage 后重试。"
+        }
     }
 
     private func readLogTail() throws -> String {
-        let handle = try FileHandle(forReadingFrom: billingLogURL)
-        defer { try? handle.close() }
-
-        let size = try handle.seekToEnd()
-        let start = size > UInt64(maximumLogBytes) ? size - UInt64(maximumLogBytes) : 0
-        try handle.seek(toOffset: start)
-        let data = try handle.readToEnd() ?? Data()
-        var log = String(decoding: data, as: UTF8.self)
-
-        // 从文件中部开始时，首行可能是不完整 JSON，丢弃它后继续向后查找。
-        if start > 0, let newline = log.firstIndex(of: "\n") {
-            log.removeSubrange(log.startIndex...newline)
-        }
-        return log
+        try readGrokLogTail(at: billingLogURL, maximumBytes: maximumLogBytes)
     }
 
     private static func makeUsage(from jsonl: String, sourcePath: String) throws -> PlatformUsageData {
-        let decoder = JSONDecoder()
-        var snapshot: GrokBillingSnapshot?
-
-        for rawLine in jsonl.split(whereSeparator: \.isNewline).reversed() {
-            guard let data = String(rawLine).data(using: .utf8),
-                  let entry = try? decoder.decode(GrokLogEntry.self, from: data),
-                  entry.message == "billing: fetched credits config",
-                  let config = entry.context?.config,
-                  let percent = config.creditUsagePercent else {
-                continue
-            }
-
-            snapshot = GrokBillingSnapshot(
-                percent: percent,
-                resetDate: parseISO8601(config.currentPeriod?.end ?? config.billingPeriodEnd),
-                tier: config.subscriptionTier ?? entry.context?.subscriptionTier,
-                syncDate: parseISO8601(entry.timestamp)
-            )
-            break
-        }
-
-        guard let snapshot else {
+        guard let snapshot = latestSnapshot(from: jsonl) else {
             throw PlatformError.unknown(
                 "Grok 本地缓存中没有额度数据。请在 Grok 中运行 /usage 后，再回到 CodeBar 刷新。"
             )
@@ -134,7 +299,7 @@ struct GrokProvider: PlatformProvider {
 
         var extraInfo: [(label: String, value: String)] = [
             (label: "数据来源", value: sourcePath),
-            (label: "刷新方式", value: "启动 Grok 或运行 /usage 后更新"),
+            (label: "刷新方式", value: "CodeBar 主动调用本机 Grok CLI；失败时显示最近缓存"),
         ]
         if let syncDate = snapshot.syncDate {
             extraInfo.insert(
@@ -155,6 +320,40 @@ struct GrokProvider: PlatformProvider {
         )
     }
 
+    private static func latestSnapshot(from jsonl: String) -> GrokBillingSnapshot? {
+        let decoder = JSONDecoder()
+        for rawLine in jsonl.split(whereSeparator: \.isNewline).reversed() {
+            guard let data = String(rawLine).data(using: .utf8),
+                  let entry = try? decoder.decode(GrokLogEntry.self, from: data),
+                  entry.message == "billing: fetched credits config",
+                  let config = entry.context?.config,
+                  let percent = config.creditUsagePercent else {
+                continue
+            }
+
+            return GrokBillingSnapshot(
+                percent: percent,
+                resetDate: parseISO8601(config.currentPeriod?.end ?? config.billingPeriodEnd),
+                tier: config.subscriptionTier ?? entry.context?.subscriptionTier,
+                syncDate: parseISO8601(entry.timestamp)
+            )
+        }
+        return nil
+    }
+
+    private static func refreshStatus(_ outcome: GrokRefreshOutcome) -> String {
+        switch outcome {
+        case .refreshed:
+            return "主动刷新成功"
+        case .unavailable:
+            return "未找到 Grok CLI，已显示上次缓存"
+        case .timedOut:
+            return "主动刷新超时，已显示上次缓存"
+        case .failed:
+            return "主动刷新失败，已显示上次缓存"
+        }
+    }
+
     private static func parseISO8601(_ value: String?) -> Date? {
         guard let value, !value.isEmpty else { return nil }
 
@@ -172,6 +371,23 @@ struct GrokProvider: PlatformProvider {
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return formatter.string(from: date)
     }
+}
+
+private func readGrokLogTail(at logURL: URL, maximumBytes: Int) throws -> String {
+    let handle = try FileHandle(forReadingFrom: logURL)
+    defer { try? handle.close() }
+
+    let size = try handle.seekToEnd()
+    let start = size > UInt64(maximumBytes) ? size - UInt64(maximumBytes) : 0
+    try handle.seek(toOffset: start)
+    let data = try handle.readToEnd() ?? Data()
+    var log = String(decoding: data, as: UTF8.self)
+
+    // 从文件中部开始时，首行可能是不完整 JSON，丢弃它后继续向后查找。
+    if start > 0, let newline = log.firstIndex(of: "\n") {
+        log.removeSubrange(log.startIndex...newline)
+    }
+    return log
 }
 
 private struct GrokLogEntry: Decodable {
