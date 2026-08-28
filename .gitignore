@@ -1,9 +1,15 @@
-# Xcode
+# macOS
 .DS_Store
-*.xcodeproj/xcuserdata/
-*.xcodeproj/project.xcworkspace/
+
+# Xcode user data / local state
+xcuserdata/
+*.xcuserstate
 *.xcscmblueprint
 *.xccheckout
+*.moved-aside
+*.xcresult
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
 
 # Build products
 build/
@@ -16,27 +22,22 @@ DerivedData/
 # Development documentation
 dev_doc/
 
-# Carthage
+# Carthage / CocoaPods (not used by this repo)
 Carthage/Build/
-
-# CocoaPods
 Pods/
 *.xcworkspace
 !*.xcworkspace.xcworkspacedata
 !*.xcworkspace/xcshareddata/
 
-# Swift Package Manager
+# Swift Package Manager scratch (this app is an Xcode project, no Package.swift)
 .swiftpm/
 .build/
-build/
-Packages/
-Package.pins
-Package.resolved
 
-# CodeBar
+# CodeBar local artifacts
 CodeBar/Config/
 *.swiftpm/
 CodeBar.dmg
+
 # Temporary files
 *.tmp
 *.temp
