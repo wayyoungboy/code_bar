@@ -6,17 +6,37 @@
 
 ### 环境要求
 
-| 工具 | 要求 |
-| --- | --- |
-| macOS | 13.0+ |
-| Xcode | 15.0+ |
-| GitHub CLI | 发布时需要 |
+| 工具 | 要求 | 说明 |
+| --- | --- | --- |
+| Mac | 必须 | 这是 AppKit/SwiftUI 菜单栏 app，Linux/Windows 不能构建或运行 |
+| macOS | 13.0+ | `MACOSX_DEPLOYMENT_TARGET` |
+| Xcode | 15.0+ 完整 Xcode.app | `CreatedOnToolsVersion = 15.0`；不要只用 Command Line Tools |
+| Swift | 5.0 | `SWIFT_VERSION = 5.0` |
+| GitHub CLI | 发布时需要 | tag 触发 `.github/workflows/release.yml` |
+
+仓库没有 `Package.swift`。不要用 `swift build` / `swift test` / `xcodebuild test`（没有 XCTest target）。
 
 ### 构建
 
+必须在 Mac 上。Debug 构建会跑 `CodeBarTests/run_module_behavior_tests.sh`（Run Script phase，仅 Debug）。
+
 ```bash
-xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
+xcodebuild -project CodeBar.xcodeproj \
+  -scheme CodeBar \
+  -configuration Debug \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath build \
+  CODE_SIGN_IDENTITY="" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  ENABLE_USER_SCRIPT_SANDBOXING=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build
+
+open build/Build/Products/Debug/CodeBar.app
 ```
+
+启动后没有 Dock 图标（`LSUIElement`），看菜单栏。
 
 Release 验证：
 
@@ -24,11 +44,22 @@ Release 验证：
 xcodebuild -project CodeBar.xcodeproj \
   -scheme CodeBar \
   -configuration Release \
+  -destination 'generic/platform=macOS' \
   -derivedDataPath build \
   CODE_SIGN_IDENTITY="" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
+  ENABLE_USER_SCRIPT_SANDBOXING=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
   build
+```
+
+`./build.sh` 同样只在 Mac 交互式终端可用（脚本会 `read`）。
+
+单独跑行为测试：
+
+```bash
+CONFIGURATION=Debug CodeBarTests/run_module_behavior_tests.sh
 ```
 
 ## 添加新 Provider
@@ -157,41 +188,34 @@ Codex 与其他平台不同：
 
 ## 发布
 
-发布不需要手动上传本地 DMG。流程：
+发布不需要手动上传本地 DMG。流程必须在能推 tag 的环境完成；**构建 DMG 的 GitHub Actions job 跑在 macos-15，不能改成 Ubuntu**。
 
-1. 更新 `CodeBar/Info.plist`：
+1. 同步更新版本号：
+   - `CodeBar/Info.plist` 的 `CFBundleShortVersionString`
+   - `CodeBar.xcodeproj/project.pbxproj` 的 `MARKETING_VERSION`
 
-```xml
-<key>CFBundleShortVersionString</key>
-<string>2.2.0</string>
-```
+当前工程版本是 `2.2.6`。
 
 2. 提交版本变更：
 
 ```bash
 git add CodeBar/Info.plist CodeBar.xcodeproj/project.pbxproj README.md
-git commit -m "Bump version to 2.2.0"
+git commit -m "Bump version to 2.2.6"
 git push origin main
 ```
 
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.0 -m "CodeBar v2.2.0"
-git push origin v2.2.0
+git tag -a v2.2.6 -m "CodeBar v2.2.6"
+git push origin v2.2.6
 ```
 
-4. GitHub Actions 自动构建、签名、创建 DMG 并上传 Release。
+4. GitHub Actions 自动在 Mac runner 上构建、adhoc 签名、创建 DMG 并上传 Release。产物未公证，用户首次打开仍可能需要 `xattr -cr` 或系统设置里「仍要打开」。
 
 ## 验证清单
 
-发布前至少运行：
-
-```bash
-xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
-```
-
-涉及发布时额外运行 Release 构建。涉及 UI 变更时，启动 Debug app 并人工检查菜单栏弹窗和设置窗口。
+发布前至少在 **Mac** 上运行上面的 Debug `xcodebuild`。涉及发布时额外运行 Release 构建。涉及 UI 变更时，启动 Debug app 并人工检查菜单栏弹窗和设置窗口——CI 不会点 GUI。
 
 ## 平台 Logo
 
