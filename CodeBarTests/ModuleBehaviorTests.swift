@@ -490,6 +490,32 @@ private struct ModuleBehaviorTests {
             fatalError("Decoded config should be Grok")
         }
 
+        let antigravityConfig = AntigravityConfig(hostAddress: "127.0.0.1:57643", csrfToken: "test-token", cliPath: "/usr/local/bin/agy")
+        let antigravityModule = MonitorModule(
+            alias: "agy",
+            config: .antigravity(antigravityConfig),
+            displayKeys: ModuleEditorView.defaultDisplayKeys(for: .antigravity),
+            resetTimeKeys: ["gemini-5h"],
+            sortOrder: 0
+        )
+
+        expect(antigravityModule.platform == .antigravity, "Antigravity module should report the Antigravity platform")
+        expect(antigravityModule.isValid, "Antigravity module should be valid by default")
+        expect(ModuleEditorView.defaultDisplayKeys(for: .antigravity) == ["gemini-5h", "gemini-weekly"], "Antigravity should default to Gemini 5h and weekly quotas")
+        expect(PlatformType.antigravity.shortName == "AGY", "Antigravity should report AGY as its short name")
+        expect(PlatformType.antigravity.logoAssetName == "AntigravityLogo", "Antigravity should use AntigravityLogo")
+        expect(PlatformType.antigravity.usesOriginalLogoColor, "Antigravity should preserve original logo color")
+
+        let encodedAntigravity = try! JSONEncoder().encode(antigravityModule.config)
+        let decodedAntigravity = try! JSONDecoder().decode(MonitorModuleConfig.self, from: encodedAntigravity)
+        if case .antigravity(let decodedConfig) = decodedAntigravity {
+            expect(decodedConfig.hostAddress == "127.0.0.1:57643", "Antigravity config should preserve custom host through Codable")
+            expect(decodedConfig.csrfToken == "test-token", "Antigravity config should preserve custom CSRF token through Codable")
+            expect(decodedConfig.cliPath == "/usr/local/bin/agy", "Antigravity config should preserve CLI path through Codable")
+        } else {
+            fatalError("Decoded config should be Antigravity")
+        }
+
         let legacyModuleJSON = """
         {
           "id": "legacy-gemini",
@@ -790,5 +816,62 @@ private struct ModuleBehaviorTests {
             fatalError("Missing Grok billing data should use PlatformError")
         }
 
+        let antigravityQuotaJSON = """
+        {
+          "response": {
+            "groups": [
+              {
+                "displayName": "Gemini Models",
+                "description": "Models within this group: Gemini Flash, Gemini Pro",
+                "buckets": [
+                  {
+                    "bucketId": "gemini-weekly",
+                    "displayName": "Weekly Limit Remaining",
+                    "window": "weekly",
+                    "remainingFraction": 0.85,
+                    "resetTime": "2026-10-23T17:00:00Z"
+                  },
+                  {
+                    "bucketId": "gemini-5h",
+                    "displayName": "Five Hour Limit Remaining",
+                    "window": "5h",
+                    "remainingFraction": 0.50,
+                    "resetTime": "2026-10-17T02:00:00Z"
+                  }
+                ]
+              },
+              {
+                "displayName": "Claude and GPT models",
+                "description": "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
+                "buckets": [
+                  {
+                    "bucketId": "3p-weekly",
+                    "displayName": "Weekly Limit Remaining",
+                    "window": "weekly",
+                    "remainingFraction": 1.0,
+                    "resetTime": "2026-10-23T17:00:00Z"
+                  },
+                  {
+                    "bucketId": "3p-5h",
+                    "displayName": "Five Hour Limit Remaining",
+                    "window": "5h",
+                    "remainingFraction": 0.75,
+                    "resetTime": "2026-10-17T02:00:00Z"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+        """
+        let antigravityUsage = try! AntigravityProvider.testUsage(from: antigravityQuotaJSON)
+        expect(antigravityUsage.platformName == "Antigravity", "Antigravity usage should map to Antigravity platform")
+        expect(antigravityUsage.items.count == 4, "Antigravity should produce 4 usage items")
+        expect(antigravityUsage.items.map(\.key) == ["gemini-weekly", "gemini-5h", "3p-weekly", "3p-5h"], "Antigravity items should preserve bucket IDs")
+        expect(antigravityUsage.items[1].used == 50, "50% remaining should mean 50% used")
+        expect(antigravityUsage.items[1].label == "Gemini 5小时", "gemini-5h should map to Gemini 5小时")
+        expect(antigravityUsage.items[2].used == 0, "100% remaining should mean 0% used")
+        expect(antigravityUsage.items[3].label == "Claude/GPT 5小时", "3p-5h should map to Claude/GPT 5小时")
+        try! await UsageProviderTests.run()
     }
 }

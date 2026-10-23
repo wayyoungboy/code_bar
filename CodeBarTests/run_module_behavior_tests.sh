@@ -26,7 +26,9 @@ swiftc \
   "$SRCROOT/CodeBar/Providers/CodexProvider.swift" \
   "$SRCROOT/CodeBar/Providers/GeminiProvider.swift" \
   "$SRCROOT/CodeBar/Providers/GrokProvider.swift" \
+  "$SRCROOT/CodeBar/Providers/AntigravityProvider.swift" \
   "$SRCROOT/CodeBarTests/TestNotifications.swift" \
+  "$SRCROOT/CodeBarTests/UsageProviderTests.swift" \
   "$SRCROOT/CodeBarTests/ModuleBehaviorTests.swift" \
   -o "$TEST_BINARY"
 

@@ -10,6 +10,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     case codex = "Codex"
     case gemini = "Gemini"
     case grok = "Grok"
+    case antigravity = "Antigravity"
 
     var id: String { rawValue }
 
@@ -21,6 +22,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .codex: return "circle.hexagongrid.fill"
         case .gemini: return "sparkles"
         case .grok: return "bolt.circle.fill"
+        case .antigravity: return "atom"
         }
     }
 
@@ -32,12 +34,13 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .codex: return "CodexLogo"
         case .gemini: return "GeminiLogo"
         case .grok: return "GrokLogo"
+        case .antigravity: return "AntigravityLogo"
         }
     }
 
     var usesOriginalLogoColor: Bool {
         switch self {
-        case .mimo, .gemini, .grok: return true
+        case .mimo, .gemini, .grok, .antigravity: return true
         default: return false
         }
     }
@@ -50,6 +53,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .codex: return "Codex"
         case .gemini: return "Gemini"
         case .grok: return "Grok"
+        case .antigravity: return "AGY"
         }
     }
 
@@ -61,6 +65,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .codex: return "#10A37F"
         case .gemini: return "#4285F4"
         case .grok: return "#6B7280"
+        case .antigravity: return "#4285F4"
         }
     }
 }
@@ -334,6 +339,8 @@ class UsageTracker: ObservableObject {
             return GeminiProvider(config: config)
         case .grok(let config):
             return GrokProvider(config: config)
+        case .antigravity(let config):
+            return AntigravityProvider(config: config)
         }
     }
 
@@ -366,6 +373,10 @@ class UsageTracker: ObservableObject {
         let grokConfig = allConfigs[PlatformType.grok.rawValue]
             .flatMap { try? JSONDecoder().decode(GrokConfig.self, from: $0) } ?? GrokConfig()
         providers[.grok] = GrokProvider(config: grokConfig)
+
+        let antigravityConfig = allConfigs[PlatformType.antigravity.rawValue]
+            .flatMap { try? JSONDecoder().decode(AntigravityConfig.self, from: $0) } ?? AntigravityConfig()
+        providers[.antigravity] = AntigravityProvider(config: antigravityConfig)
     }
 
     private func loadAllConfigs() -> [String: Data] {

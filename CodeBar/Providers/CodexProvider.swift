@@ -1,5 +1,143 @@
 import Foundation
 
+/// Keep the native client first, with a certificate-verifying system curl fallback
+/// for connections where the native TLS stack is reset before an HTTP response.
+enum CodexHTTPTransport {
+    typealias Loader = (URLRequest) async throws -> (Data, URLResponse)
+
+    static func data(for request: URLRequest, session: URLSession, proxyURL: String?) async throws -> (Data, URLResponse) {
+        try await load(
+            request,
+            primary: { try await session.data(for: $0) },
+            fallback: { request in
+                let configured = proxyURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let effectiveProxy: String?
+                if let configured, !configured.isEmpty {
+                    effectiveProxy = configured
+                } else {
+                    effectiveProxy = try systemProxyURL(for: request.url!)
+                }
+                return try await curlData(for: request, proxyURL: effectiveProxy)
+            }
+        )
+    }
+
+    private static func systemProxyURL(for url: URL) throws -> String? {
+        guard let settings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() else { return nil }
+        let proxies = CFNetworkCopyProxiesForURL(url as CFURL, settings).takeRetainedValue() as? [[String: Any]] ?? []
+        return try systemProxyURL(from: proxies)
+    }
+
+    static func systemProxyURL(from proxies: [[String: Any]]) throws -> String? {
+        guard let proxy = proxies.first,
+              let type = proxy[kCFProxyTypeKey as String] as? String,
+              type != kCFProxyTypeNone as String else { return nil }
+        let scheme: String
+        if type == kCFProxyTypeHTTP as String {
+            scheme = "http"
+        } else if type == kCFProxyTypeHTTPS as String {
+            scheme = "https"
+        } else if type == kCFProxyTypeSOCKS as String {
+            scheme = "socks5"
+        } else {
+            throw PlatformError.unknown("Codex 系统代理使用自动配置，请在模块中填写代理地址后重试")
+        }
+        guard let host = proxy[kCFProxyHostNameKey as String] as? String,
+              let port = proxy[kCFProxyPortNumberKey as String] as? Int else {
+            throw PlatformError.unknown("Codex 系统代理地址无效")
+        }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.port = port
+        guard let address = components.string else { throw PlatformError.unknown("Codex 系统代理地址无效") }
+        return address
+    }
+
+    static func load(_ request: URLRequest, primary: Loader, fallback: Loader) async throws -> (Data, URLResponse) {
+        do {
+            return try await primary(request)
+        } catch let error as URLError where [.secureConnectionFailed, .networkConnectionLost].contains(error.code) {
+            try Task.checkCancellation()
+            return try await fallback(request)
+        }
+    }
+
+    static func curlArguments(for request: URLRequest, proxyURL: String?) throws -> [String] {
+        guard let url = request.url, url.scheme == "https", url.host == "chatgpt.com",
+              url.user == nil, url.password == nil, url.port == nil || url.port == 443,
+              url.query == nil, url.fragment == nil,
+              ["/backend-api/wham/usage", "/backend-api/wham/rate-limit-reset-credits"].contains(url.path),
+              request.httpMethod == nil || request.httpMethod == "GET" else {
+            throw PlatformError.unknown("无效的 Codex 用量请求")
+        }
+        var arguments = [
+            "--disable", "--silent", "--show-error", "--proto", "=https",
+            "--connect-timeout", "10", "--max-time", String(Constants.networkTimeout),
+            "--max-filesize", "2097152", "--header", "@-", "--write-out", "\n%{http_code}",
+        ]
+        if let proxyURL = proxyURL?.trimmingCharacters(in: .whitespacesAndNewlines), !proxyURL.isEmpty {
+            guard var proxy = URLComponents(string: proxyURL),
+                  ["http", "https", "socks", "socks5"].contains(proxy.scheme?.lowercased() ?? ""),
+                  proxy.host != nil, let port = proxy.port, (1...65535).contains(port),
+                  proxy.user == nil, proxy.password == nil else {
+                throw PlatformError.unknown("Codex 代理地址无效，请使用 http://host:port 或 socks5://host:port")
+            }
+            if proxy.scheme == "socks" { proxy.scheme = "socks5" }
+            arguments += ["--proxy", proxy.string!, "--noproxy", ""]
+        } else {
+            // Match CodeBar's direct-connection setting, independent of curl's environment.
+            arguments += ["--noproxy", "*"]
+        }
+        arguments.append(url.absoluteString)
+        return arguments
+    }
+
+    private static func curlData(for request: URLRequest, proxyURL: String?) async throws -> (Data, URLResponse) {
+        let arguments = try curlArguments(for: request, proxyURL: proxyURL)
+        let headers = request.allHTTPHeaderFields ?? [:]
+        guard headers.allSatisfy({ !$0.key.contains(where: { $0.isNewline }) && !$0.value.contains(where: { $0.isNewline }) }) else {
+            throw PlatformError.invalidAPIKey
+        }
+        let headerInput = Data(headers.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)\n" }.joined().utf8)
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                do {
+                    let process = Process()
+                    let input = Pipe()
+                    let output = Pipe()
+                    defer {
+                        try? input.fileHandleForWriting.close()
+                        try? output.fileHandleForReading.close()
+                    }
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+                    process.arguments = arguments
+                    process.standardInput = input
+                    process.standardOutput = output
+                    process.standardError = FileHandle.nullDevice
+                    try process.run()
+                    try input.fileHandleForWriting.write(contentsOf: headerInput)
+                    try input.fileHandleForWriting.close()
+                    let bytes = try output.fileHandleForReading.readToEnd() ?? Data()
+                    process.waitUntilExit()
+                    guard process.terminationStatus == 0 else {
+                        throw PlatformError.unknown("Codex 网络连接失败（curl \(process.terminationStatus)），请检查网络或模块代理设置")
+                    }
+                    guard let separator = bytes.lastIndex(of: 10),
+                          let statusText = String(data: bytes[bytes.index(after: separator)...], encoding: .utf8),
+                          let status = Int(statusText), (100...599).contains(status),
+                          let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil) else {
+                        throw PlatformError.unknown("Codex 兼容请求未返回有效响应")
+                    }
+                    continuation.resume(returning: (Data(bytes[..<separator]), response))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+}
+
 /// Codex CLI / ChatGPT OAuth 订阅额度提供者
 struct CodexProvider: PlatformProvider {
     let platformName = "Codex"
@@ -35,7 +173,8 @@ struct CodexProvider: PlatformProvider {
         }
 
         let session = try makeSession()
-        let (data, response) = try await session.data(for: request)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await CodexHTTPTransport.data(for: request, session: session, proxyURL: config.proxyURL)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))
         }
@@ -292,7 +431,7 @@ struct CodexProvider: PlatformProvider {
         }
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await CodexHTTPTransport.data(for: request, session: session, proxyURL: config.proxyURL)
             guard let httpResponse = response as? HTTPURLResponse else {
                 return .unavailable
             }

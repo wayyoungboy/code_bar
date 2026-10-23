@@ -146,6 +146,7 @@ enum MonitorModuleConfig: Codable {
     case codex(CodexConfig)
     case gemini(GeminiConfig)
     case grok(GrokConfig)
+    case antigravity(AntigravityConfig)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -155,6 +156,7 @@ enum MonitorModuleConfig: Codable {
         case codex
         case gemini
         case grok
+        case antigravity
     }
 
     var platform: PlatformType {
@@ -165,6 +167,7 @@ enum MonitorModuleConfig: Codable {
         case .codex: return .codex
         case .gemini: return .gemini
         case .grok: return .grok
+        case .antigravity: return .antigravity
         }
     }
 
@@ -181,6 +184,8 @@ enum MonitorModuleConfig: Codable {
         case .gemini(let config):
             return config.isValid
         case .grok(let config):
+            return config.isValid
+        case .antigravity(let config):
             return config.isValid
         }
     }
@@ -201,6 +206,8 @@ enum MonitorModuleConfig: Codable {
             self = .gemini(try container.decode(GeminiConfig.self, forKey: .gemini))
         case .grok:
             self = .grok(try container.decode(GrokConfig.self, forKey: .grok))
+        case .antigravity:
+            self = .antigravity(try container.decode(AntigravityConfig.self, forKey: .antigravity))
         }
     }
 
@@ -220,6 +227,8 @@ enum MonitorModuleConfig: Codable {
             try container.encode(config, forKey: .gemini)
         case .grok(let config):
             try container.encode(config, forKey: .grok)
+        case .antigravity(let config):
+            try container.encode(config, forKey: .antigravity)
         }
     }
 }
@@ -453,6 +462,8 @@ enum ModuleUsageSelection {
                 CodexQuotaKey.codeReviewPrimary,
                 CodexQuotaKey.codeReviewSecondary,
             ]
+        case .antigravity:
+            preferredKeys = ["gemini-5h", "gemini-weekly", "3p-5h", "3p-weekly"]
         default:
             preferredKeys = ["5hour", "7day"]
         }
@@ -719,6 +730,30 @@ struct GrokConfig: PlatformConfig, Codable {
 
     enum CodingKeys: String, CodingKey {
         case homeDirectory = "grok_home_directory"
+    }
+}
+
+/// Antigravity / agy 用量配置
+struct AntigravityConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .antigravity
+    var hostAddress: String?
+    var csrfToken: String?
+    var cliPath: String?
+
+    init(hostAddress: String? = nil, csrfToken: String? = nil, cliPath: String? = nil) {
+        self.hostAddress = hostAddress
+        self.csrfToken = csrfToken
+        self.cliPath = cliPath
+    }
+
+    var isValid: Bool {
+        true
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case hostAddress = "antigravity_host_address"
+        case csrfToken = "antigravity_csrf_token"
+        case cliPath = "antigravity_cli_path"
     }
 }
 

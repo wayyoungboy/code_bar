@@ -21,6 +21,7 @@ struct SettingsWindowView: View {
     @State private var showMimoHelp = false
     @State private var showCodexHelp = false
     @State private var showGeminiHelp = false
+    @State private var showAntigravityHelp = false
     @AppStorage(Constants.presentationModeKey) private var presentationModeRawValue = CodeBarPresentationMode.default.rawValue
 
     // Bailian config
@@ -84,6 +85,9 @@ struct SettingsWindowView: View {
         }
         .sheet(isPresented: $showGeminiHelp) {
             HelpWindowView(platform: .gemini)
+        }
+        .sheet(isPresented: $showAntigravityHelp) {
+            HelpWindowView(platform: .antigravity)
         }
         .sheet(isPresented: $showZenMuxAccountEditor) {
             ZenMuxAccountEditorView(account: editingZenMuxAccount) { account in
@@ -864,6 +868,9 @@ struct ModuleEditorView: View {
     @State private var codexProxyURL: String
     @State private var geminiProxyURL: String
     @State private var grokHomeDirectory: String
+    @State private var antigravityHostAddress: String
+    @State private var antigravityCsrfToken: String
+    @State private var antigravityCliPath: String
     @State private var metricSelectionMode: MetricSelectionMode
     @State private var displayKeys: Set<String>
     @State private var resetTimeKeys: Set<String>
@@ -910,6 +917,9 @@ struct ModuleEditorView: View {
         var initialCodexProxyURL = ""
         var initialGeminiProxyURL = ""
         var initialGrokHomeDirectory = ""
+        var initialAntigravityHostAddress = ""
+        var initialAntigravityCsrfToken = ""
+        var initialAntigravityCliPath = ""
 
         if let module {
             switch module.config {
@@ -928,6 +938,10 @@ struct ModuleEditorView: View {
                 initialGeminiProxyURL = config.proxyURL ?? ""
             case .grok(let config):
                 initialGrokHomeDirectory = config.homeDirectory ?? ""
+            case .antigravity(let config):
+                initialAntigravityHostAddress = config.hostAddress ?? ""
+                initialAntigravityCsrfToken = config.csrfToken ?? ""
+                initialAntigravityCliPath = config.cliPath ?? ""
             }
         }
 
@@ -940,6 +954,9 @@ struct ModuleEditorView: View {
         _codexProxyURL = State(initialValue: initialCodexProxyURL)
         _geminiProxyURL = State(initialValue: initialGeminiProxyURL)
         _grokHomeDirectory = State(initialValue: initialGrokHomeDirectory)
+        _antigravityHostAddress = State(initialValue: initialAntigravityHostAddress)
+        _antigravityCsrfToken = State(initialValue: initialAntigravityCsrfToken)
+        _antigravityCliPath = State(initialValue: initialAntigravityCliPath)
     }
 
     var body: some View {
@@ -1077,6 +1094,18 @@ struct ModuleEditorView: View {
                 Text("首次使用请确保 Grok CLI 已登录；CodeBar 刷新时会在后台自动获取额度")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+        case .antigravity:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CodeBar 默认自动探测本机运行的 Antigravity 桌面端或 agy CLI；可选自定义")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                TextField("本地端点（可选，默认自动探测，如 127.0.0.1:57643）", text: $antigravityHostAddress)
+                    .textFieldStyle(.roundedBorder)
+                SecureField("CSRF Token（可选，默认从进程参数提取）", text: $antigravityCsrfToken)
+                    .textFieldStyle(.roundedBorder)
+                TextField("agy CLI 路径（可选，如 /opt/homebrew/bin/agy）", text: $antigravityCliPath)
+                    .textFieldStyle(.roundedBorder)
             }
         }
     }
@@ -1220,6 +1249,13 @@ struct ModuleEditorView: View {
             return [
                 ModuleQuotaOption(key: "grok.weekly", label: "周额度", availability: .available),
             ]
+        case .antigravity:
+            return [
+                ModuleQuotaOption(key: "gemini-5h", label: "Gemini 5小时", availability: .available),
+                ModuleQuotaOption(key: "gemini-weekly", label: "Gemini 周额度", availability: .available),
+                ModuleQuotaOption(key: "3p-5h", label: "Claude/GPT 5小时", availability: .available),
+                ModuleQuotaOption(key: "3p-weekly", label: "Claude/GPT 周额度", availability: .available),
+            ]
         case .codex:
             return codexQuotaOptions
         case .mimo:
@@ -1343,7 +1379,7 @@ struct ModuleEditorView: View {
             return !zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .mimo:
             return !mimoServiceToken.isEmpty && !mimoUserId.isEmpty
-        case .codex, .gemini, .grok:
+        case .codex, .gemini, .grok, .antigravity:
             return true
         }
     }
@@ -1391,6 +1427,15 @@ struct ModuleEditorView: View {
         case .grok:
             let trimmed = grokHomeDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
             config = .grok(GrokConfig(homeDirectory: trimmed.isEmpty ? nil : trimmed))
+        case .antigravity:
+            let host = antigravityHostAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+            let token = antigravityCsrfToken.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cli = antigravityCliPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            config = .antigravity(AntigravityConfig(
+                hostAddress: host.isEmpty ? nil : host,
+                csrfToken: token.isEmpty ? nil : token,
+                cliPath: cli.isEmpty ? nil : cli
+            ))
         }
 
         return MonitorModule(
@@ -1441,6 +1486,8 @@ struct ModuleEditorView: View {
             return ["gemini_pro", "gemini_flash", "gemini_flash_lite"]
         case .grok:
             return ["grok.weekly"]
+        case .antigravity:
+            return ["gemini-5h", "gemini-weekly"]
         case .mimo, .codex:
             return []
         }
@@ -1480,6 +1527,8 @@ struct HelpWindowView: View {
                         geminiHelpSteps
                     case .grok:
                         grokHelpSteps
+                    case .antigravity:
+                        antigravityHelpSteps
                     }
                 }
             }
@@ -1504,6 +1553,7 @@ struct HelpWindowView: View {
         case .codex: return "获取 Codex 用量凭据帮助"
         case .gemini: return "获取 Gemini 用量凭据帮助"
         case .grok: return "获取 Grok 用量帮助"
+        case .antigravity: return "获取 Antigravity (AGY) 用量帮助"
         }
     }
 
@@ -1577,6 +1627,15 @@ struct HelpWindowView: View {
             HelpStepView(number: 2, title: "生成额度快照", description: "在 Grok 中运行 /usage，确认能看到 Weekly limit", icon: "chart.bar")
             HelpStepView(number: 3, title: "自动检测", description: "CodeBar 只读取 ~/.grok/logs/unified.jsonl 中的额度快照，不读取 auth.json", icon: "lock.shield")
             HelpStepView(number: 4, title: "主动刷新与兜底", description: "CodeBar 会通过本机 Grok CLI 主动刷新；网络或 CLI 异常时继续显示最近缓存", icon: "arrow.clockwise")
+        }
+    }
+
+    private var antigravityHelpSteps: some View {
+        Group {
+            HelpStepView(number: 1, title: "启动 Antigravity 或 agy", description: "启动 Google Antigravity 桌面端或运行 agy CLI", icon: "terminal")
+            HelpStepView(number: 2, title: "登录 Google 账号", description: "在 Antigravity 中完成 Google 账号登录并确认可用", icon: "person.circle")
+            HelpStepView(number: 3, title: "自动检测端点与配额", description: "CodeBar 会自动发现本地 language_server 端口与 CSRF Token，无需手动填写凭据", icon: "atom")
+            HelpStepView(number: 4, title: "多模型池额度监控", description: "支持实时查看 Gemini 与 Claude/GPT 模型的 5小时以及周额度", icon: "chart.bar")
         }
     }
 }

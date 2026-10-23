@@ -26,6 +26,7 @@
 			A1000044 /* StatusBarIconRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000045 /* StatusBarIconRenderer.swift */; };
 			A1000045 /* StatusBarUsagePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000046 /* StatusBarUsagePresentation.swift */; };
 			A1000046 /* GrokProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000047 /* GrokProvider.swift */; };
+			A1000047 /* AntigravityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048 /* AntigravityProvider.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 			A2000045 /* StatusBarIconRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarIconRenderer.swift; sourceTree = "<group>"; };
 			A2000046 /* StatusBarUsagePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarUsagePresentation.swift; sourceTree = "<group>"; };
 			A2000047 /* GrokProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokProvider.swift; sourceTree = "<group>"; };
+			A2000048 /* AntigravityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityProvider.swift; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -111,6 +113,7 @@
 					A2000040 /* CodexProvider.swift */,
 					A2000042 /* GeminiProvider.swift */,
 					A2000047 /* GrokProvider.swift */,
+					A2000048 /* AntigravityProvider.swift */,
 				);
 				path = Providers;
 				sourceTree = "<group>";
@@ -214,7 +217,9 @@
 					"$(SRCROOT)/CodeBar/Providers/CodexProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/GeminiProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/GrokProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/AntigravityProvider.swift",
 					"$(SRCROOT)/CodeBarTests/TestNotifications.swift",
+					"$(SRCROOT)/CodeBarTests/UsageProviderTests.swift",
 					"$(SRCROOT)/CodeBarTests/ModuleBehaviorTests.swift",
 				);
 				name = "Run Module Behavior Tests";
@@ -253,6 +258,7 @@
 					A1000044 /* StatusBarIconRenderer.swift in Sources */,
 					A1000045 /* StatusBarUsagePresentation.swift in Sources */,
 					A1000046 /* GrokProvider.swift in Sources */,
+					A1000047 /* AntigravityProvider.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};

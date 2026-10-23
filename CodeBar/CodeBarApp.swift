@@ -520,6 +520,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return "审查长期"
         case "grok.weekly":
             return "周"
+        case "gemini-5h":
+            return "G 5h"
+        case "gemini-weekly":
+            return "G 周"
+        case "3p-5h":
+            return "C 5h"
+        case "3p-weekly":
+            return "C 周"
         default:
             if item.label.contains("小时") {
                 return item.label.replacingOccurrences(of: "小时", with: "h")
