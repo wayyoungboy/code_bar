@@ -44,6 +44,13 @@ jobs:
       - name: Ad-hoc Sign
         run: codesign --force --deep --sign - build/Build/Products/Release/CodeBar.app
 
+      - name: Validate app bundle
+        run: |
+          APP_PATH=build/Build/Products/Release/CodeBar.app
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          APP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")
+          test "$APP_VERSION" = "${GITHUB_REF_NAME#v}"
+
       - name: Create DMG
         run: |
           TEMP_DIR=$(mktemp -d)
@@ -54,8 +61,13 @@ jobs:
           hdiutil create -volname "CodeBar" -srcfolder "$DMG_DIR" -ov -format UDZO "CodeBar.dmg"
           rm -rf "$TEMP_DIR"
 
+      - name: Checksum DMG
+        run: shasum -a 256 CodeBar.dmg > CodeBar.dmg.sha256
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: CodeBar.dmg
+          files: |
+            CodeBar.dmg
+            CodeBar.dmg.sha256
           generate_release_notes: true

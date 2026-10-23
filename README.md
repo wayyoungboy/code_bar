@@ -6,10 +6,10 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
 [![Swift](https://img.shields.io/badge/Swift-5.0-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.6-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.6)
+[![Release](https://img.shields.io/badge/release-v2.2.7-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.7)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
-一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
+一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini、Grok、Antigravity 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
 
 </div>
 
@@ -21,7 +21,7 @@
 
 | 能力 | 说明 |
 |---|---|
-| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini |
+| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini、Grok、Antigravity |
 | 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
 | 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
 | 刘海 Island | 可切换刘海 Island 展示（见设置里的展示模式） |
@@ -42,6 +42,8 @@
 - **小米 MiMo**：监控 Token 用量（月用量、总用量）
 - **Codex**：自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
 - **Gemini**：自动读取 Gemini CLI 的 Google OAuth 凭据，查询官方 Code Assist 配额
+- **Grok**：通过官方 Grok CLI 主动刷新周额度，失败时展示本地缓存
+- **Antigravity / AGY**：支持桌面端与 agy CLI，展示 Gemini、Claude/GPT 等模型池额度
 
 想支持更多平台？欢迎提交 PR。
 
@@ -61,6 +63,9 @@
 - Codex 支持可选代理请求 `chatgpt.com/backend-api/wham/usage`
 - Gemini 自动读取本机 Gemini CLI OAuth，无需在 CodeBar 中配置 token
 - Gemini 支持可选代理请求 Google Code Assist 配额接口
+- Grok 自动调用本机 CLI 刷新额度，并展示刷新状态与缓存同步时间
+- Antigravity 自动发现本机桌面端，也可指定 agy CLI 路径查询额度
+- Codex 请求在原生连接失败时自动使用兼容通道，保持证书校验并沿用模块或系统代理
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
 
 ## 系统要求
@@ -71,7 +76,7 @@
 | 语言 | **Swift 5.0**（`SWIFT_VERSION = 5.0`） |
 | 本地开发 | **Xcode 15.0+**（`CreatedOnToolsVersion = 15.0`），且必须安装完整 Xcode.app，不能只装 Command Line Tools |
 | 工程形态 | `CodeBar.xcodeproj` / scheme **CodeBar** / product **CodeBar.app** |
-| 当前版本 | **2.2.6**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
+| 当前版本 | **2.2.7**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
 | 签名 | 工程是 Automatic signing；源码构建建议关签名（与 CI / `build.sh` 一致） |
 | 启动形态 | `LSUIElement = true`：**没有 Dock 图标**，图标只出现在菜单栏 |
 
@@ -81,7 +86,7 @@ Linux、GitHub `ubuntu-*` runner、Windows 都无法编译这个 app。CI 用的
 
 ### 从 Release 下载（需要 Mac）
 
-1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.6](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.6)）
+1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.7](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.7)）
 2. 双击打开 DMG，将 CodeBar 拖到 Applications
 3. 首次打开时 macOS 可能提示“无法验证开发者”或“已损坏”，这是因为 DMG 未经 Apple 公证。解决方法：
    - 打开「系统设置 → 隐私与安全性」，拉到最下方，点击「仍要打开」
@@ -233,7 +238,7 @@ http://127.0.0.1:7890
 socks5://127.0.0.1:7890
 ```
 
-不配置代理时会直接请求，行为与 cc-switch 的默认模式一致。
+未填写模块代理时，沿用 macOS 的系统网络配置，不会添加固定代理；系统也未设置代理时直接请求。
 
 ### Gemini
 
@@ -265,6 +270,23 @@ http://127.0.0.1:7890
 socks5://127.0.0.1:7890
 ```
 
+### Grok
+
+在设置界面点击「添加模块」，选择「Grok」。默认读取 `~/.grok/`，可选指定其他 Grok 目录。
+
+- 先安装并登录官方 Grok CLI；CodeBar 会在后台调用 CLI 的 `/usage` 刷新额度。
+- CodeBar 只读取 CLI 写入的 `logs/unified.jsonl` 额度快照，不读取或复制 Grok OAuth 凭据。
+- 展示套餐、周额度、重置时间和同步时间。CLI 不可用或刷新超时时，继续展示最近缓存并标注刷新状态。
+
+### Antigravity / AGY
+
+在设置界面点击「添加模块」，选择「Antigravity」。
+
+- 桌面版：启动并登录 Antigravity，CodeBar 自动发现本机 Language Server 的端口和 CSRF Token。
+- CLI：安装并登录官方 `agy`。CodeBar 支持 `agy -p /usage --output-format json`；填写「agy CLI 路径」可优先使用指定 CLI。
+- 默认展示 Gemini 的 5 小时和周额度；详情页展示接口实际返回的全部模型池额度，包括 Claude/GPT 和 Argon。
+- 本地端点和 CSRF Token 为可选高级配置；仅支持本机 HTTP/HTTPS 地址。
+
 ## 项目结构
 
 当前可运行的应用是 Swift 菜单栏 app。仓库里还有旧 Go/Wails 残留，**构建时不要用它们**。
@@ -286,17 +308,20 @@ code_bar/
 │   ├── StatusBarIconRenderer.swift
 │   ├── StatusBarUsagePresentation.swift
 │   ├── UpdateChecker.swift
-│   ├── Info.plist                 # 版本 2.2.6，LSUIElement
+│   ├── Info.plist                 # 版本 2.2.7，LSUIElement
 │   └── Providers/
 │       ├── PlatformProvider.swift
 │       ├── BailianProvider.swift
 │       ├── ZenMuxProvider.swift
 │       ├── MimoProvider.swift
 │       ├── CodexProvider.swift
-│       └── GeminiProvider.swift
+│       ├── GeminiProvider.swift
+│       ├── GrokProvider.swift
+│       └── AntigravityProvider.swift
 ├── CodeBarTests/                  # Debug 构建期脚本测试，不是 XCTest target
 │   ├── ModuleBehaviorTests.swift
 │   ├── TestNotifications.swift
+│   ├── UsageProviderTests.swift
 │   └── run_module_behavior_tests.sh
 ├── .github/workflows/
 │   ├── ci.yml                     # macos-15 xcodebuild Debug + 行为测试
@@ -355,8 +380,8 @@ CI 与此相同：`.github/workflows/ci.yml` 在 `macos-15` 上选 Xcode 16.x，
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.6 -m "CodeBar v2.2.6"
-git push origin v2.2.6
+git tag -a v2.2.7 -m "CodeBar v2.2.7"
+git push origin v2.2.7
 ```
 
 GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上传到 GitHub Release。发版 runner 也必须是 Mac；本地 `./build.sh` 只适合自己做安装包。
@@ -366,6 +391,9 @@ GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上
 - CodeBar 自身配置存储在 `~/.code_bar/`
 - Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - Gemini OAuth 凭据只从 Gemini CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
+- Grok 通过官方 CLI 刷新，仅解析 CLI 的本地额度快照
+- Antigravity 自动探测的 CSRF Token 仅用于访问本机服务
+- Codex 兼容请求通过标准输入传递认证头，不将 token 写入命令行参数
 - 不会上传或分享任何凭据信息
 - 默认不写运行期请求、用量或凭据相关日志
 

@@ -83,7 +83,8 @@ enum UsageProviderTests {
             fatalError("AGY should stop an unresponsive CLI")
         } catch { expect(Date().timeIntervalSince(timeoutStart) < 2, "AGY CLI timeout should not leave the request blocked") }
 
-        if ProcessInfo.processInfo.environment["CODEBAR_LIVE_USAGE_TESTS"] == "1" {
+        let testAll = ProcessInfo.processInfo.environment["CODEBAR_LIVE_USAGE_TESTS"] == "1"
+        if testAll {
             try await reportLiveUsage("Codex", provider: CodexProvider())
             try await reportLiveUsage("AGY desktop", provider: AntigravityProvider())
             if let path = ProcessInfo.processInfo.environment["CODEBAR_TEST_AGY_CLI"] {
@@ -98,11 +99,12 @@ enum UsageProviderTests {
         if ProcessInfo.processInfo.environment["CODEBAR_LIVE_DISPLAY_TESTS"] == "1" {
             expect(Bundle.main.bundleURL.pathExtension == "app", "Live display tests require an app bundle for UserNotifications")
             let tracker = await UsageTracker()
-            if testGrok {
-                await MainActor.run { tracker.modules = tracker.modules.filter { $0.platform == .grok } }
-            }
+            let platforms: [PlatformType] = testGrok
+                ? (testAll ? [.codex, .antigravity, .grok] : [.grok])
+                : [.codex, .antigravity]
+            await MainActor.run { tracker.modules = tracker.modules.filter { platforms.contains($0.platform) } }
             await tracker.refresh()
-            for platform in testGrok ? [PlatformType.grok] : [PlatformType.codex, .antigravity] {
+            for platform in platforms {
                 guard let module = await tracker.modules.first(where: { $0.platform == platform }) else {
                     fatalError("Live display should contain the \(platform.rawValue) module")
                 }

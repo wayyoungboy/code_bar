@@ -194,21 +194,21 @@ Codex 与其他平台不同：
    - `CodeBar/Info.plist` 的 `CFBundleShortVersionString`
    - `CodeBar.xcodeproj/project.pbxproj` 的 `MARKETING_VERSION`
 
-当前工程版本是 `2.2.6`。
+当前工程版本是 `2.2.7`。
 
 2. 提交版本变更：
 
 ```bash
 git add CodeBar/Info.plist CodeBar.xcodeproj/project.pbxproj README.md
-git commit -m "Bump version to 2.2.6"
+git commit -m "Bump version to 2.2.7"
 git push origin main
 ```
 
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.6 -m "CodeBar v2.2.6"
-git push origin v2.2.6
+git tag -a v2.2.7 -m "CodeBar v2.2.7"
+git push origin v2.2.7
 ```
 
 4. GitHub Actions 自动在 Mac runner 上构建、adhoc 签名、创建 DMG 并上传 Release。产物未公证，用户首次打开仍可能需要 `xattr -cr` 或系统设置里「仍要打开」。
