@@ -5,8 +5,8 @@
 **macOS 菜单栏里的 AI Coding 用量雷达。**
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
-[![Swift](https://img.shields.io/badge/Swift-5.x-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.3-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases)
+[![Swift](https://img.shields.io/badge/Swift-5.0-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
+[![Release](https://img.shields.io/badge/release-v2.2.6-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.6)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
 一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
@@ -15,6 +15,8 @@
 
 ![CodeBar 多模块监控](screenshots/image5.png)
 
+> **必须用 Mac。** 这是 Xcode 工程（`CodeBar.xcodeproj`，scheme `CodeBar`），没有 `Package.swift`，不能用 Swift Package Manager 安装，也不能在 Linux / Windows 上构建或运行。本仓库的 GitHub Actions 只在 `macos-15` 上做 `xcodebuild` 编译与脚本测试，**不会启动 GUI**。
+
 ## Highlights
 
 | 能力 | 说明 |
@@ -22,6 +24,7 @@
 | 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini |
 | 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
 | 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
+| 刘海 Island | 可切换刘海 Island 展示（见设置里的展示模式） |
 | 配额提醒 | 5 小时、7 天、周、月等周期可按模块开启提醒 |
 | 本地存储 | CodeBar 自身配置统一写入 `~/.code_bar/` |
 | OAuth 免配置 | 自动读取本机 Codex CLI / Gemini CLI OAuth 凭据 |
@@ -62,43 +65,84 @@
 
 ## 系统要求
 
-- macOS 13.0+
-- Xcode 15.0+
+| 项 | 实际值（来自工程文件） |
+|---|---|
+| 运行 / 部署目标 | **macOS 13.0+**（`MACOSX_DEPLOYMENT_TARGET`、`LSMinimumSystemVersion`） |
+| 语言 | **Swift 5.0**（`SWIFT_VERSION = 5.0`） |
+| 本地开发 | **Xcode 15.0+**（`CreatedOnToolsVersion = 15.0`），且必须安装完整 Xcode.app，不能只装 Command Line Tools |
+| 工程形态 | `CodeBar.xcodeproj` / scheme **CodeBar** / product **CodeBar.app** |
+| 当前版本 | **2.2.6**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
+| 签名 | 工程是 Automatic signing；源码构建建议关签名（与 CI / `build.sh` 一致） |
+| 启动形态 | `LSUIElement = true`：**没有 Dock 图标**，图标只出现在菜单栏 |
+
+Linux、GitHub `ubuntu-*` runner、Windows 都无法编译这个 app。CI 用的是 `macos-15` + Xcode 16.x。
 
 ## 安装
 
-### 从 Release 下载
+### 从 Release 下载（需要 Mac）
 
-1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`
+1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.6](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.6)）
 2. 双击打开 DMG，将 CodeBar 拖到 Applications
-3. 首次打开时 macOS 可能提示“无法验证开发者”或“已损坏”，这是因为 DMG 未经 Apple 公证，属于正常现象。解决方法：
+3. 首次打开时 macOS 可能提示“无法验证开发者”或“已损坏”，这是因为 DMG 未经 Apple 公证。解决方法：
    - 打开「系统设置 → 隐私与安全性」，拉到最下方，点击「仍要打开」
    - 或在终端执行：
    ```bash
    xattr -cr /Applications/CodeBar.app
    ```
+4. 启动后看**菜单栏**，不要在 Dock 里找图标
 
-### 从源码构建
+### 从源码构建（需要 Mac + 完整 Xcode）
+
+HTTPS 克隆（不要求配置 GitHub SSH key）：
 
 ```bash
-git clone git@github.com:wayyoungboy/code_bar.git
+git clone https://github.com/wayyoungboy/code_bar.git
 cd code_bar
-xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
 ```
 
-也可以使用脚本构建 Release 包：
+**推荐：用 Xcode GUI**
+
+```bash
+open CodeBar.xcodeproj
+```
+
+在 Xcode 里选 scheme `CodeBar`，destination 选 **My Mac**，然后 Run（⌘R）。第一次运行若弹出签名/开发者证书提示，选本地开发团队或改用下面的无签名命令行构建。
+
+**命令行 Debug 构建并启动：**
+
+```bash
+xcodebuild -project CodeBar.xcodeproj \
+  -scheme CodeBar \
+  -configuration Debug \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath build \
+  CODE_SIGN_IDENTITY="" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  ENABLE_USER_SCRIPT_SANDBOXING=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build
+
+open build/Build/Products/Debug/CodeBar.app
+```
+
+Debug 构建会顺带跑 `CodeBarTests/run_module_behavior_tests.sh`（这是工程里的 Run Script build phase，**不是** XCTest target，所以不要用 `xcodebuild test`）。脚本只在 `CONFIGURATION=Debug` 时执行。
+
+产物路径：`build/Build/Products/Debug/CodeBar.app`。不要用不带 `-derivedDataPath` 的 `xcodebuild`，否则 .app 会落到 `~/Library/Developer/Xcode/DerivedData/`，很难找。
+
+也可以打无签名 Release 包：
 
 ```bash
 ./build.sh
 ```
 
-脚本会询问是否创建 DMG。CI 发布时不依赖本地脚本，推送 `v*` tag 会触发 GitHub Actions 自动构建并上传 `CodeBar.dmg`。
+`build.sh` **必须在 Mac 的交互式终端里跑**：它会 `read` 询问是否打开构建目录、是否创建 DMG。非交互环境（CI、管道）会卡住。脚本内部同样关闭 code signing，产物在 `build/Build/Products/Release/CodeBar.app`。CI 发版不走这个脚本：推送 `v*` tag 会触发 `.github/workflows/release.yml`，在 `macos-15` 上 `xcodebuild`、adhoc `codesign`、打 `CodeBar.dmg` 并上传 Release。
 
 ## 使用方法
 
 ### 首次配置
 
-1. 运行应用后，点击菜单栏的 CodeBar 图标
+1. 运行应用后，点击菜单栏的 CodeBar 图标（没有 Dock 图标是正常的）
 2. 点击设置按钮（齿轮图标）
 3. 点击「添加模块」，选择供应商并填写该模块需要的凭据
 4. 保存后，可在模块列表中切换「监控」「bar栏」「详情页」
@@ -223,65 +267,99 @@ socks5://127.0.0.1:7890
 
 ## 项目结构
 
+当前可运行的应用是 Swift 菜单栏 app。仓库里还有旧 Go/Wails 残留，**构建时不要用它们**。
+
 ```text
 code_bar/
+├── CodeBar.xcodeproj/             # 唯一构建入口（不是 SPM）
+│   ├── project.pbxproj
+│   └── xcshareddata/xcschemes/CodeBar.xcscheme
 ├── CodeBar/
 │   ├── CodeBarApp.swift           # 应用入口、菜单栏和弹窗管理
-│   ├── MenuBarView.swift          # 弹窗 UI（用量卡片、进度条、额外信息）
-│   ├── SettingsWindow.swift       # 设置窗口（模块管理、凭据配置、展示选项、帮助）
-│   ├── UsageTracker.swift         # 用量追踪器（模块配置、刷新、存储、通知）
-│   ├── Constants.swift            # 应用常量配置
-│   ├── CodeBarFileStore.swift     # ~/.code_bar 文件存储封装
-│   ├── UpdateChecker.swift        # GitHub Release 更新检查
+│   ├── MenuBarView.swift          # 弹窗 UI
+│   ├── IslandMode.swift           # 刘海 Island 展示
+│   ├── IslandPanelController.swift
+│   ├── SettingsWindow.swift       # 设置窗口
+│   ├── UsageTracker.swift         # 用量追踪器
+│   ├── Constants.swift
+│   ├── CodeBarFileStore.swift     # ~/.code_bar 文件存储
+│   ├── StatusBarIconRenderer.swift
+│   ├── StatusBarUsagePresentation.swift
+│   ├── UpdateChecker.swift
+│   ├── Info.plist                 # 版本 2.2.6，LSUIElement
 │   └── Providers/
-│       ├── PlatformProvider.swift # 平台协议、数据模型和配置模型
-│       ├── BailianProvider.swift  # 阿里云百炼 API Provider
-│       ├── ZenMuxProvider.swift   # ZenMux API Provider
-│       ├── MimoProvider.swift     # 小米 MiMo API Provider
-│       ├── CodexProvider.swift    # Codex / ChatGPT OAuth Provider
-│       └── GeminiProvider.swift   # Gemini CLI / Code Assist OAuth Provider
-├── docs/
-│   ├── architecture.md
-│   ├── developer-guide.md
-│   ├── uml-diagrams.md
-│   └── codebar-go-design.md       # 历史 Go/Wails 设计草案
-├── .github/workflows/release.yml  # tag 发布 workflow
-├── build.sh
+│       ├── PlatformProvider.swift
+│       ├── BailianProvider.swift
+│       ├── ZenMuxProvider.swift
+│       ├── MimoProvider.swift
+│       ├── CodexProvider.swift
+│       └── GeminiProvider.swift
+├── CodeBarTests/                  # Debug 构建期脚本测试，不是 XCTest target
+│   ├── ModuleBehaviorTests.swift
+│   ├── TestNotifications.swift
+│   └── run_module_behavior_tests.sh
+├── .github/workflows/
+│   ├── ci.yml                     # macos-15 xcodebuild Debug + 行为测试
+│   └── release.yml                # 推送 v* tag 后打 DMG
+├── build.sh                       # Mac 交互式 Release 打包
 ├── create_dmg.sh
-└── README.md
+├── frontend/                      # 遗留：旧 Go/Wails 前端产物，当前 app 不用
+├── internal/tray/                 # 遗留：旧 Go tray，当前 app 不用
+└── docs/
 ```
 
 ## 开发
 
-### 添加新平台
+扩展 Provider 的步骤见 [docs/developer-guide.md](docs/developer-guide.md)。仓库没有 `Package.swift`，不要运行 `swift build` / `swift test`。
 
-1. 在 `PlatformType` 枚举中添加新平台
-2. 创建新的 Provider，实现 `PlatformProvider`
-3. 在 `MonitorModuleConfig` 中添加该平台的模块配置 case
-4. 在 `UsageTracker.provider(for:)` 中把模块配置映射为 Provider
-5. 在 `ModuleEditorView` 中添加凭据表单、展示项和帮助内容
-
-每个 Provider 可自由定义自己的配额项（`UsageItem`）和额外信息（`extraInfo`），UI 会动态渲染。
-
-### 构建验证
+### 构建验证（Mac + Xcode）
 
 ```bash
-xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Debug build
-xcodebuild -project CodeBar.xcodeproj -scheme CodeBar -configuration Release -derivedDataPath build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project CodeBar.xcodeproj \
+  -scheme CodeBar \
+  -configuration Debug \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath build \
+  CODE_SIGN_IDENTITY="" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  ENABLE_USER_SCRIPT_SANDBOXING=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build
+
+xcodebuild -project CodeBar.xcodeproj \
+  -scheme CodeBar \
+  -configuration Release \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath build \
+  CODE_SIGN_IDENTITY="" \
+  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_ALLOWED=NO \
+  ENABLE_USER_SCRIPT_SANDBOXING=NO \
+  COMPILER_INDEX_STORE_ENABLE=NO \
+  build
 ```
+
+单独跑行为测试（同样需要 Mac 上的 `swiftc` / macOS SDK）：
+
+```bash
+CONFIGURATION=Debug CodeBarTests/run_module_behavior_tests.sh
+```
+
+CI 与此相同：`.github/workflows/ci.yml` 在 `macos-15` 上选 Xcode 16.x，关签名后 Debug `xcodebuild`，再跑同一脚本。它**不能**代替真机点开菜单栏。
 
 ### 发布
 
-1. 更新 `CodeBar/Info.plist` 的 `CFBundleShortVersionString`
+1. 同步更新 `CodeBar/Info.plist` 的 `CFBundleShortVersionString` 和 `project.pbxproj` 的 `MARKETING_VERSION`
 2. 提交版本变更
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.3 -m "CodeBar v2.2.3"
-git push origin v2.2.3
+git tag -a v2.2.6 -m "CodeBar v2.2.6"
+git push origin v2.2.6
 ```
 
-GitHub Actions 会自动构建 Release、创建 DMG 并上传到 GitHub Release。
+GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上传到 GitHub Release。发版 runner 也必须是 Mac；本地 `./build.sh` 只适合自己做安装包。
 
 ## 安全性
 
@@ -308,7 +386,7 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 ## 贡献
 
-欢迎提交 Issue 和 Pull Request。
+欢迎提交 Issue 和 Pull Request。请在 **Mac + Xcode 15+** 上按上面的 `xcodebuild` 命令验证 Debug 构建；不要新增 Linux CI。改 UI 后需要在真机菜单栏里点一遍，Actions 编译通过不等于 GUI 可用。
 
 ## 致谢
 
