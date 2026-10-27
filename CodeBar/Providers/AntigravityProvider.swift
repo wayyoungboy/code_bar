@@ -37,7 +37,8 @@ struct AntigravityProvider: PlatformProvider {
     }
 
     func fetchUsage() async throws -> PlatformUsageData {
-        if config.cliPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+        let proxy = try ModuleProxyConfiguration.parse(config.proxyURL)
+        if proxy != nil || config.cliPath?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             return try await fetchFromCLI()
         }
         var desktopError: Error?
@@ -216,7 +217,9 @@ struct AntigravityProvider: PlatformProvider {
         let result = try await runCommand(
             executable: cliURL,
             arguments: ["-p", "/usage", "--output-format", "json"],
-            timeout: timeout
+            timeout: timeout,
+            environment: try ModuleProxyConfiguration.environment(proxyURL: config.proxyURL, inheriting: ProcessInfo.processInfo.environment),
+            workingDirectory: try CodeBarFileStore.shared.cliWorkingDirectory(for: "agy")
         )
         guard result.status == 0 else {
             throw PlatformError.unknown("agy /usage 执行失败（退出码 \(result.status)），请确认 CLI 已登录")
@@ -363,7 +366,7 @@ struct AntigravityProvider: PlatformProvider {
         let data: Data
     }
 
-    private func runCommand(executable: URL, arguments: [String], timeout: TimeInterval) async throws -> CommandResult {
+    private func runCommand(executable: URL, arguments: [String], timeout: TimeInterval, environment: [String: String]? = nil, workingDirectory: URL? = nil) async throws -> CommandResult {
         try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
                 do {
@@ -377,6 +380,8 @@ struct AntigravityProvider: PlatformProvider {
                     let process = Process()
                     process.executableURL = executable
                     process.arguments = arguments
+                    process.environment = environment
+                    process.currentDirectoryURL = workingDirectory
                     process.standardInput = FileHandle.nullDevice
                     process.standardOutput = output
                     process.standardError = FileHandle.nullDevice
@@ -403,6 +408,11 @@ struct AntigravityProvider: PlatformProvider {
 
     private func makeLocalSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
+        config.connectionProxyDictionary = [
+            kCFNetworkProxiesHTTPEnable as String: false,
+            kCFNetworkProxiesHTTPSEnable as String: false,
+            kCFNetworkProxiesSOCKSEnable as String: false,
+        ]
         config.timeoutIntervalForRequest = 4.0
         config.timeoutIntervalForResource = 4.0
         return URLSession(configuration: config, delegate: SelfSignedTLSDelegate(), delegateQueue: nil)

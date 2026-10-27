@@ -27,6 +27,8 @@
 			A1000045 /* StatusBarUsagePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000046 /* StatusBarUsagePresentation.swift */; };
 			A1000046 /* GrokProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000047 /* GrokProvider.swift */; };
 			A1000047 /* AntigravityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048 /* AntigravityProvider.swift */; };
+			A1000048 /* ModuleProxyConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000049 /* ModuleProxyConfiguration.swift */; };
+			A1000049 /* ModuleProxySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* ModuleProxySettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +54,8 @@
 			A2000047 /* GrokProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokProvider.swift; sourceTree = "<group>"; };
 			A2000048 /* AntigravityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityProvider.swift; sourceTree = "<group>"; };
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+			A2000049 /* ModuleProxyConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleProxyConfiguration.swift; sourceTree = "<group>"; };
+			A2000050 /* ModuleProxySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleProxySettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +89,7 @@
 					A2000046 /* StatusBarUsagePresentation.swift */,
 					A2000003 /* UsageTracker.swift */,
 					A2000008 /* SettingsWindow.swift */,
+					A2000050 /* ModuleProxySettingsView.swift */,
 					A2000009 /* CodeBarFileStore.swift */,
 					A2000010 /* Constants.swift */,
 					A2000013 /* UpdateChecker.swift */,
@@ -107,6 +112,7 @@
 				isa = PBXGroup;
 				children = (
 					A2000004 /* PlatformProvider.swift */,
+					A2000049 /* ModuleProxyConfiguration.swift */,
 					A2000005 /* BailianProvider.swift */,
 					A2000007 /* ZenMuxProvider.swift */,
 					A2000039 /* MimoProvider.swift */,
@@ -209,8 +215,10 @@
 					"$(SRCROOT)/CodeBar/StatusBarIconRenderer.swift",
 					"$(SRCROOT)/CodeBar/StatusBarUsagePresentation.swift",
 					"$(SRCROOT)/CodeBar/SettingsWindow.swift",
+					"$(SRCROOT)/CodeBar/ModuleProxySettingsView.swift",
 					"$(SRCROOT)/CodeBar/UpdateChecker.swift",
 					"$(SRCROOT)/CodeBar/Providers/PlatformProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/ModuleProxyConfiguration.swift",
 					"$(SRCROOT)/CodeBar/Providers/BailianProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/ZenMuxProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/MimoProvider.swift",
@@ -220,6 +228,7 @@
 					"$(SRCROOT)/CodeBar/Providers/AntigravityProvider.swift",
 					"$(SRCROOT)/CodeBarTests/TestNotifications.swift",
 					"$(SRCROOT)/CodeBarTests/UsageProviderTests.swift",
+					"$(SRCROOT)/CodeBarTests/ModuleProxyTests.swift",
 					"$(SRCROOT)/CodeBarTests/ModuleBehaviorTests.swift",
 				);
 				name = "Run Module Behavior Tests";
@@ -259,6 +268,8 @@
 					A1000045 /* StatusBarUsagePresentation.swift in Sources */,
 					A1000046 /* GrokProvider.swift in Sources */,
 					A1000047 /* AntigravityProvider.swift in Sources */,
+					A1000048 /* ModuleProxyConfiguration.swift in Sources */,
+					A1000049 /* ModuleProxySettingsView.swift in Sources */,
 				);
 				runOnlyForDeploymentPostprocessing = 0;
 			};
@@ -403,7 +414,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.7;
+					MARKETING_VERSION = 2.2.8;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;
@@ -431,7 +442,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.7;
+					MARKETING_VERSION = 2.2.8;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;

@@ -18,8 +18,10 @@ swiftc \
   "$SRCROOT/CodeBar/StatusBarIconRenderer.swift" \
   "$SRCROOT/CodeBar/StatusBarUsagePresentation.swift" \
   "$SRCROOT/CodeBar/SettingsWindow.swift" \
+  "$SRCROOT/CodeBar/ModuleProxySettingsView.swift" \
   "$SRCROOT/CodeBar/UpdateChecker.swift" \
   "$SRCROOT/CodeBar/Providers/PlatformProvider.swift" \
+  "$SRCROOT/CodeBar/Providers/ModuleProxyConfiguration.swift" \
   "$SRCROOT/CodeBar/Providers/BailianProvider.swift" \
   "$SRCROOT/CodeBar/Providers/ZenMuxProvider.swift" \
   "$SRCROOT/CodeBar/Providers/MimoProvider.swift" \
@@ -29,6 +31,7 @@ swiftc \
   "$SRCROOT/CodeBar/Providers/AntigravityProvider.swift" \
   "$SRCROOT/CodeBarTests/TestNotifications.swift" \
   "$SRCROOT/CodeBarTests/UsageProviderTests.swift" \
+  "$SRCROOT/CodeBarTests/ModuleProxyTests.swift" \
   "$SRCROOT/CodeBarTests/ModuleBehaviorTests.swift" \
   -o "$TEST_BINARY"
 

@@ -34,7 +34,9 @@ struct BailianProvider: PlatformProvider {
         let body = buildRequestBody()
         request.httpBody = body.data(using: .utf8)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = try ModuleProxyConfiguration.makeSession(proxyURL: config.proxyURL)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))

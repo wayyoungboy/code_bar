@@ -25,7 +25,9 @@ struct MimoProvider: PlatformProvider {
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36", forHTTPHeaderField: "user-agent")
         request.setValue("api-platform_serviceToken=\"\(config.serviceToken)\"; userId=\(config.userId)", forHTTPHeaderField: "cookie")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = try ModuleProxyConfiguration.makeSession(proxyURL: config.proxyURL)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))

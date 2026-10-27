@@ -40,6 +40,14 @@ final class CodeBarFileStore {
         fileManager.fileExists(atPath: fileURL(for: key).path)
     }
 
+    func cliWorkingDirectory(for tool: String) throws -> URL {
+        try ensureRootDirectory()
+        let directory = rootDirectory.appendingPathComponent("cli-workspaces", isDirectory: true)
+            .appendingPathComponent(sanitizedFileName(for: tool), isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        return directory
+    }
+
     func save<T: Codable>(_ object: T, for key: String) throws {
         let data = try JSONEncoder().encode(object)
         try save(data, for: key)

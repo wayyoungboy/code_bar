@@ -99,7 +99,9 @@ struct ZenMuxProvider: PlatformProvider {
         request.setValue("Bearer \(account.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let session = try ModuleProxyConfiguration.makeSession(proxyURL: account.proxyURL)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PlatformError.networkError(NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown, userInfo: nil))

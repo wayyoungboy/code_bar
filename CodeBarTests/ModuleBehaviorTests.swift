@@ -21,7 +21,8 @@ private struct FakeGrokUsageRefresher: GrokUsageRefreshing {
 
     func refresh(
         logURL: URL,
-        grokHomeURL: URL
+        grokHomeURL: URL,
+        proxyURL: String?
     ) async -> GrokRefreshOutcome {
         if let replacementLog {
             try? FileManager.default.createDirectory(
@@ -31,6 +32,12 @@ private struct FakeGrokUsageRefresher: GrokUsageRefreshing {
             try? Data(replacementLog.utf8).write(to: logURL, options: .atomic)
         }
         return outcome
+    }
+}
+
+private struct ForbiddenGrokUsageRefresher: GrokUsageRefreshing {
+    func refresh(logURL: URL, grokHomeURL: URL, proxyURL: String?) async -> GrokRefreshOutcome {
+        fatalError("Default Grok monitoring must not start a CLI that can request unrelated folder permissions")
     }
 }
 
@@ -401,6 +408,10 @@ private struct ModuleBehaviorTests {
         expect((try? fileStore.read(for: Constants.monitorModulesKey)) == storedPayload, "CodeBar file store should read back saved data")
         try! fileStore.delete(Constants.monitorModulesKey)
         expect(!FileManager.default.fileExists(atPath: storedPayloadURL.path), "CodeBar file store should delete persisted data files")
+        let cliWorkspace = try! fileStore.cliWorkingDirectory(for: "grok")
+        expect(cliWorkspace == tempStoreRoot.appendingPathComponent("cli-workspaces/grok", isDirectory: true), "CLI processes should use CodeBar's dedicated workspace")
+        let workspaceAttributes = try! FileManager.default.attributesOfItem(atPath: cliWorkspace.path)
+        expect((workspaceAttributes[.posixPermissions] as? NSNumber)?.intValue == 0o700, "CLI workspace must be private to its owner")
 
         let providerAccount = ModuleProviderConfiguration.zenMuxAccount(for: module)
         expect(providerAccount.displayKeys == ["5hour", "7day"], "ZenMux provider should receive all quota keys so the detail page can show all items")
@@ -486,9 +497,15 @@ private struct ModuleBehaviorTests {
         let decodedGrok = try! JSONDecoder().decode(MonitorModuleConfig.self, from: encodedGrok)
         if case .grok(let decodedConfig) = decodedGrok {
             expect(decodedConfig.homeDirectory == " /tmp/custom-grok-home ", "Grok config should preserve a custom home directory through Codable")
+            expect(!decodedConfig.isCLIRefreshEnabled, "Grok background CLI refresh must default to disabled")
         } else {
             fatalError("Decoded config should be Grok")
         }
+        let legacyGrok = try! JSONDecoder().decode(GrokConfig.self, from: Data(#"{"grok_home_directory":"/tmp/grok"}"#.utf8))
+        expect(!legacyGrok.isCLIRefreshEnabled, "Existing Grok modules must not silently enable background CLI execution")
+        let optedInGrok = GrokConfig(isCLIRefreshEnabled: true)
+        let decodedOptIn = try! JSONDecoder().decode(GrokConfig.self, from: JSONEncoder().encode(optedInGrok))
+        expect(decodedOptIn.isCLIRefreshEnabled, "Explicit Grok CLI consent must survive config persistence")
 
         let antigravityConfig = AntigravityConfig(hostAddress: "127.0.0.1:57643", csrfToken: "test-token", cliPath: "/usr/local/bin/agy")
         let antigravityModule = MonitorModule(
@@ -759,11 +776,18 @@ private struct ModuleBehaviorTests {
         )
         try! Data(grokBillingLog.utf8).write(to: temporaryGrokLog)
 
+        let readOnlyGrok = GrokProvider(
+            config: GrokConfig(homeDirectory: temporaryGrokHome.path),
+            refresher: ForbiddenGrokUsageRefresher()
+        )
+        let readOnlyGrokUsage = try! await readOnlyGrok.fetchUsage()
+        expect(readOnlyGrokUsage.items.first?.used == 6, "Default Grok monitoring should read its cached quota without launching the CLI")
+
         let refreshedGrokLog = """
         {"ts":"2026-08-26T02:30:00.000Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":9.2,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-09-01T12:22:17Z"}},"subscriptionTier":"SuperGrok"}}
         """
         let activeProvider = GrokProvider(
-            config: GrokConfig(homeDirectory: temporaryGrokHome.path),
+            config: GrokConfig(homeDirectory: temporaryGrokHome.path, isCLIRefreshEnabled: true),
             refresher: FakeGrokUsageRefresher(outcome: .refreshed, replacementLog: refreshedGrokLog)
         )
         let activelyRefreshedUsage = try! await activeProvider.fetchUsage()
@@ -775,7 +799,7 @@ private struct ModuleBehaviorTests {
 
         try! Data(grokBillingLog.utf8).write(to: temporaryGrokLog, options: .atomic)
         let fallbackProvider = GrokProvider(
-            config: GrokConfig(homeDirectory: temporaryGrokHome.path),
+            config: GrokConfig(homeDirectory: temporaryGrokHome.path, isCLIRefreshEnabled: true),
             refresher: FakeGrokUsageRefresher(outcome: .timedOut, replacementLog: nil)
         )
         let fallbackUsage = try! await fallbackProvider.fetchUsage()
@@ -788,7 +812,7 @@ private struct ModuleBehaviorTests {
         let missingGrokHome = FileManager.default.temporaryDirectory
             .appendingPathComponent("codebar-missing-grok-\(UUID().uuidString)", isDirectory: true)
         let missingProvider = GrokProvider(
-            config: GrokConfig(homeDirectory: missingGrokHome.path),
+            config: GrokConfig(homeDirectory: missingGrokHome.path, isCLIRefreshEnabled: true),
             refresher: FakeGrokUsageRefresher(outcome: .unavailable, replacementLog: nil)
         )
         do {
@@ -872,6 +896,7 @@ private struct ModuleBehaviorTests {
         expect(antigravityUsage.items[1].label == "Gemini 5小时", "gemini-5h should map to Gemini 5小时")
         expect(antigravityUsage.items[2].used == 0, "100% remaining should mean 0% used")
         expect(antigravityUsage.items[3].label == "Claude/GPT 5小时", "3p-5h should map to Claude/GPT 5小时")
+        try! await ModuleProxyTests.run()
         try! await UsageProviderTests.run()
     }
 }

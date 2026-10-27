@@ -865,9 +865,9 @@ struct ModuleEditorView: View {
     @State private var zenMuxApiKey: String
     @State private var mimoServiceToken: String
     @State private var mimoUserId: String
-    @State private var codexProxyURL: String
-    @State private var geminiProxyURL: String
+    @State private var proxyURL: String
     @State private var grokHomeDirectory: String
+    @State private var isGrokCLIRefreshEnabled: Bool
     @State private var antigravityHostAddress: String
     @State private var antigravityCsrfToken: String
     @State private var antigravityCliPath: String
@@ -914,9 +914,8 @@ struct ModuleEditorView: View {
         var initialZenMuxApiKey = ""
         var initialMimoServiceToken = ""
         var initialMimoUserId = ""
-        var initialCodexProxyURL = ""
-        var initialGeminiProxyURL = ""
         var initialGrokHomeDirectory = ""
+        var initialGrokCLIRefreshEnabled = false
         var initialAntigravityHostAddress = ""
         var initialAntigravityCsrfToken = ""
         var initialAntigravityCliPath = ""
@@ -932,12 +931,11 @@ struct ModuleEditorView: View {
             case .mimo(let config):
                 initialMimoServiceToken = config.serviceToken
                 initialMimoUserId = config.userId
-            case .codex(let config):
-                initialCodexProxyURL = config.proxyURL ?? ""
-            case .gemini(let config):
-                initialGeminiProxyURL = config.proxyURL ?? ""
+            case .codex, .gemini:
+                break
             case .grok(let config):
                 initialGrokHomeDirectory = config.homeDirectory ?? ""
+                initialGrokCLIRefreshEnabled = config.isCLIRefreshEnabled
             case .antigravity(let config):
                 initialAntigravityHostAddress = config.hostAddress ?? ""
                 initialAntigravityCsrfToken = config.csrfToken ?? ""
@@ -951,9 +949,9 @@ struct ModuleEditorView: View {
         _zenMuxApiKey = State(initialValue: initialZenMuxApiKey)
         _mimoServiceToken = State(initialValue: initialMimoServiceToken)
         _mimoUserId = State(initialValue: initialMimoUserId)
-        _codexProxyURL = State(initialValue: initialCodexProxyURL)
-        _geminiProxyURL = State(initialValue: initialGeminiProxyURL)
+        _proxyURL = State(initialValue: module?.config.proxyURL ?? "")
         _grokHomeDirectory = State(initialValue: initialGrokHomeDirectory)
+        _isGrokCLIRefreshEnabled = State(initialValue: initialGrokCLIRefreshEnabled)
         _antigravityHostAddress = State(initialValue: initialAntigravityHostAddress)
         _antigravityCsrfToken = State(initialValue: initialAntigravityCsrfToken)
         _antigravityCliPath = State(initialValue: initialAntigravityCliPath)
@@ -997,6 +995,8 @@ struct ModuleEditorView: View {
             }
 
             providerForm
+
+            ModuleProxySettingsView(proxyURL: $proxyURL, platform: provider)
 
             moduleOptions
 
@@ -1073,25 +1073,22 @@ struct ModuleEditorView: View {
                 Text("Codex 会自动读取本机 OAuth，代理可选")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $codexProxyURL)
-                    .textFieldStyle(.roundedBorder)
             }
         case .gemini:
             VStack(alignment: .leading, spacing: 6) {
                 Text("Gemini 会自动读取本机 Gemini CLI OAuth，代理可选")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                TextField("例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7890", text: $geminiProxyURL)
-                    .textFieldStyle(.roundedBorder)
             }
         case .grok:
             VStack(alignment: .leading, spacing: 6) {
-                Text("通过本机 Grok CLI 主动刷新；失败时显示最近缓存，不会读取登录令牌")
+                Text("默认仅读取 Grok 本地额度快照，不在后台启动完整 CLI")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 TextField("Grok 目录（可选，默认 ~/.grok）", text: $grokHomeDirectory)
                     .textFieldStyle(.roundedBorder)
-                Text("首次使用请确保 Grok CLI 已登录；CodeBar 刷新时会在后台自动获取额度")
+                Toggle("后台调用 Grok CLI 刷新", isOn: $isGrokCLIRefreshEnabled)
+                Text(isGrokCLIRefreshEnabled ? "开启后会启动官方 CLI；CLI 可能读取自身配置、插件并触发系统文件权限。" : "请在 Grok 中手动运行 /usage，CodeBar 会读取更新后的快照。")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -1364,7 +1361,7 @@ struct ModuleEditorView: View {
     }
 
     private var canSave: Bool {
-        guard canSelectProvider(provider) else {
+        guard canSelectProvider(provider), ModuleProxyConfiguration.validationMessage(for: proxyURL) == nil else {
             return false
         }
 
@@ -1405,7 +1402,7 @@ struct ModuleEditorView: View {
     }
 
     private func makeModule() -> MonitorModule {
-        let config: MonitorModuleConfig
+        var config: MonitorModuleConfig
         switch provider {
         case .bailian:
             config = .bailian(BailianConfig(cookies: cookies, secToken: secToken, region: region))
@@ -1419,14 +1416,12 @@ struct ModuleEditorView: View {
         case .mimo:
             config = .mimo(MimoConfig(serviceToken: mimoServiceToken, userId: mimoUserId))
         case .codex:
-            let trimmed = codexProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            config = .codex(CodexConfig(proxyURL: trimmed.isEmpty ? nil : trimmed))
+            config = .codex(CodexConfig())
         case .gemini:
-            let trimmed = geminiProxyURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            config = .gemini(GeminiConfig(proxyURL: trimmed.isEmpty ? nil : trimmed))
+            config = .gemini(GeminiConfig())
         case .grok:
             let trimmed = grokHomeDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-            config = .grok(GrokConfig(homeDirectory: trimmed.isEmpty ? nil : trimmed))
+            config = .grok(GrokConfig(homeDirectory: trimmed.isEmpty ? nil : trimmed, isCLIRefreshEnabled: isGrokCLIRefreshEnabled))
         case .antigravity:
             let host = antigravityHostAddress.trimmingCharacters(in: .whitespacesAndNewlines)
             let token = antigravityCsrfToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1437,6 +1432,8 @@ struct ModuleEditorView: View {
                 cliPath: cli.isEmpty ? nil : cli
             ))
         }
+
+        config.proxyURL = proxyURL
 
         return MonitorModule(
             id: module?.id ?? UUID().uuidString,
@@ -1626,7 +1623,7 @@ struct HelpWindowView: View {
             HelpStepView(number: 1, title: "安装并登录 Grok CLI", description: "CodeBar 使用本机 Grok CLI 已生成的数据，不需要复制任何登录凭据", icon: "terminal")
             HelpStepView(number: 2, title: "生成额度快照", description: "在 Grok 中运行 /usage，确认能看到 Weekly limit", icon: "chart.bar")
             HelpStepView(number: 3, title: "自动检测", description: "CodeBar 只读取 ~/.grok/logs/unified.jsonl 中的额度快照，不读取 auth.json", icon: "lock.shield")
-            HelpStepView(number: 4, title: "主动刷新与兜底", description: "CodeBar 会通过本机 Grok CLI 主动刷新；网络或 CLI 异常时继续显示最近缓存", icon: "arrow.clockwise")
+            HelpStepView(number: 4, title: "主动刷新与兜底", description: "默认只读取本地快照；可选择启用后台 CLI 刷新，但 CLI 初始化可能触发额外文件权限", icon: "arrow.clockwise")
         }
     }
 

@@ -164,6 +164,18 @@ Codex 与其他平台不同：
 
 新增 Codex 字段时，应优先保持与接口原始字段名对应的 `CodingKeys`，再映射成 UI 需要的 `UsageItem` 或 `extraInfo`。
 
+## 模块代理
+
+各平台配置中的 `proxyURL` 为可选字段；`MonitorModuleConfig.proxyURL` 提供统一的编辑入口，保留 Codex / Gemini 原有存储键并兼容没有代理字段的旧模块。
+
+- 原生 HTTP Provider 使用 `ModuleProxyConfiguration.makeSession(proxyURL:)`，用量与 OAuth 请求共用相同规则。
+- ZenMux 的代理保存在账号配置中，不在多个账号间共享会话。
+- CLI Provider 使用 `ModuleProxyConfiguration.environment(proxyURL:inheriting:)` 生成子进程环境，不修改 CodeBar 或其他模块的环境变量。
+- Grok 的 `isCLIRefreshEnabled` 默认为 `false`，旧配置缺少该字段时也只读取日志快照；启用后才启动完整 CLI 并传递代理。
+- Grok / AGY CLI 的工作目录使用 `~/.code_bar/cli-workspaces/<tool>/`，避免以主目录或根目录启动。第三方 CLI 仍可能访问自己的配置、插件等文件并触发系统权限。
+- AGY 设置代理时选择 CLI 路径，本地服务不经过外部代理。
+- 配置解析、旧数据兼容、CLI 传递和本地 HTTP / SOCKS5 路由检查位于 `CodeBarTests/ModuleProxyTests.swift`。
+
 ## 配置与缓存
 
 | 数据 | 存储位置 |
@@ -194,21 +206,21 @@ Codex 与其他平台不同：
    - `CodeBar/Info.plist` 的 `CFBundleShortVersionString`
    - `CodeBar.xcodeproj/project.pbxproj` 的 `MARKETING_VERSION`
 
-当前工程版本是 `2.2.7`。
+当前工程版本是 `2.2.8`。
 
 2. 提交版本变更：
 
 ```bash
 git add CodeBar/Info.plist CodeBar.xcodeproj/project.pbxproj README.md
-git commit -m "Bump version to 2.2.7"
+git commit -m "Bump version to 2.2.8"
 git push origin main
 ```
 
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.7 -m "CodeBar v2.2.7"
-git push origin v2.2.7
+git tag -a v2.2.8 -m "CodeBar v2.2.8"
+git push origin v2.2.8
 ```
 
 4. GitHub Actions 自动在 Mac runner 上构建、adhoc 签名、创建 DMG 并上传 Release。产物未公证，用户首次打开仍可能需要 `xattr -cr` 或系统设置里「仍要打开」。

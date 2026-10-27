@@ -76,17 +76,9 @@ enum CodexHTTPTransport {
             "--connect-timeout", "10", "--max-time", String(Constants.networkTimeout),
             "--max-filesize", "2097152", "--header", "@-", "--write-out", "\n%{http_code}",
         ]
-        if let proxyURL = proxyURL?.trimmingCharacters(in: .whitespacesAndNewlines), !proxyURL.isEmpty {
-            guard var proxy = URLComponents(string: proxyURL),
-                  ["http", "https", "socks", "socks5"].contains(proxy.scheme?.lowercased() ?? ""),
-                  proxy.host != nil, let port = proxy.port, (1...65535).contains(port),
-                  proxy.user == nil, proxy.password == nil else {
-                throw PlatformError.unknown("Codex 代理地址无效，请使用 http://host:port 或 socks5://host:port")
-            }
-            if proxy.scheme == "socks" { proxy.scheme = "socks5" }
-            arguments += ["--proxy", proxy.string!, "--noproxy", ""]
+        if let proxy = try ModuleProxyConfiguration.parse(proxyURL) {
+            arguments += ["--proxy", proxy.url.absoluteString, "--noproxy", ""]
         } else {
-            // Match CodeBar's direct-connection setting, independent of curl's environment.
             arguments += ["--noproxy", "*"]
         }
         arguments.append(url.absoluteString)
@@ -589,43 +581,7 @@ struct CodexProvider: PlatformProvider {
     }
 
     private func makeSession() throws -> URLSession {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = Constants.networkTimeout
-        configuration.timeoutIntervalForResource = Constants.networkTimeout
-
-        guard let rawProxyURL = config.proxyURL?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !rawProxyURL.isEmpty else {
-            return URLSession(configuration: configuration)
-        }
-
-        guard let proxyURL = URL(string: rawProxyURL),
-              let scheme = proxyURL.scheme?.lowercased(),
-              let host = proxyURL.host,
-              let port = proxyURL.port else {
-            throw PlatformError.unknown("Codex 代理地址无效，请使用 http://host:port 或 socks5://host:port")
-        }
-
-        switch scheme {
-        case "http", "https":
-            configuration.connectionProxyDictionary = [
-                kCFNetworkProxiesHTTPEnable as String: true,
-                kCFNetworkProxiesHTTPProxy as String: host,
-                kCFNetworkProxiesHTTPPort as String: port,
-                kCFNetworkProxiesHTTPSEnable as String: true,
-                kCFNetworkProxiesHTTPSProxy as String: host,
-                kCFNetworkProxiesHTTPSPort as String: port,
-            ]
-        case "socks", "socks5":
-            configuration.connectionProxyDictionary = [
-                kCFNetworkProxiesSOCKSEnable as String: true,
-                kCFNetworkProxiesSOCKSProxy as String: host,
-                kCFNetworkProxiesSOCKSPort as String: port,
-            ]
-        default:
-            throw PlatformError.unknown("Codex 代理协议不支持：\(scheme)")
-        }
-
-        return URLSession(configuration: configuration)
+        try ModuleProxyConfiguration.makeSession(proxyURL: config.proxyURL)
     }
 
     private func parseCredentialsJSON(_ content: String, source: CodexCredentials.Source) -> CodexCredentials? {

@@ -1,6 +1,7 @@
 import Foundation
 
 enum GrokRefreshOutcome: Equatable {
+    case disabled
     case refreshed
     case unavailable
     case timedOut
@@ -10,7 +11,8 @@ enum GrokRefreshOutcome: Equatable {
 protocol GrokUsageRefreshing {
     func refresh(
         logURL: URL,
-        grokHomeURL: URL
+        grokHomeURL: URL,
+        proxyURL: String?
     ) async -> GrokRefreshOutcome
 }
 
@@ -24,17 +26,20 @@ actor GrokCLIUsageRefresher: GrokUsageRefreshing {
 
     func refresh(
         logURL: URL,
-        grokHomeURL: URL
+        grokHomeURL: URL,
+        proxyURL: String?
     ) async -> GrokRefreshOutcome {
         guard let executableURL = findExecutable(grokHomeURL: grokHomeURL) else {
             return .unavailable
         }
+        guard let workingDirectory = try? CodeBarFileStore.shared.cliWorkingDirectory(for: "grok") else { return .failed }
 
         let previousMarker = latestBillingMarker(at: logURL)
         let previousStartupMarker = latestLogMarker(at: logURL, message: "startup timing")
         let process = Process()
         let inputPipe = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        process.currentDirectoryURL = workingDirectory
         process.arguments = [
             "-q",
             "/dev/null",
@@ -42,12 +47,12 @@ actor GrokCLIUsageRefresher: GrokUsageRefreshing {
             "--no-alt-screen",
             "--no-subagents",
             "--cwd",
-            FileManager.default.homeDirectoryForCurrentUser.path,
+            workingDirectory.path,
         ]
         process.standardInput = inputPipe
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
-        var environment = ProcessInfo.processInfo.environment
+        guard var environment = try? ModuleProxyConfiguration.environment(proxyURL: proxyURL, inheriting: ProcessInfo.processInfo.environment) else { return .failed }
         environment["GROK_HOME"] = grokHomeURL.path
         process.environment = environment
 
@@ -178,8 +183,8 @@ actor GrokCLIUsageRefresher: GrokUsageRefreshing {
 
 /// Grok CLI 的本地周额度提供者。
 ///
-/// CodeBar 通过官方 CLI 主动刷新，再读取 CLI 自己写入的 `logs/unified.jsonl`
-/// 用量快照；刷新失败时保留最近缓存，且绝不读取或复制登录令牌。
+/// 默认只读取 `logs/unified.jsonl` 中的额度快照，不启动 CLI。
+/// 用户启用后台 CLI 刷新后，才调用官方 CLI；失败时保留最近缓存。
 struct GrokProvider: PlatformProvider {
     let platformName = "Grok"
     private let config: GrokConfig
@@ -199,10 +204,17 @@ struct GrokProvider: PlatformProvider {
     }
 
     func fetchUsage() async throws -> PlatformUsageData {
-        let refreshOutcome = await refresher.refresh(
-            logURL: billingLogURL,
-            grokHomeURL: grokHomeURL
-        )
+        _ = try ModuleProxyConfiguration.parse(config.proxyURL)
+        let refreshOutcome: GrokRefreshOutcome
+        if config.isCLIRefreshEnabled {
+            refreshOutcome = await refresher.refresh(
+                logURL: billingLogURL,
+                grokHomeURL: grokHomeURL,
+                proxyURL: config.proxyURL
+            )
+        } else {
+            refreshOutcome = .disabled
+        }
 
         do {
             let log = try readLogTail()
@@ -265,6 +277,8 @@ struct GrokProvider: PlatformProvider {
 
     private func missingSnapshotMessage(for outcome: GrokRefreshOutcome) -> String {
         switch outcome {
+        case .disabled:
+            return "未找到 Grok 本地额度快照。请在 Grok 中手动运行 /usage；默认不会在后台启动 CLI。"
         case .unavailable:
             return "未找到 Grok CLI，且没有可用额度缓存。请安装并登录 Grok，运行 /usage 后重试。"
         case .timedOut:
@@ -299,7 +313,7 @@ struct GrokProvider: PlatformProvider {
 
         var extraInfo: [(label: String, value: String)] = [
             (label: "数据来源", value: sourcePath),
-            (label: "刷新方式", value: "CodeBar 主动调用本机 Grok CLI；失败时显示最近缓存"),
+            (label: "刷新方式", value: "读取本地额度快照；可在设置中选择后台 CLI 刷新"),
         ]
         if let syncDate = snapshot.syncDate {
             extraInfo.insert(
@@ -343,6 +357,8 @@ struct GrokProvider: PlatformProvider {
 
     private static func refreshStatus(_ outcome: GrokRefreshOutcome) -> String {
         switch outcome {
+        case .disabled:
+            return "仅显示本地缓存（后台 CLI 刷新已关闭）"
         case .refreshed:
             return "主动刷新成功"
         case .unavailable:

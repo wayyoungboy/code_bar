@@ -159,6 +159,33 @@ enum MonitorModuleConfig: Codable {
         case antigravity
     }
 
+    var proxyURL: String? {
+        get {
+            switch self {
+            case .bailian(let value): return value.proxyURL
+            case .zenmux(let value): return value.proxyURL
+            case .mimo(let value): return value.proxyURL
+            case .codex(let value): return value.proxyURL
+            case .gemini(let value): return value.proxyURL
+            case .grok(let value): return value.proxyURL
+            case .antigravity(let value): return value.proxyURL
+            }
+        }
+        set {
+            let trimmed = newValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let proxy = trimmed?.isEmpty == true ? nil : trimmed
+            switch self {
+            case .bailian(var value): value.proxyURL = proxy; self = .bailian(value)
+            case .zenmux(var value): value.proxyURL = proxy; self = .zenmux(value)
+            case .mimo(var value): value.proxyURL = proxy; self = .mimo(value)
+            case .codex(var value): value.proxyURL = proxy; self = .codex(value)
+            case .gemini(var value): value.proxyURL = proxy; self = .gemini(value)
+            case .grok(var value): value.proxyURL = proxy; self = .grok(value)
+            case .antigravity(var value): value.proxyURL = proxy; self = .antigravity(value)
+            }
+        }
+    }
+
     var platform: PlatformType {
         switch self {
         case .bailian: return .bailian
@@ -172,6 +199,7 @@ enum MonitorModuleConfig: Codable {
     }
 
     var isValid: Bool {
+        guard ModuleProxyConfiguration.validationMessage(for: proxyURL) == nil else { return false }
         switch self {
         case .bailian(let config):
             return config.isValid
@@ -564,6 +592,7 @@ struct BailianConfig: PlatformConfig, Codable {
     var cookies: String
     var secToken: String
     var region: String = "cn-beijing"
+    var proxyURL: String? = nil
 
     var isValid: Bool {
         !cookies.isEmpty && !secToken.isEmpty
@@ -573,6 +602,7 @@ struct BailianConfig: PlatformConfig, Codable {
         case cookies = "bailian_cookies"
         case secToken = "bailian_sec_token"
         case region = "bailian_region"
+        case proxyURL = "bailian_proxy_url"
     }
 }
 
@@ -600,14 +630,17 @@ struct ZenMuxAccountConfig: Codable, Identifiable, Equatable {
     var apiKey: String
     var displayKeys: [String]
     var resetTimeKeys: [String]
+    var proxyURL: String?
 
     init(
         id: String = UUID().uuidString,
         alias: String = "",
         apiKey: String = "",
         displayKeys: [String] = ZenMuxAccountConfig.defaultDisplayKeys,
-        resetTimeKeys: [String] = []
+        resetTimeKeys: [String] = [],
+        proxyURL: String? = nil
     ) {
+        self.proxyURL = proxyURL
         self.id = id
         self.alias = alias
         self.apiKey = apiKey
@@ -648,6 +681,7 @@ struct MimoConfig: PlatformConfig, Codable {
     let platform: PlatformType = .mimo
     var serviceToken: String
     var userId: String
+    var proxyURL: String? = nil
 
     var isValid: Bool {
         !serviceToken.isEmpty && !userId.isEmpty
@@ -656,6 +690,7 @@ struct MimoConfig: PlatformConfig, Codable {
     enum CodingKeys: String, CodingKey {
         case serviceToken = "mimo_service_token"
         case userId = "mimo_user_id"
+        case proxyURL = "mimo_proxy_url"
     }
 }
 
@@ -719,9 +754,13 @@ struct GeminiConfig: PlatformConfig, Codable {
 struct GrokConfig: PlatformConfig, Codable {
     let platform: PlatformType = .grok
     var homeDirectory: String?
+    var proxyURL: String?
+    var isCLIRefreshEnabled: Bool
 
-    init(homeDirectory: String? = nil) {
+    init(homeDirectory: String? = nil, proxyURL: String? = nil, isCLIRefreshEnabled: Bool = false) {
         self.homeDirectory = homeDirectory
+        self.proxyURL = proxyURL
+        self.isCLIRefreshEnabled = isCLIRefreshEnabled
     }
 
     var isValid: Bool {
@@ -730,6 +769,15 @@ struct GrokConfig: PlatformConfig, Codable {
 
     enum CodingKeys: String, CodingKey {
         case homeDirectory = "grok_home_directory"
+        case proxyURL = "grok_proxy_url"
+        case isCLIRefreshEnabled = "grok_cli_refresh_enabled"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        homeDirectory = try container.decodeIfPresent(String.self, forKey: .homeDirectory)
+        proxyURL = try container.decodeIfPresent(String.self, forKey: .proxyURL)
+        isCLIRefreshEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCLIRefreshEnabled) ?? false
     }
 }
 
@@ -739,8 +787,10 @@ struct AntigravityConfig: PlatformConfig, Codable {
     var hostAddress: String?
     var csrfToken: String?
     var cliPath: String?
+    var proxyURL: String?
 
-    init(hostAddress: String? = nil, csrfToken: String? = nil, cliPath: String? = nil) {
+    init(hostAddress: String? = nil, csrfToken: String? = nil, cliPath: String? = nil, proxyURL: String? = nil) {
+        self.proxyURL = proxyURL
         self.hostAddress = hostAddress
         self.csrfToken = csrfToken
         self.cliPath = cliPath
@@ -754,6 +804,7 @@ struct AntigravityConfig: PlatformConfig, Codable {
         case hostAddress = "antigravity_host_address"
         case csrfToken = "antigravity_csrf_token"
         case cliPath = "antigravity_cli_path"
+        case proxyURL = "antigravity_proxy_url"
     }
 }
 
