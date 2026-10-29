@@ -896,6 +896,7 @@ private struct ModuleBehaviorTests {
         expect(antigravityUsage.items[1].label == "Gemini 5小时", "gemini-5h should map to Gemini 5小时")
         expect(antigravityUsage.items[2].used == 0, "100% remaining should mean 0% used")
         expect(antigravityUsage.items[3].label == "Claude/GPT 5小时", "3p-5h should map to Claude/GPT 5小时")
+        try! await GrokSubscriptionTests.run()
         try! await ModuleProxyTests.run()
         try! await UsageProviderTests.run()
     }

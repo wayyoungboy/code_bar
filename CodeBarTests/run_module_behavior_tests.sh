@@ -32,6 +32,7 @@ swiftc \
   "$SRCROOT/CodeBarTests/TestNotifications.swift" \
   "$SRCROOT/CodeBarTests/UsageProviderTests.swift" \
   "$SRCROOT/CodeBarTests/ModuleProxyTests.swift" \
+  "$SRCROOT/CodeBarTests/GrokSubscriptionTests.swift" \
   "$SRCROOT/CodeBarTests/ModuleBehaviorTests.swift" \
   -o "$TEST_BINARY"
 
