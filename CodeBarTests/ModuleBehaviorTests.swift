@@ -15,32 +15,6 @@ private final class FakeStatusItem: StatusItemVisibilityRepresenting {
     }
 }
 
-private struct FakeGrokUsageRefresher: GrokUsageRefreshing {
-    let outcome: GrokRefreshOutcome
-    var replacementLog: String?
-
-    func refresh(
-        logURL: URL,
-        grokHomeURL: URL,
-        proxyURL: String?
-    ) async -> GrokRefreshOutcome {
-        if let replacementLog {
-            try? FileManager.default.createDirectory(
-                at: logURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            try? Data(replacementLog.utf8).write(to: logURL, options: .atomic)
-        }
-        return outcome
-    }
-}
-
-private struct ForbiddenGrokUsageRefresher: GrokUsageRefreshing {
-    func refresh(logURL: URL, grokHomeURL: URL, proxyURL: String?) async -> GrokRefreshOutcome {
-        fatalError("Default Grok monitoring must not start a CLI that can request unrelated folder permissions")
-    }
-}
-
 private struct FixtureGrokSubscriptionClient: GrokSubscriptionFetching {
     let payload: Data
     func fetch(authURL: URL, proxyURL: String?) async throws -> Data { payload }
@@ -502,15 +476,14 @@ private struct ModuleBehaviorTests {
         let decodedGrok = try! JSONDecoder().decode(MonitorModuleConfig.self, from: encodedGrok)
         if case .grok(let decodedConfig) = decodedGrok {
             expect(decodedConfig.homeDirectory == " /tmp/custom-grok-home ", "Grok config should preserve a custom home directory through Codable")
-            expect(!decodedConfig.isCLIRefreshEnabled, "Grok background CLI refresh must default to disabled")
         } else {
             fatalError("Decoded config should be Grok")
         }
-        let legacyGrok = try! JSONDecoder().decode(GrokConfig.self, from: Data(#"{"grok_home_directory":"/tmp/grok"}"#.utf8))
-        expect(!legacyGrok.isCLIRefreshEnabled, "Existing Grok modules must not silently enable background CLI execution")
-        let optedInGrok = GrokConfig(isCLIRefreshEnabled: true)
-        let decodedOptIn = try! JSONDecoder().decode(GrokConfig.self, from: JSONEncoder().encode(optedInGrok))
-        expect(decodedOptIn.isCLIRefreshEnabled, "Explicit Grok CLI consent must survive config persistence")
+        for legacyFlag in [false, true] {
+            let legacyJSON = "{\"grok_home_directory\":\"/tmp/grok\",\"grok_cli_refresh_enabled\":\(legacyFlag)}"
+            let legacyGrok = try! JSONDecoder().decode(GrokConfig.self, from: Data(legacyJSON.utf8))
+            expect(legacyGrok.homeDirectory == "/tmp/grok", "Legacy CLI refresh settings must decode without restoring a CLI execution path")
+        }
 
         let antigravityConfig = AntigravityConfig(hostAddress: "127.0.0.1:57643", csrfToken: "test-token", cliPath: "/usr/local/bin/agy")
         let antigravityModule = MonitorModule(
@@ -748,101 +721,19 @@ private struct ModuleBehaviorTests {
             "Codex reset credit info should convert granted_at and expires_at from UTC to local time"
         )
 
-        let grokBillingLog = """
-        {"ts":"2026-08-24T12:00:00.000Z","src":"shell","msg":"unrelated event"}
-        {"ts":"2026-08-24T13:00:00.000Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":12,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-24T12:00:00Z","end":"2026-08-31T12:00:00Z"},"subscriptionTier":"SuperGrok"}}}
-        {not valid json}
-        {"ts":"2026-08-25T15:13:54.512Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":6.4,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-08-25T12:22:17.580519+00:00","end":"2026-09-01T12:22:17.580519+00:00"},"billingPeriodStart":"2026-08-25T12:22:17.580519+00:00","billingPeriodEnd":"2026-09-01T12:22:17.580519+00:00"},"subscriptionTier":"SuperGrok"}}
-        """
-        let grokUsage = try! GrokProvider.testUsage(from: grokBillingLog)
-        expect(grokUsage.platformName == "Grok", "Grok local billing data should map to the Grok platform")
-        expect(grokUsage.planType == "SuperGrok", "Grok should preserve the subscription tier from its local billing cache")
-        expect(grokUsage.items.map(\.key) == ["grok.weekly"], "Grok should expose its weekly quota with a stable key")
-        expect(grokUsage.items.map(\.label) == ["周额度"], "Grok weekly usage should use a user-facing label")
-        expect(grokUsage.items.map(\.used) == [6], "Grok usage percent should round and clamp into a percentage item")
-        expect(
-            grokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-09-01T12:22:17Z"),
-            "Grok should decode fractional ISO-8601 billing reset timestamps"
-        )
-        expect(
-            grokUsage.extraInfo.contains(where: { $0.label == "Grok 同步时间" && $0.value.contains("2026-08-25") }),
-            "Grok details should expose the timestamp of the cached billing snapshot"
-        )
-
-        let temporaryGrokHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("codebar-grok-tests-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: temporaryGrokHome) }
-        let temporaryGrokLog = temporaryGrokHome
-            .appendingPathComponent("logs", isDirectory: true)
-            .appendingPathComponent("unified.jsonl")
-        try! FileManager.default.createDirectory(
-            at: temporaryGrokLog.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try! Data(grokBillingLog.utf8).write(to: temporaryGrokLog)
-
-        let readOnlyGrok = GrokProvider(
-            config: GrokConfig(homeDirectory: temporaryGrokHome.path),
-            refresher: ForbiddenGrokUsageRefresher()
-        )
-        let readOnlyGrokUsage = try! await readOnlyGrok.fetchUsage()
-        expect(readOnlyGrokUsage.items.first?.used == 6, "Default Grok monitoring should read its cached quota without launching the CLI")
-
-        let refreshedGrokLog = """
-        {"ts":"2026-08-26T02:30:00.000Z","src":"shell","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":9.2,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-09-01T12:22:17Z"}},"subscriptionTier":"SuperGrok"}}
-        """
-        let activeProvider = GrokProvider(
-            config: GrokConfig(homeDirectory: temporaryGrokHome.path, isCLIRefreshEnabled: true),
-            refresher: FakeGrokUsageRefresher(outcome: .refreshed, replacementLog: refreshedGrokLog)
-        )
-        let activelyRefreshedUsage = try! await activeProvider.fetchUsage()
-        expect(activelyRefreshedUsage.items.first?.used == 9, "Grok active refresh should replace an older cached snapshot")
-        expect(
-            activelyRefreshedUsage.extraInfo.contains(where: { $0.label == "刷新状态" && $0.value == "主动刷新成功" }),
-            "Grok details should confirm a successful active refresh"
-        )
-
-        try! Data(grokBillingLog.utf8).write(to: temporaryGrokLog, options: .atomic)
-        let fallbackProvider = GrokProvider(
-            config: GrokConfig(homeDirectory: temporaryGrokHome.path, isCLIRefreshEnabled: true),
-            refresher: FakeGrokUsageRefresher(outcome: .timedOut, replacementLog: nil)
-        )
-        let fallbackUsage = try! await fallbackProvider.fetchUsage()
-        expect(fallbackUsage.items.first?.used == 6, "Grok should preserve its last cached usage when active refresh times out")
-        expect(
-            fallbackUsage.extraInfo.contains(where: { $0.label == "刷新状态" && $0.value.contains("已显示上次缓存") }),
-            "Grok details should disclose when cached data is used as a fallback"
-        )
-
-        let missingGrokHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("codebar-missing-grok-\(UUID().uuidString)", isDirectory: true)
-        let missingProvider = GrokProvider(
-            config: GrokConfig(homeDirectory: missingGrokHome.path, isCLIRefreshEnabled: true),
-            refresher: FakeGrokUsageRefresher(outcome: .unavailable, replacementLog: nil)
-        )
-        do {
-            _ = try await missingProvider.fetchUsage()
-            fatalError("Grok without a CLI or cached snapshot should fail")
-        } catch let error as PlatformError {
-            expect(
-                error.errorDescription?.contains("未找到 Grok CLI") == true
-                    && error.errorDescription?.contains("/usage") == true,
-                "Grok missing-state error should explain both the CLI problem and the manual fallback"
-            )
-        } catch {
-            fatalError("Grok missing-state should use PlatformError")
-        }
-
-        do {
-            _ = try GrokProvider.testUsage(from: #"{"msg":"no billing data"}"#)
-            fatalError("Missing Grok billing data should fail")
-        } catch let error as PlatformError {
-            expect(
-                error.errorDescription?.contains("/usage") == true,
-                "Missing Grok billing data should explain how to generate a fresh local snapshot"
-            )
-        } catch {
-            fatalError("Missing Grok billing data should use PlatformError")
+        let grokJSON = Data(#"{"config":{"creditUsagePercent":6.4,"currentPeriod":{"end":"2026-09-01T12:22:17.580519+00:00"}},"subscriptionTier":"SuperGrok"}"#.utf8)
+        let grokUsage = try! GrokProvider.testUsage(from: grokJSON)
+        expect(grokUsage.platformName == "Grok" && grokUsage.planType == "SuperGrok", "Subscription billing should map to the signed-in Grok plan")
+        expect(grokUsage.items.map(\.key) == ["grok.weekly"], "Grok should preserve the existing quota key")
+        expect(grokUsage.items.map(\.used) == [6], "Grok should round the subscription usage percentage")
+        expect(grokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-09-01T12:22:17Z"), "Subscription reset timestamps should support fractional seconds")
+        expect(grokUsage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "Grok details should confirm a direct subscription refresh")
+        for invalid in [#"{"config":{}}"#, #"{"config":{"creditUsagePercent":true}}"#, "not json"] {
+            do {
+                _ = try GrokProvider.testUsage(from: Data(invalid.utf8))
+                fatalError("Invalid subscription responses must not display zero quota as if successful")
+            } catch GrokSubscriptionError.invalidResponse { }
+            catch { fatalError("Invalid Grok responses should produce a safe parse error") }
         }
 
         let antigravityQuotaJSON = """

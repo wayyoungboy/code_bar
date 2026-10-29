@@ -23,7 +23,7 @@ struct ModuleProxySettingsView: View {
     private var helpText: String {
         switch platform {
         case .grok:
-            return "仅在开启后台 Grok CLI 刷新时使用；只读缓存模式不发起网络请求。"
+            return "订阅查询和 OAuth 刷新均使用当前模块的代理；留空沿用系统网络设置。"
         case .antigravity:
             return "配置后通过 agy CLI 查询，需已安装并登录 agy；本机通信始终直连。留空优先读取桌面端。"
         default:

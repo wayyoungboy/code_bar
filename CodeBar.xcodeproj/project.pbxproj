@@ -29,6 +29,7 @@
 			A1000047 /* AntigravityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000048 /* AntigravityProvider.swift */; };
 			A1000048 /* ModuleProxyConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000049 /* ModuleProxyConfiguration.swift */; };
 			A1000049 /* ModuleProxySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000050 /* ModuleProxySettingsView.swift */; };
+			A1000050 /* GrokSubscriptionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000051 /* GrokSubscriptionClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +57,7 @@
 			A3000001 /* CodeBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 			A2000049 /* ModuleProxyConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleProxyConfiguration.swift; sourceTree = "<group>"; };
 			A2000050 /* ModuleProxySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModuleProxySettingsView.swift; sourceTree = "<group>"; };
+			A2000051 /* GrokSubscriptionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokSubscriptionClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -119,6 +121,7 @@
 					A2000040 /* CodexProvider.swift */,
 					A2000042 /* GeminiProvider.swift */,
 					A2000047 /* GrokProvider.swift */,
+					A2000051 /* GrokSubscriptionClient.swift */,
 					A2000048 /* AntigravityProvider.swift */,
 				);
 				path = Providers;
@@ -225,10 +228,12 @@
 					"$(SRCROOT)/CodeBar/Providers/CodexProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/GeminiProvider.swift",
 					"$(SRCROOT)/CodeBar/Providers/GrokProvider.swift",
+					"$(SRCROOT)/CodeBar/Providers/GrokSubscriptionClient.swift",
 					"$(SRCROOT)/CodeBar/Providers/AntigravityProvider.swift",
 					"$(SRCROOT)/CodeBarTests/TestNotifications.swift",
 					"$(SRCROOT)/CodeBarTests/UsageProviderTests.swift",
 					"$(SRCROOT)/CodeBarTests/ModuleProxyTests.swift",
+					"$(SRCROOT)/CodeBarTests/GrokSubscriptionTests.swift",
 					"$(SRCROOT)/CodeBarTests/ModuleBehaviorTests.swift",
 				);
 				name = "Run Module Behavior Tests";
@@ -267,6 +272,7 @@
 					A1000044 /* StatusBarIconRenderer.swift in Sources */,
 					A1000045 /* StatusBarUsagePresentation.swift in Sources */,
 					A1000046 /* GrokProvider.swift in Sources */,
+					A1000050 /* GrokSubscriptionClient.swift in Sources */,
 					A1000047 /* AntigravityProvider.swift in Sources */,
 					A1000048 /* ModuleProxyConfiguration.swift in Sources */,
 					A1000049 /* ModuleProxySettingsView.swift in Sources */,

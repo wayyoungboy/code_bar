@@ -93,8 +93,8 @@ enum UsageProviderTests {
         }
         let testGrok = ProcessInfo.processInfo.environment["CODEBAR_LIVE_GROK_TESTS"] == "1"
         if testGrok {
-            let usage = try await reportLiveUsage("Grok", provider: GrokProvider(config: GrokConfig(isCLIRefreshEnabled: true)))
-            expect(usage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "主动刷新成功" }, "Grok live test should refresh its real quota instead of only returning a cached value")
+            let usage = try await reportLiveUsage("Grok", provider: GrokProvider())
+            expect(usage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "Grok live test should refresh its real quota instead of only returning a cached value")
         }
         if ProcessInfo.processInfo.environment["CODEBAR_LIVE_DISPLAY_TESTS"] == "1" {
             expect(Bundle.main.bundleURL.pathExtension == "app", "Live display tests require an app bundle for UserNotifications")

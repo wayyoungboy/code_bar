@@ -867,7 +867,6 @@ struct ModuleEditorView: View {
     @State private var mimoUserId: String
     @State private var proxyURL: String
     @State private var grokHomeDirectory: String
-    @State private var isGrokCLIRefreshEnabled: Bool
     @State private var antigravityHostAddress: String
     @State private var antigravityCsrfToken: String
     @State private var antigravityCliPath: String
@@ -915,7 +914,6 @@ struct ModuleEditorView: View {
         var initialMimoServiceToken = ""
         var initialMimoUserId = ""
         var initialGrokHomeDirectory = ""
-        var initialGrokCLIRefreshEnabled = false
         var initialAntigravityHostAddress = ""
         var initialAntigravityCsrfToken = ""
         var initialAntigravityCliPath = ""
@@ -935,7 +933,6 @@ struct ModuleEditorView: View {
                 break
             case .grok(let config):
                 initialGrokHomeDirectory = config.homeDirectory ?? ""
-                initialGrokCLIRefreshEnabled = config.isCLIRefreshEnabled
             case .antigravity(let config):
                 initialAntigravityHostAddress = config.hostAddress ?? ""
                 initialAntigravityCsrfToken = config.csrfToken ?? ""
@@ -951,7 +948,6 @@ struct ModuleEditorView: View {
         _mimoUserId = State(initialValue: initialMimoUserId)
         _proxyURL = State(initialValue: module?.config.proxyURL ?? "")
         _grokHomeDirectory = State(initialValue: initialGrokHomeDirectory)
-        _isGrokCLIRefreshEnabled = State(initialValue: initialGrokCLIRefreshEnabled)
         _antigravityHostAddress = State(initialValue: initialAntigravityHostAddress)
         _antigravityCsrfToken = State(initialValue: initialAntigravityCsrfToken)
         _antigravityCliPath = State(initialValue: initialAntigravityCliPath)
@@ -1082,13 +1078,12 @@ struct ModuleEditorView: View {
             }
         case .grok:
             VStack(alignment: .leading, spacing: 6) {
-                Text("默认仅读取 Grok 本地额度快照，不在后台启动完整 CLI")
+                Text("直接查询 Grok 订阅额度，OAuth 到期时自动刷新")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 TextField("Grok 目录（可选，默认 ~/.grok）", text: $grokHomeDirectory)
                     .textFieldStyle(.roundedBorder)
-                Toggle("后台调用 Grok CLI 刷新", isOn: $isGrokCLIRefreshEnabled)
-                Text(isGrokCLIRefreshEnabled ? "开启后会启动官方 CLI；CLI 可能读取自身配置、插件并触发系统文件权限。" : "请在 Grok 中手动运行 /usage，CodeBar 会读取更新后的快照。")
+                Text("复用本机 Grok 登录信息；首次使用请先在 Grok 中完成登录。")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -1421,7 +1416,7 @@ struct ModuleEditorView: View {
             config = .gemini(GeminiConfig())
         case .grok:
             let trimmed = grokHomeDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
-            config = .grok(GrokConfig(homeDirectory: trimmed.isEmpty ? nil : trimmed, isCLIRefreshEnabled: isGrokCLIRefreshEnabled))
+            config = .grok(GrokConfig(homeDirectory: trimmed.isEmpty ? nil : trimmed))
         case .antigravity:
             let host = antigravityHostAddress.trimmingCharacters(in: .whitespacesAndNewlines)
             let token = antigravityCsrfToken.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1620,10 +1615,10 @@ struct HelpWindowView: View {
 
     private var grokHelpSteps: some View {
         Group {
-            HelpStepView(number: 1, title: "安装并登录 Grok CLI", description: "CodeBar 使用本机 Grok CLI 已生成的数据，不需要复制任何登录凭据", icon: "terminal")
-            HelpStepView(number: 2, title: "生成额度快照", description: "在 Grok 中运行 /usage，确认能看到 Weekly limit", icon: "chart.bar")
-            HelpStepView(number: 3, title: "自动检测", description: "CodeBar 只读取 ~/.grok/logs/unified.jsonl 中的额度快照，不读取 auth.json", icon: "lock.shield")
-            HelpStepView(number: 4, title: "主动刷新与兜底", description: "默认只读取本地快照；可选择启用后台 CLI 刷新，但 CLI 初始化可能触发额外文件权限", icon: "arrow.clockwise")
+            HelpStepView(number: 1, title: "登录 Grok", description: "先在本机 Grok 中完成订阅账号登录，无需手动复制令牌", icon: "terminal")
+            HelpStepView(number: 2, title: "直接查询订阅额度", description: "CodeBar 直接访问订阅接口，展示周用量百分比与重置时间", icon: "chart.bar")
+            HelpStepView(number: 3, title: "自动续期登录", description: "读取 ~/.grok/auth.json；OAuth 到期时自动刷新并安全保存，保持与 Grok 共用登录", icon: "lock.shield")
+            HelpStepView(number: 4, title: "后台自动刷新", description: "按设置的刷新周期查询；不会启动完整 Grok CLI，也无需扫描工作目录", icon: "arrow.clockwise")
         }
     }
 

@@ -73,32 +73,15 @@ enum ModuleProxyTests {
         expect(usage.items.first?.used == 20, "AGY must pass the configured proxy to its actual CLI process")
 
         let grokHome = folder.appendingPathComponent("grok")
-        try FileManager.default.createDirectory(at: grokHome.appendingPathComponent("bin"), withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: grokHome.appendingPathComponent("logs"), withIntermediateDirectories: true)
-        let grokCLI = grokHome.appendingPathComponent("bin/grok")
-        let grokScript = """
-        #!/bin/sh
-        [ "$PWD" != "/" ] && [ "$PWD" != "$HOME" ] || exit 19
-        [ "$HTTPS_PROXY" = "\(address)" ] && [ "$all_proxy" = "\(address)" ] || exit 18
-        printf '%s\\n' '{"ts":"proxy-fixture-start","msg":"startup timing"}' >> "$GROK_HOME/logs/unified.jsonl"
-        while IFS= read -r command; do
-          case "$command" in
-            /usage) printf '%s\\n' '{"ts":"2026-10-27T00:00:00Z","msg":"billing: fetched credits config","ctx":{"config":{"creditUsagePercent":31}}}' >> "$GROK_HOME/logs/unified.jsonl" ;;
-            /quit) exit 0 ;;
-          esac
-        done
-        """
-        try Data(grokScript.utf8).write(to: grokCLI)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: grokCLI.path)
-        let grok = try await GrokProvider(config: GrokConfig(homeDirectory: grokHome.path, proxyURL: address, isCLIRefreshEnabled: true)).fetchUsage()
-        expect(grok.items.first?.used == 31, "Grok must pass the module proxy through the real PTY subprocess path")
-        expect(grok.extraInfo.contains { $0.label == "刷新状态" && $0.value == "主动刷新成功" }, "Grok proxy tests must perform a refresh instead of using a cached snapshot")
+        try FileManager.default.createDirectory(at: grokHome, withIntermediateDirectories: true)
+        try GrokSubscriptionTests.auth(at: grokHome.appendingPathComponent("auth.json"), expired: false)
 
         let httpProbe = try ProxyProbe(socks: false)
         defer { httpProbe.stop() }
         let httpAddress = "http://127.0.0.1:\(httpProbe.port)"
         let providers: [any PlatformProvider] = [
             BailianProvider(config: BailianConfig(cookies: "fixture", secToken: "fixture", proxyURL: httpAddress)),
+            GrokProvider(config: GrokConfig(homeDirectory: grokHome.path, proxyURL: httpAddress)),
             MimoProvider(config: MimoConfig(serviceToken: "fixture", userId: "fixture", proxyURL: httpAddress)),
             ZenMuxProvider(config: ZenMuxConfig(accounts: [ZenMuxAccountConfig(apiKey: String(repeating: "a", count: 24), proxyURL: httpAddress)])),
         ]
@@ -115,9 +98,19 @@ enum ModuleProxyTests {
         } else {
             FileHandle.standardOutput.write(Data("Proxy routing targets: \(targets)\n".utf8))
         }
-        for host in ["bailian-cs.console.aliyun.com:443", "platform.xiaomimimo.com:443", "zenmux.ai:443"] {
+        for host in ["bailian-cs.console.aliyun.com:443", "platform.xiaomimimo.com:443", "zenmux.ai:443", "cli-chat-proxy.grok.com:443"] {
             expect(targets.contains { $0.contains(host) }, "The provider request must actually reach its configured HTTP proxy")
         }
+
+        let grokAuthURL = grokHome.appendingPathComponent("auth.json")
+        var grokAuth = try GrokSubscriptionTests.read(grokAuthURL)
+        var grokEntry = grokAuth[GrokSubscriptionTests.entryID] as! [String: Any]
+        grokEntry["expires_at"] = "2020-01-01T00:00:00Z"
+        grokAuth[GrokSubscriptionTests.entryID] = grokEntry
+        try JSONSerialization.data(withJSONObject: grokAuth).write(to: grokAuthURL)
+        do { _ = try await GrokProvider(config: GrokConfig(homeDirectory: grokHome.path, proxyURL: httpAddress)).fetchUsage() }
+        catch { }
+        expect(httpProbe.targets.contains { $0.contains("auth.x.ai:443") }, "Grok OAuth refresh must reach the same module proxy as its subscription request")
 
         let otherProxy = try ProxyProbe(socks: false)
         defer { otherProxy.stop() }

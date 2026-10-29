@@ -750,34 +750,20 @@ struct GeminiConfig: PlatformConfig, Codable {
     }
 }
 
-/// Grok CLI 本地用量缓存配置
+/// Grok subscription configuration; legacy CLI-refresh fields are ignored on decode.
 struct GrokConfig: PlatformConfig, Codable {
     let platform: PlatformType = .grok
     var homeDirectory: String?
     var proxyURL: String?
-    var isCLIRefreshEnabled: Bool
 
-    init(homeDirectory: String? = nil, proxyURL: String? = nil, isCLIRefreshEnabled: Bool = false) {
+    init(homeDirectory: String? = nil, proxyURL: String? = nil) {
         self.homeDirectory = homeDirectory
         self.proxyURL = proxyURL
-        self.isCLIRefreshEnabled = isCLIRefreshEnabled
     }
-
-    var isValid: Bool {
-        true
-    }
-
+    var isValid: Bool { true }
     enum CodingKeys: String, CodingKey {
         case homeDirectory = "grok_home_directory"
         case proxyURL = "grok_proxy_url"
-        case isCLIRefreshEnabled = "grok_cli_refresh_enabled"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        homeDirectory = try container.decodeIfPresent(String.self, forKey: .homeDirectory)
-        proxyURL = try container.decodeIfPresent(String.self, forKey: .proxyURL)
-        isCLIRefreshEnabled = try container.decodeIfPresent(Bool.self, forKey: .isCLIRefreshEnabled) ?? false
     }
 }
 
