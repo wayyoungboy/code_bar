@@ -41,6 +41,11 @@ private struct ForbiddenGrokUsageRefresher: GrokUsageRefreshing {
     }
 }
 
+private struct FixtureGrokSubscriptionClient: GrokSubscriptionFetching {
+    let payload: Data
+    func fetch(authURL: URL, proxyURL: String?) async throws -> Data { payload }
+}
+
 @main
 private struct ModuleBehaviorTests {
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
@@ -896,6 +901,9 @@ private struct ModuleBehaviorTests {
         expect(antigravityUsage.items[1].label == "Gemini 5小时", "gemini-5h should map to Gemini 5小时")
         expect(antigravityUsage.items[2].used == 0, "100% remaining should mean 0% used")
         expect(antigravityUsage.items[3].label == "Claude/GPT 5小时", "3p-5h should map to Claude/GPT 5小时")
+        let directGrok = GrokProvider(client: FixtureGrokSubscriptionClient(payload: GrokSubscriptionTests.billing))
+        let directUsage = try! await directGrok.fetchUsage()
+        expect(directUsage.items.first?.used == 24, "Default Grok monitoring must query subscription HTTP without launching a CLI or requiring a log")
         try! await GrokSubscriptionTests.run()
         try! await ModuleProxyTests.run()
         try! await UsageProviderTests.run()
