@@ -123,7 +123,7 @@ actor GrokSubscriptionClient: GrokSubscriptionFetching {
     }
 }
 
-private final class GrokNativeHTTPClient: NSObject, URLSessionTaskDelegate {
+final class GrokNativeHTTPClient: NSObject, URLSessionTaskDelegate {
     private var session: URLSession!
 
     init(proxyURL: String?) throws {

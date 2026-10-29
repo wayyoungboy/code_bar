@@ -42,7 +42,7 @@
 - **小米 MiMo**：监控 Token 用量（月用量、总用量）
 - **Codex**：自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
 - **Gemini**：自动读取 Gemini CLI 的 Google OAuth 凭据，查询官方 Code Assist 配额
-- **Grok**：默认读取本地周额度快照，可选择后台调用官方 CLI 刷新
+- **Grok**：复用本机 OAuth，直接查询订阅周额度并自动续期
 - **Antigravity / AGY**：支持桌面端与 agy CLI，展示 Gemini、Claude/GPT 等模型池额度
 
 想支持更多平台？欢迎提交 PR。
@@ -63,7 +63,7 @@
 - Codex 支持可选代理请求 `chatgpt.com/backend-api/wham/usage`
 - Gemini 自动读取本机 Gemini CLI OAuth，无需在 CodeBar 中配置 token
 - Gemini 支持可选代理请求 Google Code Assist 配额接口
-- Grok 默认读取本地额度缓存，后台 CLI 刷新需手动开启，并展示刷新状态与缓存同步时间
+- Grok 直接查询订阅周额度，自动刷新 OAuth，不启动完整 CLI
 - Antigravity 自动发现本机桌面端，也可指定 agy CLI 路径查询额度
 - Codex 请求在原生连接失败时自动使用兼容通道，保持证书校验并沿用模块或系统代理
 - 自动刷新（每 60 秒，带随机 jitter 避免风控）
@@ -164,7 +164,7 @@ socks5://127.0.0.1:1080
 ```
 
 - 百炼、ZenMux（每个账号独立）、MiMo、Codex、Gemini 的用量请求使用该模块的代理；Gemini OAuth 刷新也使用同一代理。
-- Grok 开启后台 CLI 刷新后才将代理传给刷新进程；默认缓存模式不发起网络请求。
+- Grok 的订阅查询和 OAuth 刷新均使用当前模块代理。
 - AGY 配置代理后通过 `agy` CLI 查询，需已安装并登录 CLI；本机 Language Server 通信始终直连。留空时仍优先探测桌面端，其对外代理由 Antigravity 自身管理。
 - 代理留空会沿用原有系统网络或 CLI 环境；修改一个模块不会影响其他模块。
 - 地址必须包含协议、主机和端口；暂不支持带账号密码的代理 URL。无效地址会提示并禁用保存。
@@ -289,10 +289,11 @@ socks5://127.0.0.1:7890
 
 在设置界面点击「添加模块」，选择「Grok」。默认读取 `~/.grok/`，可选指定其他 Grok 目录。
 
-- 先安装并登录官方 Grok CLI，在 Grok 中运行 `/usage` 生成额度快照。
-- CodeBar 默认只读取 CLI 写入的 `logs/unified.jsonl`，不在后台启动 CLI，也不读取或复制 Grok OAuth 凭据。
-- 可在模块编辑窗口开启「后台调用 Grok CLI 刷新」。完整 CLI 会加载自身配置和插件，可能触发额外的系统文件权限请求；CodeBar 将其工作目录限制在 `~/.code_bar/cli-workspaces/grok/`。
-- 展示套餐、周额度、重置时间和同步时间。后台刷新失败时继续展示最近缓存并标注刷新状态。
+- 先在本机 Grok 中完成订阅账号登录；CodeBar 读取 `auth.json`，直接查询订阅用量，不再启动完整 CLI，也不需要手动运行 `/usage`。
+- OAuth 即将到期或订阅接口返回 401 时自动刷新；轮换后的令牌通过凭据锁和原子写入保存到同一个 `auth.json`，权限为 `0600`，不会复制到 CodeBar 配置。
+- 展示周用量百分比、重置时间和同步时间。旧版后台 CLI 开关会被忽略，升级后统一使用 HTTP 查询。
+- 订阅接口使用 Grok 登录态，普通 API Key / Management Key 的 API 账单与订阅周额度分开。
+- 此订阅接口来自官方 CLI 的内部调用，接口变化可能需要更新 CodeBar；授权被撤销时需要先在 Grok 重新登录。
 
 ### Antigravity / AGY
 
@@ -407,10 +408,10 @@ GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上
 - CodeBar 自身配置存储在 `~/.code_bar/`
 - Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
 - Gemini OAuth 凭据只从 Gemini CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
-- Grok 默认只读本地额度快照；后台 CLI 刷新需手动开启，完整 CLI 的文件访问可能需要额外权限
+- Grok 仅访问本机 OAuth 文件、凭据锁及同目录的原子更新临时文件；订阅查询和续期直接通过 HTTPS，不启动 CLI 或扫描工作目录
 - Antigravity 自动探测的 CSRF Token 仅用于访问本机服务
 - Codex 兼容请求通过标准输入传递认证头，不将 token 写入命令行参数
-- 不会上传或分享任何凭据信息
+- 登录凭据仅发往对应供应商的认证或用量接口，不写入请求日志或分享给第三方
 - 默认不写运行期请求、用量或凭据相关日志
 
 ## 商标与 Logo

@@ -171,10 +171,19 @@ Codex 与其他平台不同：
 - 原生 HTTP Provider 使用 `ModuleProxyConfiguration.makeSession(proxyURL:)`，用量与 OAuth 请求共用相同规则。
 - ZenMux 的代理保存在账号配置中，不在多个账号间共享会话。
 - CLI Provider 使用 `ModuleProxyConfiguration.environment(proxyURL:inheriting:)` 生成子进程环境，不修改 CodeBar 或其他模块的环境变量。
-- Grok 的 `isCLIRefreshEnabled` 默认为 `false`，旧配置缺少该字段时也只读取日志快照；启用后才启动完整 CLI 并传递代理。
-- Grok / AGY CLI 的工作目录使用 `~/.code_bar/cli-workspaces/<tool>/`，避免以主目录或根目录启动。第三方 CLI 仍可能访问自己的配置、插件等文件并触发系统权限。
+- Grok 使用 `GrokSubscriptionClient` 直接查询订阅额度和刷新 OAuth，旧配置的 `grok_cli_refresh_enabled` 会被忽略；两个请求都使用模块代理。
+- AGY CLI 的工作目录使用 `~/.code_bar/cli-workspaces/agy/`。Grok 不再创建工作目录或启动任何 CLI 进程。
 - AGY 设置代理时选择 CLI 路径，本地服务不经过外部代理。
 - 配置解析、旧数据兼容、CLI 传递和本地 HTTP / SOCKS5 路由检查位于 `CodeBarTests/ModuleProxyTests.swift`。
+
+## Grok 订阅 OAuth
+
+- 只支持 `https://auth.x.ai` 的 OIDC 登录，固定访问官方 token / subscription billing 端点，不跟随重定向，不能填写 Management Key 替代订阅登录。
+- `GrokSubscriptionClient` 合并并发请求；刷新前取得 CLI 共用的 `auth.json.lock`（`flock`），重新读取磁盘凭据，防止复用已经轮换的 refresh token。
+- 提前 60 秒刷新即将到期的令牌，401 时最多刷新并重试一次。失败不删除凭据；身份已变化时不覆盖新登录。
+- 仅更新选中的账号令牌与到期时间，保留其他账号及未知字段；同目录 `0600` 临时文件、同步后原子替换，临时文件在退出路径删除。
+- 仅用例数据进入测试，真实登录测试需显式设置 `CODEBAR_LIVE_GROK_TESTS=1`。再设置 `CODEBAR_LIVE_GROK_REFRESH_TESTS=1` 会模拟一次 401，验证真实 OAuth 续期和轮换保存，不需要修改磁盘到期时间。
+- `CodeBarTests/GrokSubscriptionTests.swift` 覆盖续期、重试上限、锁竞争、并发合并、凭据变更保护和安全错误；`ModuleProxyTests` 验证订阅与 OAuth 的实际代理路由。
 
 ## 配置与缓存
 
@@ -183,6 +192,7 @@ Codex 与其他平台不同：
 | 监控模块、模块凭据、指标选择策略、排序 | `~/.code_bar/MonitorModules.json` |
 | 平台代理等配置 | `~/.code_bar/PlatformConfigs.json` |
 | Codex OAuth | `~/.codex/auth.json` |
+| Grok OAuth（与 Grok 共用，自动续期） | `~/.grok/auth.json` |
 | 用量缓存 | UserDefaults |
 
 ## UI 约定

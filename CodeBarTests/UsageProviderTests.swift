@@ -93,8 +93,23 @@ enum UsageProviderTests {
         }
         let testGrok = ProcessInfo.processInfo.environment["CODEBAR_LIVE_GROK_TESTS"] == "1"
         if testGrok {
-            let usage = try await reportLiveUsage("Grok", provider: GrokProvider())
-            expect(usage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "Grok live test should refresh its real quota instead of only returning a cached value")
+            let grok: GrokProvider
+            var native: GrokNativeHTTPClient?
+            if ProcessInfo.processInfo.environment["CODEBAR_LIVE_GROK_REFRESH_TESTS"] == "1" {
+                let connection = try GrokNativeHTTPClient(proxyURL: nil)
+                native = connection
+                let gate = GrokLiveRefreshGate()
+                let client = GrokSubscriptionClient(transport: { request in
+                    if request.url == GrokSubscriptionClient.billingURL, await gate.rejectFirstRequest() {
+                        return (Data(), HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil, headerFields: nil)!)
+                    }
+                    return try await connection.send(request)
+                })
+                grok = GrokProvider(client: client)
+            } else { grok = GrokProvider() }
+            defer { native?.invalidate() }
+            let usage = try await reportLiveUsage("Grok", provider: grok)
+            expect(usage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "Grok live test should refresh its real subscription quota over HTTP")
         }
         if ProcessInfo.processInfo.environment["CODEBAR_LIVE_DISPLAY_TESTS"] == "1" {
             expect(Bundle.main.bundleURL.pathExtension == "app", "Live display tests require an app bundle for UserNotifications")
@@ -141,5 +156,15 @@ enum UsageProviderTests {
         let data = try JSONSerialization.data(withJSONObject: summary, options: [.sortedKeys])
         FileHandle.standardOutput.write(data + Data("\n".utf8))
         return usage
+    }
+}
+
+// Forces exactly one 401 to exercise a real IdP refresh without changing the on-disk expiry.
+private actor GrokLiveRefreshGate {
+    private var rejected = false
+    func rejectFirstRequest() -> Bool {
+        guard !rejected else { return false }
+        rejected = true
+        return true
     }
 }
