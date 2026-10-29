@@ -28,6 +28,7 @@ swiftc \
   "$SRCROOT/CodeBar/Providers/CodexProvider.swift" \
   "$SRCROOT/CodeBar/Providers/GeminiProvider.swift" \
   "$SRCROOT/CodeBar/Providers/GrokProvider.swift" \
+  "$SRCROOT/CodeBar/Providers/GrokSubscriptionClient.swift" \
   "$SRCROOT/CodeBar/Providers/AntigravityProvider.swift" \
   "$SRCROOT/CodeBarTests/TestNotifications.swift" \
   "$SRCROOT/CodeBarTests/UsageProviderTests.swift" \
