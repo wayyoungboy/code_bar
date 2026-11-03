@@ -728,9 +728,45 @@ private struct ModuleBehaviorTests {
         expect(grokUsage.items.map(\.used) == [6], "Grok should round the subscription usage percentage")
         expect(grokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-09-01T12:22:17Z"), "Subscription reset timestamps should support fractional seconds")
         expect(grokUsage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "Grok details should confirm a direct subscription refresh")
-        for invalid in [#"{"config":{}}"#, #"{"config":{"creditUsagePercent":true}}"#, "not json"] {
+
+        // A real credits response after the weekly reset omits the proto3 zero scalar.
+        let zeroGrokConfig: [String: Any] = [
+            "currentPeriod": ["type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "2026-11-03T12:22:17.580519+00:00", "end": "2026-11-10T12:22:17.580519+00:00"],
+            "isUnifiedBillingUser": true, "prepaidBalance": [:] as [String: Any],
+            "onDemandCap": [:] as [String: Any], "onDemandUsed": [:] as [String: Any],
+            "billingPeriodStart": "2026-11-03T12:22:17.580519+00:00", "billingPeriodEnd": "2026-11-10T12:22:17.580519+00:00",
+        ]
+        let zeroGrokData = try! JSONSerialization.data(withJSONObject: ["config": zeroGrokConfig])
+        let zeroGrokUsage: PlatformUsageData
+        do { zeroGrokUsage = try GrokProvider.testUsage(from: zeroGrokData) }
+        catch { fatalError("A complete zero-usage weekly credits response must not fail when the server omits creditUsagePercent: \(error)") }
+        expect(zeroGrokUsage.items.map(\.used) == [0] && zeroGrokUsage.items.map(\.key) == ["grok.weekly"], "An omitted proto3 zero must display a fresh 0% weekly quota")
+        expect(zeroGrokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-11-10T12:22:17Z"), "A zero-usage week should retain its new reset time")
+        expect(zeroGrokUsage.extraInfo.contains { $0.label == "用量说明" && $0.value.contains("0%") }, "Inferred zero usage should explain why the interface has no explicit percentage")
+
+        var invalidGrokData = [#"{"config":{}}"#, #"{"config":{"creditUsagePercent":true}}"#, "not json"].map { Data($0.utf8) }
+        for invalidPercent: Any in [NSNull(), true, "0", [:] as [String: Any]] {
+            var malformed = zeroGrokConfig
+            malformed["creditUsagePercent"] = invalidPercent
+            invalidGrokData.append(try! JSONSerialization.data(withJSONObject: ["config": malformed]))
+        }
+        for missingField in ["currentPeriod", "prepaidBalance", "isUnifiedBillingUser"] {
+            var incomplete = zeroGrokConfig
+            incomplete.removeValue(forKey: missingField)
+            invalidGrokData.append(try! JSONSerialization.data(withJSONObject: ["config": incomplete]))
+        }
+        for period in [
+            ["type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "invalid", "end": "2026-11-10T12:22:17Z"],
+            ["type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "2026-11-10T12:22:17Z", "end": "2026-11-03T12:22:17Z"],
+            ["type": "USAGE_PERIOD_TYPE_MONTHLY", "start": "2026-11-03T12:22:17Z", "end": "2026-12-03T12:22:17Z"],
+        ] {
+            var malformed = zeroGrokConfig
+            malformed["currentPeriod"] = period
+            invalidGrokData.append(try! JSONSerialization.data(withJSONObject: ["config": malformed]))
+        }
+        for invalid in invalidGrokData {
             do {
-                _ = try GrokProvider.testUsage(from: Data(invalid.utf8))
+                _ = try GrokProvider.testUsage(from: invalid)
                 fatalError("Invalid subscription responses must not display zero quota as if successful")
             } catch GrokSubscriptionError.invalidResponse { }
             catch { fatalError("Invalid Grok responses should produce a safe parse error") }
