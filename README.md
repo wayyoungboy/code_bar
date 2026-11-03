@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
 [![Swift](https://img.shields.io/badge/Swift-5.0-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.8-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.8)
+[![Release](https://img.shields.io/badge/release-v2.2.9-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.9)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
 一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini、Grok、Antigravity 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
@@ -76,7 +76,7 @@
 | 语言 | **Swift 5.0**（`SWIFT_VERSION = 5.0`） |
 | 本地开发 | **Xcode 15.0+**（`CreatedOnToolsVersion = 15.0`），且必须安装完整 Xcode.app，不能只装 Command Line Tools |
 | 工程形态 | `CodeBar.xcodeproj` / scheme **CodeBar** / product **CodeBar.app** |
-| 当前版本 | **2.2.8**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
+| 当前版本 | **2.2.9**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
 | 签名 | 工程是 Automatic signing；源码构建建议关签名（与 CI / `build.sh` 一致） |
 | 启动形态 | `LSUIElement = true`：**没有 Dock 图标**，图标只出现在菜单栏 |
 
@@ -86,7 +86,7 @@ Linux、GitHub `ubuntu-*` runner、Windows 都无法编译这个 app。CI 用的
 
 ### 从 Release 下载（需要 Mac）
 
-1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.8](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.8)）
+1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.9](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.9)）
 2. 双击打开 DMG，将 CodeBar 拖到 Applications
 3. 首次打开时 macOS 可能提示“无法验证开发者”或“已损坏”，这是因为 DMG 未经 Apple 公证。解决方法：
    - 打开「系统设置 → 隐私与安全性」，拉到最下方，点击「仍要打开」
@@ -292,6 +292,7 @@ socks5://127.0.0.1:7890
 - 先在本机 Grok 中完成订阅账号登录；CodeBar 读取 `auth.json`，直接查询订阅用量，不再启动完整 CLI，也不需要手动运行 `/usage`。
 - OAuth 即将到期或订阅接口返回 401 时自动刷新；轮换后的令牌通过凭据锁和原子写入保存到同一个 `auth.json`，权限为 `0600`，不会复制到 CodeBar 配置。
 - 展示周用量百分比、重置时间和同步时间。旧版后台 CLI 开关会被忽略，升级后统一使用 HTTP 查询。
+- 周额度重置后，若接口省略为零的百分比字段，仅在完整的统一周额度数据中显示 0%；不完整或异常响应仍会报错。
 - 订阅接口使用 Grok 登录态，普通 API Key / Management Key 的 API 账单与订阅周额度分开。
 - 此订阅接口来自官方 CLI 的内部调用，接口变化可能需要更新 CodeBar；授权被撤销时需要先在 Grok 重新登录。
 
@@ -325,7 +326,7 @@ code_bar/
 │   ├── StatusBarIconRenderer.swift
 │   ├── StatusBarUsagePresentation.swift
 │   ├── UpdateChecker.swift
-│   ├── Info.plist                 # 版本 2.2.8，LSUIElement
+│   ├── Info.plist                 # 版本 2.2.9，LSUIElement
 │   └── Providers/
 │       ├── PlatformProvider.swift
 │       ├── BailianProvider.swift
@@ -397,8 +398,8 @@ CI 与此相同：`.github/workflows/ci.yml` 在 `macos-15` 上选 Xcode 16.x，
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.8 -m "CodeBar v2.2.8"
-git push origin v2.2.8
+git tag -a v2.2.9 -m "CodeBar v2.2.9"
+git push origin v2.2.9
 ```
 
 GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上传到 GitHub Release。发版 runner 也必须是 Mac；本地 `./build.sh` 只适合自己做安装包。

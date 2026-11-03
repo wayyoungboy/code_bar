@@ -420,7 +420,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.8;
+					MARKETING_VERSION = 2.2.9;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;
@@ -448,7 +448,7 @@
 						"$(inherited)",
 						"@executable_path/../Frameworks",
 					);
-					MARKETING_VERSION = 2.2.8;
+					MARKETING_VERSION = 2.2.9;
 					PRODUCT_BUNDLE_IDENTIFIER = com.codebar.app;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SWIFT_EMIT_LOC_STRINGS = YES;
