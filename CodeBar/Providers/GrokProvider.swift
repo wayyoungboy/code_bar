@@ -46,28 +46,50 @@ struct GrokProvider: PlatformProvider {
 
     private static func makeUsage(from data: Data) throws -> PlatformUsageData {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let config = root["config"] as? [String: Any],
-              let number = config["creditUsagePercent"] as? NSNumber,
-              CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite else {
+              let config = root["config"] as? [String: Any] else {
             throw GrokSubscriptionError.invalidResponse
         }
-        let percent = max(0, min(100, number.doubleValue))
         let period = config["currentPeriod"] as? [String: Any]
+        let percent: Double
+        let inferredZero: Bool
+        if let value = config["creditUsagePercent"] {
+            guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+                  number.doubleValue.isFinite else { throw GrokSubscriptionError.invalidResponse }
+            percent = max(0, min(100, number.doubleValue))
+            inferredZero = false
+        } else {
+            // The credits API omits proto3 zero scalars after a weekly reset.
+            // Only accept the complete unified weekly shape; malformed responses must still fail.
+            guard let unified = config["isUnifiedBillingUser"] as? NSNumber,
+                  CFGetTypeID(unified) == CFBooleanGetTypeID(), unified.boolValue,
+                  config["prepaidBalance"] is [String: Any],
+                  period?["type"] as? String == "USAGE_PERIOD_TYPE_WEEKLY",
+                  let start = parseDate(period?["start"] as? String),
+                  let end = parseDate(period?["end"] as? String), start < end else {
+                throw GrokSubscriptionError.invalidResponse
+            }
+            percent = 0
+            inferredZero = true
+        }
         let reset = parseDate(period?["end"] as? String ?? config["billingPeriodEnd"] as? String)
         let tier = (config["subscriptionTier"] as? String ?? root["subscriptionTier"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        var extraInfo: [(label: String, value: String)] = [
+            (label: "数据来源", value: "Grok 订阅接口"),
+            (label: "刷新方式", value: "直接查询订阅额度，自动刷新 OAuth"),
+            (label: "Grok 同步时间", value: formatter.string(from: Date())),
+            (label: "刷新状态", value: "订阅用量已更新"),
+        ]
+        if inferredZero {
+            extraInfo.append((label: "用量说明", value: "本周用量为 0%（接口省略零值）"))
+        }
         return PlatformUsageData(
             platformName: "Grok", planType: tier?.isEmpty == false ? tier! : "Grok 订阅",
             items: [UsageItem(key: "grok.weekly", label: "周额度", used: Int(percent.rounded()), total: 100, unit: "%", resetDate: reset)],
-            extraInfo: [
-                (label: "数据来源", value: "Grok 订阅接口"),
-                (label: "刷新方式", value: "直接查询订阅额度，自动刷新 OAuth"),
-                (label: "Grok 同步时间", value: formatter.string(from: Date())),
-                (label: "刷新状态", value: "订阅用量已更新"),
-            ]
+            extraInfo: extraInfo
         )
     }
 
