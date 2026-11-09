@@ -863,6 +863,7 @@ struct ModuleEditorView: View {
     @State private var secToken: String
     @State private var region: String
     @State private var zenMuxApiKey: String
+    @State private var openAIAdminKey: String
     @State private var mimoServiceToken: String
     @State private var mimoUserId: String
     @State private var proxyURL: String
@@ -911,6 +912,7 @@ struct ModuleEditorView: View {
         var initialSecToken = ""
         var initialRegion = "cn-beijing"
         var initialZenMuxApiKey = ""
+        var initialOpenAIAdminKey = ""
         var initialMimoServiceToken = ""
         var initialMimoUserId = ""
         var initialGrokHomeDirectory = ""
@@ -926,6 +928,8 @@ struct ModuleEditorView: View {
                 initialRegion = config.region
             case .zenmux(let account):
                 initialZenMuxApiKey = account.apiKey
+            case .openaiAPI(let config):
+                initialOpenAIAdminKey = config.adminAPIKey
             case .mimo(let config):
                 initialMimoServiceToken = config.serviceToken
                 initialMimoUserId = config.userId
@@ -944,6 +948,7 @@ struct ModuleEditorView: View {
         _secToken = State(initialValue: initialSecToken)
         _region = State(initialValue: initialRegion)
         _zenMuxApiKey = State(initialValue: initialZenMuxApiKey)
+        _openAIAdminKey = State(initialValue: initialOpenAIAdminKey)
         _mimoServiceToken = State(initialValue: initialMimoServiceToken)
         _mimoUserId = State(initialValue: initialMimoUserId)
         _proxyURL = State(initialValue: module?.config.proxyURL ?? "")
@@ -1057,6 +1062,18 @@ struct ModuleEditorView: View {
                     .font(.caption)
                     .foregroundColor(.orange)
             }
+        case .openaiAPI:
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Admin API Key")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                SecureField("sk-admin-…", text: $openAIAdminKey)
+                    .textFieldStyle(.roundedBorder)
+                Link("创建 OpenAI Admin API Key", destination: URL(string: "https://platform.openai.com/settings/organization/admin-keys")!)
+                Text("使用组织管理密钥读取 API 费用和用量；普通项目 Key 不适用。费用按 UTC 日 / 月统计，可能延迟入账。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         case .mimo:
             VStack(alignment: .leading, spacing: 8) {
                 SecureField("api-platform_serviceToken", text: $mimoServiceToken)
@@ -1111,7 +1128,8 @@ struct ModuleEditorView: View {
                 Toggle("通知", isOn: $isNotificationEnabled)
             }
             .toggleStyle(.checkbox)
-            HStack(spacing: 10) {
+            if provider != .openaiAPI {
+              HStack(spacing: 10) {
                 Text("百分比")
                     .foregroundColor(.secondary)
                 Picker("百分比", selection: $percentDisplayMode) {
@@ -1121,6 +1139,7 @@ struct ModuleEditorView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 150)
+              }
             }
         }
         .font(.caption)
@@ -1220,6 +1239,11 @@ struct ModuleEditorView: View {
 
     private var quotaOptions: [ModuleQuotaOption] {
         switch provider {
+        case .openaiAPI:
+            return [
+                ModuleQuotaOption(key: "openai.cost.month", label: "本月费用", availability: .available),
+                ModuleQuotaOption(key: "openai.cost.today", label: "今日费用", availability: .available),
+            ]
         case .bailian:
             return [
                 ModuleQuotaOption(key: "billMonth", label: "账单月", availability: .available),
@@ -1367,6 +1391,8 @@ struct ModuleEditorView: View {
         switch provider {
         case .bailian:
             return !cookies.isEmpty && !secToken.isEmpty
+        case .openaiAPI:
+            return OpenAIAPIConfig(adminAPIKey: openAIAdminKey.trimmingCharacters(in: .whitespacesAndNewlines)).isValid
         case .zenmux:
             return !zenMuxApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .mimo:
@@ -1399,6 +1425,8 @@ struct ModuleEditorView: View {
     private func makeModule() -> MonitorModule {
         var config: MonitorModuleConfig
         switch provider {
+        case .openaiAPI:
+            config = .openaiAPI(OpenAIAPIConfig(adminAPIKey: openAIAdminKey.trimmingCharacters(in: .whitespacesAndNewlines)))
         case .bailian:
             config = .bailian(BailianConfig(cookies: cookies, secToken: secToken, region: region))
         case .zenmux:
@@ -1442,7 +1470,7 @@ struct ModuleEditorView: View {
             displayKeys: orderedDisplayKeys,
             resetTimeKeys: orderedResetTimeKeys,
             isCollapsed: module?.isCollapsed ?? false,
-            percentDisplayMode: percentDisplayMode,
+            percentDisplayMode: provider == .openaiAPI ? .used : percentDisplayMode,
             sortOrder: module?.sortOrder ?? 0
         )
     }
@@ -1470,6 +1498,8 @@ struct ModuleEditorView: View {
 
     static func defaultDisplayKeys(for provider: PlatformType) -> [String] {
         switch provider {
+        case .openaiAPI:
+            return ["openai.cost.month", "openai.cost.today"]
         case .bailian:
             return ["billMonth", "5hour", "week"]
         case .zenmux:
@@ -1507,6 +1537,8 @@ struct HelpWindowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     switch platform {
+                    case .openaiAPI:
+                        openAIAPIHelpSteps
                     case .bailian:
                         bailianHelpSteps
                     case .zenmux:
@@ -1539,6 +1571,7 @@ struct HelpWindowView: View {
 
     private var helpTitle: String {
         switch platform {
+        case .openaiAPI: return "获取 OpenAI API 计费凭据"
         case .bailian: return "获取百炼凭据帮助"
         case .zenmux: return "获取 ZenMux API Key 帮助"
         case .mimo: return "获取小米 MiMo 凭据帮助"
@@ -1546,6 +1579,16 @@ struct HelpWindowView: View {
         case .gemini: return "获取 Gemini 用量凭据帮助"
         case .grok: return "获取 Grok 用量帮助"
         case .antigravity: return "获取 Antigravity (AGY) 用量帮助"
+        }
+    }
+
+    private var openAIAPIHelpSteps: some View {
+        Group {
+            Link("打开 OpenAI 组织管理密钥页面", destination: URL(string: "https://platform.openai.com/settings/organization/admin-keys")!)
+            HelpStepView(number: 1, title: "登录组织管理账号", description: "进入 OpenAI Platform 的组织设置 → Admin keys。", icon: "person.circle")
+            HelpStepView(number: 2, title: "创建 Admin API Key", description: "创建以 sk-admin- 开头的组织管理密钥，并将其填入 CodeBar 的 Admin API Key。普通项目密钥不适用。", icon: "key")
+            HelpStepView(number: 3, title: "选择费用展示项", description: "支持本月费用和今日费用，单位为美元。详情包含 Completions Token 和请求数；日期边界为 UTC。", icon: "dollarsign.circle")
+            HelpStepView(number: 4, title: "查看已入账费用", description: "费用可能延迟入账，暂无记录会单独标注。这些数据是 API 费用，不代表账户余额或 Codex 订阅额度。", icon: "doc.text")
         }
     }
 

@@ -69,6 +69,9 @@ private actor OpenAIAPIFixture {
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
         OpenAIAPITests.expect(query["start_time"] == "1793491200" && query["end_time"] == "1794313800", "Query ranges must use the entire UTC month through the current instant")
         OpenAIAPITests.expect(query["bucket_width"] == "1d" && query["limit"] == "31", "A monthly query must request all daily buckets")
+        if let page = query["page"], mode != "cursor" {
+            OpenAIAPITests.expect(page == "page+2&x=y" && request.url!.absoluteString.contains("%2B"), "Pagination cursors must preserve plus signs and query punctuation")
+        }
         let cost = request.url!.path == "/v1/organization/costs"
         OpenAIAPITests.expect(cost || request.url!.path == "/v1/organization/usage/completions", "No model or administrative mutation endpoint should be called")
         var status = 200

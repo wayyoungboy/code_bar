@@ -30,6 +30,7 @@ swiftc \
   "$SRCROOT/CodeBar/Providers/GrokProvider.swift" \
   "$SRCROOT/CodeBar/Providers/GrokSubscriptionClient.swift" \
   "$SRCROOT/CodeBar/Providers/AntigravityProvider.swift" \
+  "$SRCROOT/CodeBar/Providers/OpenAIAPIProvider.swift" \
   "$SRCROOT/CodeBarTests/TestNotifications.swift" \
   "$SRCROOT/CodeBarTests/UsageProviderTests.swift" \
   "$SRCROOT/CodeBarTests/ModuleProxyTests.swift" \

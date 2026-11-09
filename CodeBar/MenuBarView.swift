@@ -348,7 +348,10 @@ struct MenuBarView: View {
     ) -> some View {
         let displayValue = displayMode.value(for: item)
         let displayPercent = displayMode.percent(for: item)
-        let helpText = "\(item.label) \(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.total)) \(item.unit)"
+        let valueText = item.total > 0
+            ? "\(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.total)) \(item.unit)"
+            : UsageStatusFormatting.amountText(for: item)
+        let helpText = "\(item.label) \(valueText)"
 
         VStack(alignment: .leading, spacing: 4) {
             if !compact {
@@ -357,13 +360,13 @@ struct MenuBarView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text("\(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.total)) \(item.unit)")
+                    Text(valueText)
                         .font(.caption)
                         .fontWeight(.medium)
                 }
             }
-            // 进度条
-            GeometryReader { geometry in
+            if item.total > 0 {
+              GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color.gray.opacity(0.2))
@@ -372,7 +375,8 @@ struct MenuBarView: View {
                         .frame(width: geometry.size.width * CGFloat(displayPercent / 100))
                 }
             }
-            .frame(height: 6)
+              .frame(height: 6)
+            }
 
             if let resetDate = resetDate, !compact {
                 HStack {

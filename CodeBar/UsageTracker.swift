@@ -11,6 +11,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
     case gemini = "Gemini"
     case grok = "Grok"
     case antigravity = "Antigravity"
+    case openaiAPI = "OpenAI API"
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .gemini: return "sparkles"
         case .grok: return "bolt.circle.fill"
         case .antigravity: return "atom"
+        case .openaiAPI: return "creditcard"
         }
     }
 
@@ -35,6 +37,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .gemini: return "GeminiLogo"
         case .grok: return "GrokLogo"
         case .antigravity: return "AntigravityLogo"
+        case .openaiAPI: return "CodexLogo"
         }
     }
 
@@ -54,6 +57,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .gemini: return "Gemini"
         case .grok: return "Grok"
         case .antigravity: return "AGY"
+        case .openaiAPI: return "API"
         }
     }
 
@@ -66,6 +70,7 @@ enum PlatformType: String, CaseIterable, Identifiable, Codable {
         case .gemini: return "#4285F4"
         case .grok: return "#6B7280"
         case .antigravity: return "#4285F4"
+        case .openaiAPI: return "#10A37F"
         }
     }
 }
@@ -341,6 +346,8 @@ class UsageTracker: ObservableObject {
             return GrokProvider(config: config)
         case .antigravity(let config):
             return AntigravityProvider(config: config)
+        case .openaiAPI(let config):
+            return OpenAIAPIProvider(config: config)
         }
     }
 

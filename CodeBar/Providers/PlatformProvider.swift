@@ -147,6 +147,7 @@ enum MonitorModuleConfig: Codable {
     case gemini(GeminiConfig)
     case grok(GrokConfig)
     case antigravity(AntigravityConfig)
+    case openaiAPI(OpenAIAPIConfig)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -157,6 +158,7 @@ enum MonitorModuleConfig: Codable {
         case gemini
         case grok
         case antigravity
+        case openaiAPI
     }
 
     var proxyURL: String? {
@@ -169,6 +171,7 @@ enum MonitorModuleConfig: Codable {
             case .gemini(let value): return value.proxyURL
             case .grok(let value): return value.proxyURL
             case .antigravity(let value): return value.proxyURL
+            case .openaiAPI(let value): return value.proxyURL
             }
         }
         set {
@@ -182,6 +185,7 @@ enum MonitorModuleConfig: Codable {
             case .gemini(var value): value.proxyURL = proxy; self = .gemini(value)
             case .grok(var value): value.proxyURL = proxy; self = .grok(value)
             case .antigravity(var value): value.proxyURL = proxy; self = .antigravity(value)
+            case .openaiAPI(var value): value.proxyURL = proxy; self = .openaiAPI(value)
             }
         }
     }
@@ -195,6 +199,7 @@ enum MonitorModuleConfig: Codable {
         case .gemini: return .gemini
         case .grok: return .grok
         case .antigravity: return .antigravity
+        case .openaiAPI: return .openaiAPI
         }
     }
 
@@ -214,6 +219,8 @@ enum MonitorModuleConfig: Codable {
         case .grok(let config):
             return config.isValid
         case .antigravity(let config):
+            return config.isValid
+        case .openaiAPI(let config):
             return config.isValid
         }
     }
@@ -236,6 +243,8 @@ enum MonitorModuleConfig: Codable {
             self = .grok(try container.decode(GrokConfig.self, forKey: .grok))
         case .antigravity:
             self = .antigravity(try container.decode(AntigravityConfig.self, forKey: .antigravity))
+        case .openaiAPI:
+            self = .openaiAPI(try container.decode(OpenAIAPIConfig.self, forKey: .openaiAPI))
         }
     }
 
@@ -257,6 +266,8 @@ enum MonitorModuleConfig: Codable {
             try container.encode(config, forKey: .grok)
         case .antigravity(let config):
             try container.encode(config, forKey: .antigravity)
+        case .openaiAPI(let config):
+            try container.encode(config, forKey: .openaiAPI)
         }
     }
 }
@@ -492,6 +503,8 @@ enum ModuleUsageSelection {
             ]
         case .antigravity:
             preferredKeys = ["gemini-5h", "gemini-weekly", "3p-5h", "3p-weekly"]
+        case .openaiAPI:
+            preferredKeys = ["openai.cost.month", "openai.cost.today"]
         default:
             preferredKeys = ["5hour", "7day"]
         }
@@ -535,6 +548,7 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func value(for item: UsageItem) -> Int {
+        guard item.total > 0 else { return item.used }
         switch self {
         case .used:
             return item.used
@@ -544,6 +558,7 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func percent(for item: UsageItem) -> Double {
+        guard item.total > 0 else { return 0 }
         switch self {
         case .used:
             return item.percent
@@ -553,6 +568,7 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func isNearLimit(_ item: UsageItem) -> Bool {
+        guard item.total > 0 else { return false }
         switch self {
         case .used:
             return item.percent > 80
@@ -564,7 +580,23 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
 
 enum UsageStatusFormatting {
     static func compactPercentText(for item: UsageItem, displayMode: UsagePercentDisplayMode) -> String {
-        String(format: "%.0f%%", displayMode.percent(for: item))
+        if item.total <= 0 { return amountText(for: item) }
+        return String(format: "%.0f%%", displayMode.percent(for: item))
+    }
+
+    static func amountText(for item: UsageItem) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        if item.unit == "USD" {
+            // USD values are stored as integer microdollars to retain billing precision.
+            formatter.numberStyle = .currency
+            formatter.currencyCode = "USD"
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = abs(Double(item.used)) < 1_000_000 ? 6 : 2
+            return formatter.string(from: NSDecimalNumber(decimal: Decimal(item.used) / 1_000_000)) ?? "$0.00"
+        }
+        formatter.numberStyle = .decimal
+        return "\(formatter.string(from: NSNumber(value: item.used)) ?? String(item.used)) \(item.unit)"
     }
 }
 
@@ -764,6 +796,25 @@ struct GrokConfig: PlatformConfig, Codable {
     enum CodingKeys: String, CodingKey {
         case homeDirectory = "grok_home_directory"
         case proxyURL = "grok_proxy_url"
+    }
+}
+
+/// OpenAI organization billing; independent of the Codex OAuth subscription.
+struct OpenAIAPIConfig: PlatformConfig, Codable {
+    let platform: PlatformType = .openaiAPI
+    var adminAPIKey: String
+    var proxyURL: String?
+
+    init(adminAPIKey: String = "", proxyURL: String? = nil) {
+        self.adminAPIKey = adminAPIKey
+        self.proxyURL = proxyURL
+    }
+
+    var isValid: Bool {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+        return adminAPIKey.hasPrefix("sk-admin-") && adminAPIKey.count > 20
+            && adminAPIKey.unicodeScalars.allSatisfy { allowed.contains($0) }
+            && ModuleProxyConfiguration.validationMessage(for: proxyURL) == nil
     }
 }
 
