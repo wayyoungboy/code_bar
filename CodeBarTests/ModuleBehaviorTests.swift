@@ -29,6 +29,7 @@ private struct ModuleBehaviorTests {
     }
 
     static func main() async {
+        try! await OpenAIAPITests.run()
         let fiveHourReset = Date(timeIntervalSince1970: 1_800_000_000)
         let sevenDayReset = Date(timeIntervalSince1970: 1_800_100_000)
         let fiveHour = UsageItem(key: "5hour", label: "5小时", used: 1, total: 10, unit: "flows", resetDate: fiveHourReset)
