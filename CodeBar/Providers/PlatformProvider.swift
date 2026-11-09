@@ -804,6 +804,7 @@ struct OpenAIAPIConfig: PlatformConfig, Codable {
     let platform: PlatformType = .openaiAPI
     var adminAPIKey: String
     var proxyURL: String?
+    private enum CodingKeys: String, CodingKey { case adminAPIKey, proxyURL }
 
     init(adminAPIKey: String = "", proxyURL: String? = nil) {
         self.adminAPIKey = adminAPIKey

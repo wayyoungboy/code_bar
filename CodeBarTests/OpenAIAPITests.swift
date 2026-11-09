@@ -28,7 +28,8 @@ enum OpenAIAPITests {
 
         let decoded = try JSONDecoder().decode(MonitorModuleConfig.self, from: JSONEncoder().encode(MonitorModuleConfig.openaiAPI(OpenAIAPIConfig(adminAPIKey: key, proxyURL: "http://127.0.0.1:7890"))))
         expect(decoded.platform == .openaiAPI && decoded.isValid && decoded.proxyURL != nil, "The new module and proxy must survive configuration persistence")
-        expect(ModuleEditorView.defaultDisplayKeys(for: .openaiAPI) == ["openai.cost.month", "openai.cost.today"], "The default menu bar selection should prefer monthly costs")
+        let defaultKeys = await MainActor.run { ModuleEditorView.defaultDisplayKeys(for: .openaiAPI) }
+        expect(defaultKeys == ["openai.cost.month", "openai.cost.today"], "The default menu bar selection should prefer monthly costs")
 
         for invalid in ["", "sk-proj-fixture", key + "\nheader", " " + key] {
             expect(!OpenAIAPIConfig(adminAPIKey: invalid).isValid, "Only a well-formed Admin API Key should be accepted")

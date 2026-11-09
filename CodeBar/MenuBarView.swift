@@ -366,16 +366,16 @@ struct MenuBarView: View {
                 }
             }
             if item.total > 0 {
-              GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.gray.opacity(0.2))
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(progressColor(for: displayPercent, mode: displayMode))
-                        .frame(width: geometry.size.width * CGFloat(displayPercent / 100))
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.gray.opacity(0.2))
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(progressColor(for: displayPercent, mode: displayMode))
+                            .frame(width: geometry.size.width * CGFloat(displayPercent / 100))
+                    }
                 }
-            }
-              .frame(height: 6)
+                .frame(height: 6)
             }
 
             if let resetDate = resetDate, !compact {

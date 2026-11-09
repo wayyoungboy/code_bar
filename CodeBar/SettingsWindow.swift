@@ -1070,6 +1070,7 @@ struct ModuleEditorView: View {
                 SecureField("sk-admin-…", text: $openAIAdminKey)
                     .textFieldStyle(.roundedBorder)
                 Link("创建 OpenAI Admin API Key", destination: URL(string: "https://platform.openai.com/settings/organization/admin-keys")!)
+                Link("查看 API 额度余额和到期时间", destination: URL(string: "https://platform.openai.com/settings/organization/billing/overview")!)
                 Text("使用组织管理密钥读取 API 费用和用量；普通项目 Key 不适用。费用按 UTC 日 / 月统计，可能延迟入账。")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -1129,17 +1130,17 @@ struct ModuleEditorView: View {
             }
             .toggleStyle(.checkbox)
             if provider != .openaiAPI {
-              HStack(spacing: 10) {
-                Text("百分比")
-                    .foregroundColor(.secondary)
-                Picker("百分比", selection: $percentDisplayMode) {
-                    ForEach(UsagePercentDisplayMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                HStack(spacing: 10) {
+                    Text("百分比")
+                        .foregroundColor(.secondary)
+                    Picker("百分比", selection: $percentDisplayMode) {
+                        ForEach(UsagePercentDisplayMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 150)
-              }
             }
         }
         .font(.caption)
@@ -1585,6 +1586,7 @@ struct HelpWindowView: View {
     private var openAIAPIHelpSteps: some View {
         Group {
             Link("打开 OpenAI 组织管理密钥页面", destination: URL(string: "https://platform.openai.com/settings/organization/admin-keys")!)
+            Link("查看 API 额度余额和到期时间", destination: URL(string: "https://platform.openai.com/settings/organization/billing/overview")!)
             HelpStepView(number: 1, title: "登录组织管理账号", description: "进入 OpenAI Platform 的组织设置 → Admin keys。", icon: "person.circle")
             HelpStepView(number: 2, title: "创建 Admin API Key", description: "创建以 sk-admin- 开头的组织管理密钥，并将其填入 CodeBar 的 Admin API Key。普通项目密钥不适用。", icon: "key")
             HelpStepView(number: 3, title: "选择费用展示项", description: "支持本月费用和今日费用，单位为美元。详情包含 Completions Token 和请求数；日期边界为 UTC。", icon: "dollarsign.circle")

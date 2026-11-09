@@ -14,6 +14,7 @@ enum ModuleProxyTests {
             .mimo(MimoConfig(serviceToken: "fixture-token", userId: "fixture-user")),
             .codex(CodexConfig()), .gemini(GeminiConfig()),
             .grok(GrokConfig()), .antigravity(AntigravityConfig()),
+            .openaiAPI(OpenAIAPIConfig(adminAPIKey: OpenAIAPITests.key)),
         ]
         for var configuration in configurations {
             let legacy = try JSONEncoder().encode(configuration)
@@ -83,6 +84,7 @@ enum ModuleProxyTests {
             BailianProvider(config: BailianConfig(cookies: "fixture", secToken: "fixture", proxyURL: httpAddress)),
             GrokProvider(config: GrokConfig(homeDirectory: grokHome.path, proxyURL: httpAddress)),
             MimoProvider(config: MimoConfig(serviceToken: "fixture", userId: "fixture", proxyURL: httpAddress)),
+            OpenAIAPIProvider(config: OpenAIAPIConfig(adminAPIKey: OpenAIAPITests.key, proxyURL: httpAddress)),
             ZenMuxProvider(config: ZenMuxConfig(accounts: [ZenMuxAccountConfig(apiKey: String(repeating: "a", count: 24), proxyURL: httpAddress)])),
         ]
         var errors: [String] = []
@@ -98,7 +100,7 @@ enum ModuleProxyTests {
         } else {
             FileHandle.standardOutput.write(Data("Proxy routing targets: \(targets)\n".utf8))
         }
-        for host in ["bailian-cs.console.aliyun.com:443", "platform.xiaomimimo.com:443", "zenmux.ai:443", "cli-chat-proxy.grok.com:443"] {
+        for host in ["bailian-cs.console.aliyun.com:443", "platform.xiaomimimo.com:443", "zenmux.ai:443", "cli-chat-proxy.grok.com:443", "api.openai.com:443"] {
             expect(targets.contains { $0.contains(host) }, "The provider request must actually reach its configured HTTP proxy")
         }
 

@@ -43,6 +43,7 @@
 - **Codex**：自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
 - **Gemini**：自动读取 Gemini CLI 的 Google OAuth 凭据，查询官方 Code Assist 配额
 - **Grok**：复用本机 OAuth，直接查询订阅周额度并自动续期
+- **OpenAI API**：使用组织 Admin API Key 查询今日 / 本月 API 费用与本月 Token、请求数，独立于 Codex 订阅
 - **Antigravity / AGY**：支持桌面端与 agy CLI，展示 Gemini、Claude/GPT 等模型池额度
 
 想支持更多平台？欢迎提交 PR。
@@ -295,6 +296,17 @@ socks5://127.0.0.1:7890
 - 周额度重置后，若接口省略为零的百分比字段，仅在完整的统一周额度数据中显示 0%；不完整或异常响应仍会报错。
 - 订阅接口使用 Grok 登录态，普通 API Key / Management Key 的 API 账单与订阅周额度分开。
 - 此订阅接口来自官方 CLI 的内部调用，接口变化可能需要更新 CodeBar；授权被撤销时需要先在 Grok 重新登录。
+
+### OpenAI API 计费
+
+在设置界面点击「添加模块」，选择「OpenAI API」，然后使用组织管理账号前往 [Admin keys](https://platform.openai.com/settings/organization/admin-keys) 创建管理密钥并填入「Admin API Key」。普通项目 API Key 和 Codex OAuth 不适用。
+
+- 菜单栏和详情显示今日 / 本月费用（USD）；没有账单额度时显示实际金额，不虚构百分比或账户余额。
+- 日期边界为 UTC。费用取自官方 [Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs)，统计当前组织全部项目，可能延迟入账；空费用记录会单独标注。
+- API 赠送 / 预付额度余额及到期日不由 Costs API 返回。模块提供 [账单控制台入口](https://platform.openai.com/settings/organization/billing/overview)；当前未通过 Admin Key 取得这类数据，不会将费用 $0.00 当作余额为零。
+- Token 和请求数取自 [Completions Usage API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/completions)，输入 Token 已包含缓存输入，不重复累加；费用包含全部 API 产品，统计范围与 Token 明细不同。
+- 支持独立模块代理、每日 / 每月费用展示选择和配置编辑。Token 明细暂时不可用时，保留已经成功读取的费用数据并说明原因。
+- 管理密钥与其他手动凭据一样保存在本机 `~/.code_bar/` 的权限受限配置文件中，不写入项目或运行日志，仅用于官方 OpenAI 只读计费接口。
 
 ### Antigravity / AGY
 

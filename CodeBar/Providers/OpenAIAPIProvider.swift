@@ -70,6 +70,7 @@ struct OpenAIAPIProvider: PlatformProvider {
             ("数据范围", "当前组织全部项目的 API 费用"),
             ("统计时区", "UTC"),
             ("费用说明", "以费用接口已入账数据为准；不是账户余额"),
+            ("额度余额 / 到期日", "请在 OpenAI 账单控制台查看；费用接口不返回余额"),
         ]
         if records == 0 { info.append(("费用记录", "当前月份暂无费用记录")) }
         do {
