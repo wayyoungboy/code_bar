@@ -6,10 +6,10 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
 [![Swift](https://img.shields.io/badge/Swift-5.0-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.9-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.9)
+[![Release](https://img.shields.io/badge/release-v2.2.10-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.10)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
-一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini、Grok、Antigravity 的用量和重置时间收进菜单栏，适合同时维护多个账号、多个团队额度的人。
+一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini、Grok、Antigravity 的用量与重置时间，以及 OpenAI API 费用收进菜单栏，适合同时维护多个账号、多个团队额度的人。
 
 </div>
 
@@ -21,7 +21,7 @@
 
 | 能力 | 说明 |
 |---|---|
-| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini、Grok、Antigravity |
+| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini、Grok、Antigravity、OpenAI API |
 | 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
 | 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
 | 刘海 Island | 可切换刘海 Island 展示（见设置里的展示模式） |
@@ -77,7 +77,7 @@
 | 语言 | **Swift 5.0**（`SWIFT_VERSION = 5.0`） |
 | 本地开发 | **Xcode 15.0+**（`CreatedOnToolsVersion = 15.0`），且必须安装完整 Xcode.app，不能只装 Command Line Tools |
 | 工程形态 | `CodeBar.xcodeproj` / scheme **CodeBar** / product **CodeBar.app** |
-| 当前版本 | **2.2.9**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
+| 当前版本 | **2.2.10**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
 | 签名 | 工程是 Automatic signing；源码构建建议关签名（与 CI / `build.sh` 一致） |
 | 启动形态 | `LSUIElement = true`：**没有 Dock 图标**，图标只出现在菜单栏 |
 
@@ -87,7 +87,7 @@ Linux、GitHub `ubuntu-*` runner、Windows 都无法编译这个 app。CI 用的
 
 ### 从 Release 下载（需要 Mac）
 
-1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.9](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.9)）
+1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.10](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.10)）
 2. 双击打开 DMG，将 CodeBar 拖到 Applications
 3. 首次打开时 macOS 可能提示“无法验证开发者”或“已损坏”，这是因为 DMG 未经 Apple 公证。解决方法：
    - 打开「系统设置 → 隐私与安全性」，拉到最下方，点击「仍要打开」
@@ -303,7 +303,7 @@ socks5://127.0.0.1:7890
 
 - 菜单栏和详情显示今日 / 本月费用（USD）；没有账单额度时显示实际金额，不虚构百分比或账户余额。
 - 日期边界为 UTC。费用取自官方 [Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs)，统计当前组织全部项目，可能延迟入账；空费用记录会单独标注。
-- API 赠送 / 预付额度余额及到期日不由 Costs API 返回。模块提供 [账单控制台入口](https://platform.openai.com/settings/organization/billing/overview)；当前未通过 Admin Key 取得这类数据，不会将费用 $0.00 当作余额为零。
+- 模块仅通过 Admin Key 调用官方 API。API 赠送 / 预付额度余额及到期日不由 Costs API 返回；目前未通过管理接口取得这类数据，不会将费用 $0.00 当作余额为零。
 - Token 和请求数取自 [Completions Usage API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/completions)，输入 Token 已包含缓存输入，不重复累加；费用包含全部 API 产品，统计范围与 Token 明细不同。
 - 支持独立模块代理、每日 / 每月费用展示选择和配置编辑。Token 明细暂时不可用时，保留已经成功读取的费用数据并说明原因。
 - 管理密钥与其他手动凭据一样保存在本机 `~/.code_bar/` 的权限受限配置文件中，不写入项目或运行日志，仅用于官方 OpenAI 只读计费接口。
@@ -338,7 +338,7 @@ code_bar/
 │   ├── StatusBarIconRenderer.swift
 │   ├── StatusBarUsagePresentation.swift
 │   ├── UpdateChecker.swift
-│   ├── Info.plist                 # 版本 2.2.9，LSUIElement
+│   ├── Info.plist                 # 版本 2.2.10，LSUIElement
 │   └── Providers/
 │       ├── PlatformProvider.swift
 │       ├── BailianProvider.swift
@@ -410,8 +410,8 @@ CI 与此相同：`.github/workflows/ci.yml` 在 `macos-15` 上选 Xcode 16.x，
 3. 创建并推送 tag：
 
 ```bash
-git tag -a v2.2.9 -m "CodeBar v2.2.9"
-git push origin v2.2.9
+git tag -a v2.2.10 -m "CodeBar v2.2.10"
+git push origin v2.2.10
 ```
 
 GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上传到 GitHub Release。发版 runner 也必须是 Mac；本地 `./build.sh` 只适合自己做安装包。
