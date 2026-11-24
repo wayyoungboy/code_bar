@@ -218,12 +218,15 @@ enum GrokSubscriptionTests {
         let dated = GrokHTTPFixture(acceptOld: true, billingStatus: 429, retryAfter: httpDate)
         let datedClient = GrokSubscriptionClient(transport: { try await dated.send($0) }, now: { dateClock.now })
         do { _ = try await datedClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await dated.counts()) == [0, 1], "The first HTTP-date 429 should send one billing request")
+        let datedFirst = await dated.counts()
+        expect(datedFirst == [0, 1], "The first HTTP-date 429 should send one billing request")
         do { _ = try await datedClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await dated.counts()) == [0, 1], "An HTTP-date cooldown must not send another billing request")
+        let datedCooled = await dated.counts()
+        expect(datedCooled == [0, 1], "An HTTP-date cooldown must not send another billing request")
         dateClock.now = now.addingTimeInterval(181)
         do { _ = try await datedClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await dated.counts()) == [0, 2], "After the HTTP-date cooldown the client may query billing again")
+        let datedRetried = await dated.counts()
+        expect(datedRetried == [0, 2], "After the HTTP-date cooldown the client may query billing again")
 
         try auth(at: url, expired: false)
         let defaultClock = GrokTestClock(now)
@@ -231,13 +234,16 @@ enum GrokSubscriptionTests {
         let defaultClient = GrokSubscriptionClient(transport: { try await defaulted.send($0) }, now: { defaultClock.now })
         do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
         do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await defaulted.counts()) == [0, 1], "A billing 429 without Retry-After should use the default cooldown")
+        let defaultFirst = await defaulted.counts()
+        expect(defaultFirst == [0, 1], "A billing 429 without Retry-After should use the default cooldown")
         defaultClock.now = now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown - 1)
         do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await defaulted.counts()) == [0, 1], "Default cooldown should still be active just before 5 minutes")
+        let defaultActive = await defaulted.counts()
+        expect(defaultActive == [0, 1], "Default cooldown should still be active just before 5 minutes")
         defaultClock.now = now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown + 1)
         do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await defaulted.counts()) == [0, 2], "Default 5-minute cooldown should expire afterwards")
+        let defaultExpired = await defaulted.counts()
+        expect(defaultExpired == [0, 2], "Default 5-minute cooldown should expire afterwards")
 
         try auth(at: url) // expired token, so the first request is a refresh
         let tokenClock = GrokTestClock(now)
@@ -246,12 +252,15 @@ enum GrokSubscriptionTests {
         do { _ = try await tokenClient.fetch(authURL: url, proxyURL: nil) } catch {
             expect(error.localizedDescription.contains("限流"), "A token-endpoint 429 must surface as a rate limit, not zero usage")
         }
-        expect((await tokenLimited.counts()) == [1, 0], "A token 429 should not continue to the billing request")
+        let tokenFirst = await tokenLimited.counts()
+        expect(tokenFirst == [1, 0], "A token 429 should not continue to the billing request")
         do { _ = try await tokenClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await tokenLimited.counts()) == [1, 0], "A token 429 must start the same account cooldown")
+        let tokenCooled = await tokenLimited.counts()
+        expect(tokenCooled == [1, 0], "A token 429 must start the same account cooldown")
         tokenClock.now = now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown + 1)
         do { _ = try await tokenClient.fetch(authURL: url, proxyURL: nil) } catch { }
-        expect((await tokenLimited.counts()) == [2, 0], "After the default cooldown the client may refresh the token again")
+        let tokenRetried = await tokenLimited.counts()
+        expect(tokenRetried == [2, 0], "After the default cooldown the client may refresh the token again")
 
         print("Grok subscription OAuth tests passed")
     }
