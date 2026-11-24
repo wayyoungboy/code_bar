@@ -149,7 +149,7 @@ enum CodeBarIslandCompactStatusBuilder {
     }
 
     private static func constraintScore(for item: UsageItem, displayMode: UsagePercentDisplayMode) -> Double {
-        guard item.total > 0 else { return 0 }
+        guard item.measuredTotal > 0 else { return 0 }
         switch displayMode {
         case .used:
             return displayMode.percent(for: item)

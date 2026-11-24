@@ -631,15 +631,9 @@ class UsageTracker: ObservableObject {
                     checkZenMuxRefreshNotices(usage: usage)
                 }
             } catch let err as PlatformError {
-                errorMessages[platform] = err.errorDescription
-                if platform == .zenmux {
-                    platforms[platform] = nil
-                }
+                retainGrokPlatformFailure(platform: platform, message: err.errorDescription ?? "查询失败")
             } catch {
-                errorMessages[platform] = error.localizedDescription
-                if platform == .zenmux {
-                    platforms[platform] = nil
-                }
+                retainGrokPlatformFailure(platform: platform, message: error.localizedDescription)
             }
         }
 
@@ -668,11 +662,9 @@ class UsageTracker: ObservableObject {
                     checkZenMuxRefreshNotices(usage: usage, moduleID: module.id)
                 }
             } catch let err as PlatformError {
-                moduleUsages[module.id] = nil
-                moduleErrors[module.id] = err.errorDescription
+                applyModuleFailure(module, message: err.errorDescription ?? "查询失败")
             } catch {
-                moduleUsages[module.id] = nil
-                moduleErrors[module.id] = error.localizedDescription
+                applyModuleFailure(module, message: error.localizedDescription)
             }
         }
     }
@@ -683,64 +675,34 @@ class UsageTracker: ObservableObject {
         }
     }
 
+    private func applyModuleFailure(_ module: MonitorModule, message: String) {
+        if module.platform == .grok, let previous = moduleUsages[module.id] {
+            moduleUsages[module.id] = GrokUsageStatus.markAsLastSuccessCache(previous)
+            moduleErrors[module.id] = GrokUsageStatus.retainedFailureMessage(base: message, previous: previous)
+            return
+        }
+        moduleUsages[module.id] = nil
+        moduleErrors[module.id] = message
+    }
+
+    private func retainGrokPlatformFailure(platform: PlatformType, message: String) {
+        if platform == .grok, let previous = platforms[platform] {
+            platforms[platform] = GrokUsageStatus.markAsLastSuccessCache(previous)
+            errorMessages[platform] = GrokUsageStatus.retainedFailureMessage(base: message, previous: previous)
+            return
+        }
+        errorMessages[platform] = message
+        if platform == .zenmux {
+            platforms[platform] = nil
+        }
+    }
+
     // MARK: - 本地存储
 
     private func saveToStorage() {
         var data: [String: [String: Any]] = [:]
         for (platform, usage) in platforms {
-            let itemsArray = usage.items.map { item -> [String: Any] in
-                var itemData: [String: Any] = [
-                    "key": item.key,
-                    "label": item.label,
-                    "used": item.used,
-                    "total": item.total,
-                    "unit": item.unit,
-                ]
-                if let resetDate = item.resetDate {
-                    itemData["resetDate"] = resetDate
-                }
-                return itemData
-            }
-            let extraArray = usage.extraInfo.map { info -> [String: String] in
-                ["label": info.label, "value": info.value]
-            }
-            let accountArray = usage.accountBreakdowns.map { account -> [String: Any] in
-                let accountItems = account.items.map { item -> [String: Any] in
-                    var itemData: [String: Any] = [
-                        "key": item.key,
-                        "label": item.label,
-                        "used": item.used,
-                        "total": item.total,
-                        "unit": item.unit,
-                    ]
-                    if let resetDate = item.resetDate {
-                        itemData["resetDate"] = resetDate
-                    }
-                    return itemData
-                }
-                let accountExtra = account.extraInfo.map { info -> [String: String] in
-                    ["label": info.label, "value": info.value]
-                }
-                var accountDict: [String: Any] = [
-                    "id": account.id,
-                    "alias": account.alias,
-                    "planType": account.planType,
-                    "items": accountItems,
-                    "resetTimeKeys": account.resetTimeKeys,
-                    "extraInfo": accountExtra,
-                ]
-                if let errorMessage = account.errorMessage {
-                    accountDict["errorMessage"] = errorMessage
-                }
-                return accountDict
-            }
-            data[platform.rawValue] = [
-                "platformName": usage.platformName,
-                "planType": usage.planType,
-                "items": itemsArray,
-                "extraInfo": extraArray,
-                "accountBreakdowns": accountArray,
-            ]
+            data[platform.rawValue] = UsageCacheCodec.usageDictionary(usage)
         }
         UserDefaults.standard.set(data, forKey: Constants.usageCacheKey)
     }
@@ -753,81 +715,10 @@ class UsageTracker: ObservableObject {
         for (platformRaw, usageData) in data {
             guard let platform = PlatformType.allCases.first(where: { $0.rawValue == platformRaw }),
                   let dict = usageData as? [String: Any],
-                  let platformName = dict["platformName"] as? String,
-                  let planType = dict["planType"] as? String,
-                  let itemsArray = dict["items"] as? [[String: Any]] else {
+                  let usage = UsageCacheCodec.usage(from: dict) else {
                 continue
             }
-
-            let items = itemsArray.compactMap { itemDict -> UsageItem? in
-                guard let key = itemDict["key"] as? String,
-                      let label = itemDict["label"] as? String,
-                      let used = itemDict["used"] as? Int,
-                      let total = itemDict["total"] as? Int,
-                      let unit = itemDict["unit"] as? String else {
-                    return nil
-                }
-                let resetDate = itemDict["resetDate"] as? Date
-                return UsageItem(key: key, label: label, used: used, total: total, unit: unit, resetDate: resetDate)
-            }
-
-            var extraInfo: [(label: String, value: String)] = []
-            if let extraArray = dict["extraInfo"] as? [[String: String]] {
-                extraInfo = extraArray.compactMap { d in
-                    guard let label = d["label"], let value = d["value"] else { return nil }
-                    return (label: label, value: value)
-                }
-            }
-
-            var accountBreakdowns: [AccountUsageData] = []
-            if let accountArray = dict["accountBreakdowns"] as? [[String: Any]] {
-                accountBreakdowns = accountArray.compactMap { accountDict in
-                    guard let id = accountDict["id"] as? String,
-                          let alias = accountDict["alias"] as? String,
-                          let accountPlanType = accountDict["planType"] as? String,
-                          let accountItemsArray = accountDict["items"] as? [[String: Any]] else {
-                        return nil
-                    }
-
-                    let accountItems = accountItemsArray.compactMap { itemDict -> UsageItem? in
-                        guard let key = itemDict["key"] as? String,
-                              let label = itemDict["label"] as? String,
-                              let used = itemDict["used"] as? Int,
-                              let total = itemDict["total"] as? Int,
-                              let unit = itemDict["unit"] as? String else {
-                            return nil
-                        }
-                        let resetDate = itemDict["resetDate"] as? Date
-                        return UsageItem(key: key, label: label, used: used, total: total, unit: unit, resetDate: resetDate)
-                    }
-
-                    var accountExtra: [(label: String, value: String)] = []
-                    if let accountExtraArray = accountDict["extraInfo"] as? [[String: String]] {
-                        accountExtra = accountExtraArray.compactMap { d in
-                            guard let label = d["label"], let value = d["value"] else { return nil }
-                            return (label: label, value: value)
-                        }
-                    }
-
-                    return AccountUsageData(
-                        id: id,
-                        alias: alias,
-                        planType: accountPlanType,
-                        items: accountItems,
-                        resetTimeKeys: accountDict["resetTimeKeys"] as? [String] ?? [],
-                        extraInfo: accountExtra,
-                        errorMessage: accountDict["errorMessage"] as? String
-                    )
-                }
-            }
-
-            platforms[platform] = PlatformUsageData(
-                platformName: platformName,
-                planType: planType,
-                items: items,
-                extraInfo: extraInfo,
-                accountBreakdowns: accountBreakdowns
-            )
+            platforms[platform] = usage
         }
     }
 
@@ -914,6 +805,16 @@ class UsageTracker: ObservableObject {
         }
     }
 
+
+    private func usageItemDictionary(_ item: UsageItem) -> [String: Any] {
+        UsageCacheCodec.itemDictionary(item)
+    }
+
+    private func usageItem(from itemDict: [String: Any]) -> UsageItem? {
+        UsageCacheCodec.item(from: itemDict)
+    }
+
+
     private func noticeCacheKey(for itemKey: String, moduleID: String? = nil) -> String? {
         let baseKey: String
         switch itemKey {
@@ -944,5 +845,149 @@ class UsageTracker: ObservableObject {
                 self?.scheduleNextRefresh()
             }
         }
+    }
+}
+
+
+/// Encodes and decodes cached usage items with the same types UsageTracker writes to UserDefaults.
+enum UsageCacheCodec {
+    static func itemDictionary(_ item: UsageItem) -> [String: Any] {
+        var itemData: [String: Any] = [
+            "key": item.key,
+            "label": item.label,
+            "used": item.used,
+            "total": item.total,
+            "unit": item.unit,
+        ]
+        if let resetDate = item.resetDate {
+            itemData["resetDate"] = resetDate
+        }
+        if let usedAmount = item.usedAmount {
+            itemData["usedAmount"] = usedAmount
+        }
+        if let totalAmount = item.totalAmount {
+            itemData["totalAmount"] = totalAmount
+        }
+        return itemData
+    }
+
+    static func item(from itemDict: [String: Any]) -> UsageItem? {
+        guard let key = itemDict["key"] as? String,
+              let label = itemDict["label"] as? String,
+              let used = intValue(itemDict["used"]),
+              let total = intValue(itemDict["total"]),
+              let unit = itemDict["unit"] as? String else {
+            return nil
+        }
+        return UsageItem(
+            key: key,
+            label: label,
+            used: used,
+            total: total,
+            unit: unit,
+            resetDate: itemDict["resetDate"] as? Date,
+            usedAmount: doubleValue(itemDict["usedAmount"]),
+            totalAmount: doubleValue(itemDict["totalAmount"])
+        )
+    }
+
+    static func usageDictionary(_ usage: PlatformUsageData) -> [String: Any] {
+        let extraArray = usage.extraInfo.map { info -> [String: String] in
+            ["label": info.label, "value": info.value]
+        }
+        let accountArray = usage.accountBreakdowns.map { account -> [String: Any] in
+            var accountDict: [String: Any] = [
+                "id": account.id,
+                "alias": account.alias,
+                "planType": account.planType,
+                "items": account.items.map { itemDictionary($0) },
+                "resetTimeKeys": account.resetTimeKeys,
+                "extraInfo": account.extraInfo.map { info -> [String: String] in
+                    ["label": info.label, "value": info.value]
+                },
+            ]
+            if let errorMessage = account.errorMessage {
+                accountDict["errorMessage"] = errorMessage
+            }
+            return accountDict
+        }
+        return [
+            "platformName": usage.platformName,
+            "planType": usage.planType,
+            "items": usage.items.map { itemDictionary($0) },
+            "extraInfo": extraArray,
+            "accountBreakdowns": accountArray,
+        ]
+    }
+
+    static func usage(from dict: [String: Any]) -> PlatformUsageData? {
+        guard let platformName = dict["platformName"] as? String,
+              let planType = dict["planType"] as? String,
+              let itemsArray = dict["items"] as? [[String: Any]] else {
+            return nil
+        }
+        let items = itemsArray.compactMap { item(from: $0) }
+        var extraInfo: [(label: String, value: String)] = []
+        if let extraArray = dict["extraInfo"] as? [[String: String]] {
+            extraInfo = extraArray.compactMap { d in
+                guard let label = d["label"], let value = d["value"] else { return nil }
+                return (label: label, value: value)
+            }
+        } else if let extraArray = dict["extraInfo"] as? [[String: Any]] {
+            extraInfo = extraArray.compactMap { d in
+                guard let label = d["label"] as? String, let value = d["value"] as? String else { return nil }
+                return (label: label, value: value)
+            }
+        }
+        var accountBreakdowns: [AccountUsageData] = []
+        if let accountArray = dict["accountBreakdowns"] as? [[String: Any]] {
+            accountBreakdowns = accountArray.compactMap { accountDict in
+                guard let id = accountDict["id"] as? String,
+                      let alias = accountDict["alias"] as? String,
+                      let accountPlanType = accountDict["planType"] as? String,
+                      let accountItemsArray = accountDict["items"] as? [[String: Any]] else {
+                    return nil
+                }
+                var accountExtra: [(label: String, value: String)] = []
+                if let accountExtraArray = accountDict["extraInfo"] as? [[String: String]] {
+                    accountExtra = accountExtraArray.compactMap { d in
+                        guard let label = d["label"], let value = d["value"] else { return nil }
+                        return (label: label, value: value)
+                    }
+                } else if let accountExtraArray = accountDict["extraInfo"] as? [[String: Any]] {
+                    accountExtra = accountExtraArray.compactMap { d in
+                        guard let label = d["label"] as? String, let value = d["value"] as? String else { return nil }
+                        return (label: label, value: value)
+                    }
+                }
+                return AccountUsageData(
+                    id: id,
+                    alias: alias,
+                    planType: accountPlanType,
+                    items: accountItemsArray.compactMap { item(from: $0) },
+                    resetTimeKeys: accountDict["resetTimeKeys"] as? [String] ?? [],
+                    extraInfo: accountExtra,
+                    errorMessage: accountDict["errorMessage"] as? String
+                )
+            }
+        }
+        return PlatformUsageData(
+            platformName: platformName,
+            planType: planType,
+            items: items,
+            extraInfo: extraInfo,
+            accountBreakdowns: accountBreakdowns
+        )
+    }
+
+    static func intValue(_ raw: Any?) -> Int? {
+        guard let number = raw as? NSNumber else { return nil }
+        return number.intValue
+    }
+
+    static func doubleValue(_ raw: Any?) -> Double? {
+        guard let number = raw as? NSNumber else { return nil }
+        let value = number.doubleValue
+        return value.isFinite ? value : nil
     }
 }
