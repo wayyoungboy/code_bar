@@ -1,120 +1,124 @@
 <div align="center">
 
+<img src="logo/png/codebar-header-1280.png" alt="CodeBar — AI coding usage in the macOS menu bar" width="800" />
+
 # CodeBar
 
-**macOS 菜单栏里的 AI Coding 用量雷达。**
+**AI coding usage, right in the macOS menu bar.**
 
-[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#系统要求)
-[![Swift](https://img.shields.io/badge/Swift-5.0-F05138?style=flat-square&logo=swift&logoColor=white)](#开发)
-[![Release](https://img.shields.io/badge/release-v2.2.10-2563eb?style=flat-square)](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.10)
+[English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
+
+[![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-111827?style=flat-square&logo=apple)](#system-requirements)
+[![Swift](https://img.shields.io/badge/Swift-5.0-F05138?style=flat-square&logo=swift&logoColor=white)](#development)
+[![Release](https://img.shields.io/github/v/release/wayyoungboy/code_bar?style=flat-square&color=2563eb)](https://github.com/wayyoungboy/code_bar/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-059669?style=flat-square)](LICENSE)
 
-一个实时监控 AI Coding 平台额度的 macOS 菜单栏应用。把 BaiLian、ZenMux、MiMo、Codex、Gemini、Grok、Antigravity 的用量与重置时间，以及 OpenAI API 费用收进菜单栏，适合同时维护多个账号、多个团队额度的人。
+A macOS menu bar app that watches AI coding plan usage in real time. It pulls quotas and reset times from BaiLian, ZenMux, MiMo, Codex, Gemini, Grok, and Antigravity, plus OpenAI API costs, into the menu bar — useful if you juggle more than one account or team allowance.
 
 </div>
 
-![CodeBar 多模块监控](screenshots/image5.png)
+![CodeBar monitoring several modules](screenshots/image5.png)
 
-> **必须用 Mac。** 这是 Xcode 工程（`CodeBar.xcodeproj`，scheme `CodeBar`），没有 `Package.swift`，不能用 Swift Package Manager 安装，也不能在 Linux / Windows 上构建或运行。本仓库的 GitHub Actions 只在 `macos-15` 上做 `xcodebuild` 编译与脚本测试，**不会启动 GUI**。
+> **This is a Mac app.** The project is an Xcode project (`CodeBar.xcodeproj`, scheme `CodeBar`). There is no `Package.swift`, so you cannot install it with Swift Package Manager, and you cannot build or run it on Linux or Windows. GitHub Actions in this repository only run `xcodebuild` and script tests on `macos-15`. **They do not launch the GUI.**
 
 ## Highlights
 
-| 能力 | 说明 |
+| Capability | What it does |
 |---|---|
-| 多平台监控 | 阿里云百炼、ZenMux、小米 MiMo、Codex、Gemini、Grok、Antigravity、OpenAI API |
-| 多账号模块 | ZenMux 支持多个账号模块，每个账号独立展示 |
-| 菜单栏策略 | 支持独立状态项和轮播状态项两种展示方式 |
-| 刘海 Island | 可切换刘海 Island 展示（见设置里的展示模式） |
-| 配额提醒 | 5 小时、7 天、周、月等周期可按模块开启提醒 |
-| 本地存储 | CodeBar 自身配置统一写入 `~/.code_bar/` |
-| OAuth 免配置 | 自动读取本机 Codex CLI / Gemini CLI OAuth 凭据 |
+| Multi-platform monitoring | Alibaba Cloud BaiLian, ZenMux, Xiaomi MiMo, Codex, Gemini, Grok, Antigravity, and OpenAI API |
+| Multi-account modules | ZenMux can be added as one module per account, each shown on its own |
+| Menu bar layout | Independent status items, or a single rotating status item |
+| Notch Island | Optional Island layout around the notch (see display mode in Settings) |
+| Quota reminders | Optional reminders per module for 5-hour, 7-day, weekly, or monthly windows |
+| Local storage | CodeBar writes its own settings under `~/.code_bar/` |
+| OAuth without extra tokens | Reads local Codex CLI / Gemini CLI OAuth credentials automatically |
 
 ## Preview
 
-| 多模块监控 | Codex 用量 | 额度刷新通知 |
+| Several modules | Codex usage | Quota refresh notification |
 |---|---|---|
-| ![多模块监控](screenshots/image5.png) | ![Codex Usage](screenshots/codex-usage.png) | ![ZenMux 额度刷新通知](screenshots/image4.png) |
+| ![Several modules](screenshots/image5.png) | ![Codex usage](screenshots/codex-usage.png) | ![ZenMux quota refresh notification](screenshots/image4.png) |
 
-## 支持平台
+## Supported platforms
 
-- **阿里云百炼**：监控 Coding Plan 用量（账单月、5 小时、周）
-- **ZenMux**：监控 Flow 用量（5 小时、7 天），支持按账号添加独立监控模块
-- **小米 MiMo**：监控 Token 用量（月用量、总用量）
-- **Codex**：自动读取 Codex CLI 的 ChatGPT OAuth 凭据，查询官方 5 小时 / 7 天订阅额度
-- **Gemini**：自动读取 Gemini CLI 的 Google OAuth 凭据，查询官方 Code Assist 配额
-- **Grok**：复用本机 OAuth，直接查询订阅周额度并自动续期
-- **OpenAI API**：使用组织 Admin API Key 查询今日 / 本月 API 费用与本月 Token、请求数，独立于 Codex 订阅
-- **Antigravity / AGY**：支持桌面端与 agy CLI，展示 Gemini、Claude/GPT 等模型池额度
+- **Alibaba Cloud BaiLian**: Coding Plan usage (billing month, 5-hour, and weekly windows)
+- **ZenMux**: Flow usage (5-hour and 7-day), with a separate module per account
+- **Xiaomi MiMo**: token usage (monthly and total)
+- **Codex**: reads ChatGPT OAuth credentials from the local Codex CLI and queries the official 5-hour / 7-day subscription quotas
+- **Gemini**: reads Google OAuth credentials from the local Gemini CLI and queries official Code Assist quotas
+- **Grok**: reuses local OAuth, queries the weekly subscription quota directly, and refreshes tokens automatically
+- **OpenAI API**: uses an organization Admin API Key to show today's and this month's API cost, plus this month's tokens and request counts — independent of a Codex subscription
+- **Antigravity / AGY**: desktop app or the `agy` CLI, showing pool quotas for Gemini, Claude/GPT, and others
 
-想支持更多平台？欢迎提交 PR。
+Want another platform? Pull requests are welcome.
 
-## 功能特性
+## Features
 
-- 通过「添加模块」逐个添加供应商账号或凭据
-- 每个模块可配置别名，方便区分个人、团队或项目账号
-- 每个模块可独立选择是否监控、是否显示在菜单栏、是否显示在详情页
-- 设置页支持拖动模块排序，详情页和菜单栏按模块顺序展示
-- 菜单栏多模块展示支持「独立」和「轮播」两种模式
-- 弹窗按模块独立展示用量、套餐、重置时间和额外信息
-- 每个模块的配额周期可独立选择是否展示，以及是否展示剩余重置时间
-- ZenMux 支持添加多个 Management API Key，每个账号都是一个独立模块
-- ZenMux 展示账号用量和完整订阅信息（套餐、费用、单价、到期时间等）
-- ZenMux 额度刷新通知（5 小时 / 7 天周期自动提醒）
-- Codex 自动读取本机 Codex CLI OAuth，无需在 CodeBar 中配置 token
-- Codex 支持可选代理请求 `chatgpt.com/backend-api/wham/usage`
-- Gemini 自动读取本机 Gemini CLI OAuth，无需在 CodeBar 中配置 token
-- Gemini 支持可选代理请求 Google Code Assist 配额接口
-- Grok 直接查询订阅周额度，自动刷新 OAuth，不启动完整 CLI
-- Antigravity 自动发现本机桌面端，也可指定 agy CLI 路径查询额度
-- Codex 请求在原生连接失败时自动使用兼容通道，保持证书校验并沿用模块或系统代理
-- 自动刷新（每 60 秒，带随机 jitter 避免风控）
+- Add vendor accounts or credentials one module at a time with “Add Module”
+- Give each module an alias so personal, team, or project accounts stay distinct
+- Choose per module whether it is monitored, shown in the menu bar, and shown on the detail page
+- Drag modules in Settings to change order; the detail page and menu bar follow that order
+- Menu bar layout can be “independent” or “rotating”
+- The popover shows usage, plan, reset time, and extra fields per module
+- Each quota window on a module can be shown or hidden, including remaining time until reset
+- ZenMux accepts multiple Management API Keys; each account is its own module
+- ZenMux shows account usage and full subscription details (plan, cost, unit price, expiry, and similar fields)
+- ZenMux quota-refresh notifications for the 5-hour / 7-day windows
+- Codex reads local Codex CLI OAuth; you do not paste a token into CodeBar
+- Codex can optionally send `chatgpt.com/backend-api/wham/usage` through a module proxy
+- Gemini reads local Gemini CLI OAuth; you do not paste a token into CodeBar
+- Gemini can optionally send Code Assist quota requests through a module proxy
+- Grok queries the weekly subscription quota over HTTP and refreshes OAuth itself; it does not launch the full CLI
+- Antigravity discovers a local desktop install automatically, or you can point it at an `agy` CLI path
+- If a native Codex request fails, CodeBar falls back to a compatibility channel, still verifying certificates and still using the module or system proxy
+- Auto-refresh every 60 seconds, with a random jitter of ±5 seconds so requests do not all line up
 
-## 系统要求
+## System requirements
 
-| 项 | 实际值（来自工程文件） |
+| Item | Value (from the project files) |
 |---|---|
-| 运行 / 部署目标 | **macOS 13.0+**（`MACOSX_DEPLOYMENT_TARGET`、`LSMinimumSystemVersion`） |
-| 语言 | **Swift 5.0**（`SWIFT_VERSION = 5.0`） |
-| 本地开发 | **Xcode 15.0+**（`CreatedOnToolsVersion = 15.0`），且必须安装完整 Xcode.app，不能只装 Command Line Tools |
-| 工程形态 | `CodeBar.xcodeproj` / scheme **CodeBar** / product **CodeBar.app** |
-| 当前版本 | **2.2.10**（`CodeBar/Info.plist` 的 `CFBundleShortVersionString` 与 `MARKETING_VERSION`） |
-| 签名 | 工程是 Automatic signing；源码构建建议关签名（与 CI / `build.sh` 一致） |
-| 启动形态 | `LSUIElement = true`：**没有 Dock 图标**，图标只出现在菜单栏 |
+| Run / deploy target | **macOS 13.0+** (`MACOSX_DEPLOYMENT_TARGET`, `LSMinimumSystemVersion`) |
+| Language | **Swift 5.0** (`SWIFT_VERSION = 5.0`) |
+| Local development | **Xcode 15.0+** (`CreatedOnToolsVersion = 15.0`). You need the full Xcode.app, not just Command Line Tools |
+| Project shape | `CodeBar.xcodeproj` / scheme **CodeBar** / product **CodeBar.app** |
+| Current release | **2.2.10** (`CFBundleShortVersionString` in `CodeBar/Info.plist`, and `MARKETING_VERSION`) |
+| Signing | The project uses Automatic signing; for source builds, turn signing off (same as CI and `build.sh`) |
+| Launch style | `LSUIElement = true`: **no Dock icon**. The icon lives in the menu bar only |
 
-Linux、GitHub `ubuntu-*` runner、Windows 都无法编译这个 app。CI 用的是 `macos-15` + Xcode 16.x。
+Linux, GitHub `ubuntu-*` runners, and Windows cannot compile this app. CI uses `macos-15` with Xcode 16.x.
 
-## 安装
+## Install
 
-### 从 Release 下载（需要 Mac）
+### From a Release (Mac required)
 
-1. 前往 [Releases](https://github.com/wayyoungboy/code_bar/releases) 下载最新 `CodeBar.dmg`（当前最新 tag 为 [v2.2.10](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.10)）
-2. 双击打开 DMG，将 CodeBar 拖到 Applications
-3. 首次打开时 macOS 可能提示“无法验证开发者”或“已损坏”，这是因为 DMG 未经 Apple 公证。解决方法：
-   - 打开「系统设置 → 隐私与安全性」，拉到最下方，点击「仍要打开」
-   - 或在终端执行：
+1. Go to [Releases](https://github.com/wayyoungboy/code_bar/releases) and download the latest `CodeBar.dmg` (the current latest tag is [v2.2.10](https://github.com/wayyoungboy/code_bar/releases/tag/v2.2.10)).
+2. Open the DMG and drag CodeBar into Applications.
+3. The first launch may say the app “can't be opened because the developer cannot be verified” or that it is “damaged”. The DMG is not notarized by Apple. You can:
+   - Open **System Settings → Privacy & Security**, scroll to the bottom, and choose **Open Anyway**
+   - Or run this in Terminal:
    ```bash
    xattr -cr /Applications/CodeBar.app
    ```
-4. 启动后看**菜单栏**，不要在 Dock 里找图标
+4. After it starts, look in the **menu bar**. There is no Dock icon.
 
-### 从源码构建（需要 Mac + 完整 Xcode）
+### Build from source (Mac + full Xcode)
 
-HTTPS 克隆（不要求配置 GitHub SSH key）：
+Clone over HTTPS (no GitHub SSH key required):
 
 ```bash
 git clone https://github.com/wayyoungboy/code_bar.git
 cd code_bar
 ```
 
-**推荐：用 Xcode GUI**
+**Recommended: Xcode GUI**
 
 ```bash
 open CodeBar.xcodeproj
 ```
 
-在 Xcode 里选 scheme `CodeBar`，destination 选 **My Mac**，然后 Run（⌘R）。第一次运行若弹出签名/开发者证书提示，选本地开发团队或改用下面的无签名命令行构建。
+In Xcode, choose scheme `CodeBar`, destination **My Mac**, then Run (⌘R). If a signing / developer-certificate prompt appears the first time, pick a local team or use the unsigned command-line build below.
 
-**命令行 Debug 构建并启动：**
+**Command-line Debug build and launch:**
 
 ```bash
 xcodebuild -project CodeBar.xcodeproj \
@@ -132,154 +136,154 @@ xcodebuild -project CodeBar.xcodeproj \
 open build/Build/Products/Debug/CodeBar.app
 ```
 
-Debug 构建会顺带跑 `CodeBarTests/run_module_behavior_tests.sh`（这是工程里的 Run Script build phase，**不是** XCTest target，所以不要用 `xcodebuild test`）。脚本只在 `CONFIGURATION=Debug` 时执行。
+A Debug build also runs `CodeBarTests/run_module_behavior_tests.sh`. That script is an Xcode Run Script build phase, **not** an XCTest target, so do not use `xcodebuild test`. The script runs only when `CONFIGURATION=Debug`.
 
-产物路径：`build/Build/Products/Debug/CodeBar.app`。不要用不带 `-derivedDataPath` 的 `xcodebuild`，否则 .app 会落到 `~/Library/Developer/Xcode/DerivedData/`，很难找。
+The app lands at `build/Build/Products/Debug/CodeBar.app`. Always pass `-derivedDataPath`; otherwise the `.app` disappears into `~/Library/Developer/Xcode/DerivedData/`.
 
-也可以打无签名 Release 包：
+You can also make an unsigned Release build:
 
 ```bash
 ./build.sh
 ```
 
-`build.sh` **必须在 Mac 的交互式终端里跑**：它会 `read` 询问是否打开构建目录、是否创建 DMG。非交互环境（CI、管道）会卡住。脚本内部同样关闭 code signing，产物在 `build/Build/Products/Release/CodeBar.app`。CI 发版不走这个脚本：推送 `v*` tag 会触发 `.github/workflows/release.yml`，在 `macos-15` 上 `xcodebuild`、adhoc `codesign`、打 `CodeBar.dmg` 并上传 Release。
+`build.sh` **must be run in an interactive Terminal on a Mac**: it `read`s whether to open the build folder and whether to create a DMG. In CI or a pipe, it will hang waiting for input. The script also disables code signing. The product is `build/Build/Products/Release/CodeBar.app`. CI releases do not use this script: pushing a `v*` tag runs `.github/workflows/release.yml` on `macos-15`, which runs `xcodebuild`, ad-hoc `codesign`, builds `CodeBar.dmg`, and uploads the GitHub Release.
 
-## 使用方法
+## Usage
 
-### 首次配置
+### First-time setup
 
-1. 运行应用后，点击菜单栏的 CodeBar 图标（没有 Dock 图标是正常的）
-2. 点击设置按钮（齿轮图标）
-3. 点击「添加模块」，选择供应商并填写该模块需要的凭据
-4. 保存后，可在模块列表中切换「监控」「bar栏」「详情页」
-5. 拖动模块列表调整展示顺序
-6. 进入模块编辑页，勾选需要展示的配额周期和重置时间
+1. After launch, click the CodeBar icon in the menu bar (no Dock icon is expected).
+2. Open Settings (the gear icon).
+3. Click **Add Module**, pick a vendor, and fill in the credentials that module needs.
+4. After saving, use the module list to toggle **Monitor**, **Menu bar**, and **Detail page**.
+5. Drag the module list to change display order.
+6. Open a module's edit page and choose which quota windows and reset times to show.
 
-### 模块代理
+### Module proxies
 
-每个供应商模块的编辑窗口都有「代理（可选）」字段，可分别设置，例如：
+Every vendor module's edit window has an optional **Proxy** field. You can set it independently, for example:
 
 ```text
 http://127.0.0.1:7890
 socks5://127.0.0.1:1080
 ```
 
-- 百炼、ZenMux（每个账号独立）、MiMo、Codex、Gemini 的用量请求使用该模块的代理；Gemini OAuth 刷新也使用同一代理。
-- Grok 的订阅查询和 OAuth 刷新均使用当前模块代理。
-- AGY 配置代理后通过 `agy` CLI 查询，需已安装并登录 CLI；本机 Language Server 通信始终直连。留空时仍优先探测桌面端，其对外代理由 Antigravity 自身管理。
-- 代理留空会沿用原有系统网络或 CLI 环境；修改一个模块不会影响其他模块。
-- 地址必须包含协议、主机和端口；暂不支持带账号密码的代理 URL。无效地址会提示并禁用保存。
+- BaiLian, ZenMux (per account), MiMo, Codex, and Gemini usage requests use that module's proxy. Gemini OAuth refresh uses the same proxy.
+- Grok subscription queries and OAuth refresh both use the current module proxy.
+- If you set a proxy on AGY, CodeBar queries through the `agy` CLI, which must already be installed and signed in. Language Server traffic to a local desktop install is always direct. When the field is empty, CodeBar still prefers a discovered desktop install; any outbound proxy is then whatever Antigravity itself uses.
+- Leaving the proxy blank keeps the previous system network or CLI environment. Changing one module does not change the others.
+- The URL must include a scheme, host, and port. Userinfo (`user:password@`) in the proxy URL is not supported yet. An invalid address is rejected and Save stays disabled.
 
-### 阿里云百炼
+### Alibaba Cloud BaiLian
 
-在设置界面点击「添加模块」，选择「阿里云百炼」，填入：
+In Settings, click **Add Module**, choose **Alibaba Cloud BaiLian**, and fill in:
 
-- **Cookie**：从浏览器复制的完整 Cookie 字符串
-- **Sec Token**：从请求中复制的 `sec_token` 值
-- **区域**：选择 `cn-beijing`、`cn-shanghai`、`cn-shenzhen` 或 `cn-hangzhou`
+- **Cookie**: the full Cookie string copied from the browser
+- **Sec Token**: the `sec_token` value from the request
+- **Region**: `cn-beijing`, `cn-shanghai`, `cn-shenzhen`, or `cn-hangzhou`
 
-获取步骤：
+How to get them:
 
-1. 登录 https://bailian.console.aliyun.com/
-2. 打开开发者工具，切到 Network
-3. 进入 Coding Plan 页面
-4. 找到 `api.json` 请求
-5. 从请求头复制 Cookie 和 `sec_token`
+1. Sign in at https://bailian.console.aliyun.com/
+2. Open developer tools and go to Network
+3. Open the Coding Plan page
+4. Find the `api.json` request
+5. Copy Cookie and `sec_token` from the request headers
 
 ### ZenMux
 
-在设置界面点击「添加模块」，选择「ZenMux」。每个 ZenMux 账号对应一个独立模块，填入：
+In Settings, click **Add Module** and choose **ZenMux**. Each ZenMux account is its own module. Fill in:
 
-- **账号别名**：用于区分项目、团队或个人账号
-- **Management API Key**：从 ZenMux 管理页面复制的 Management API Key
+- **Account alias**: to tell project, team, or personal accounts apart
+- **Management API Key**: copied from the ZenMux admin page
 
-注意：仅支持 Management API Key，标准 API Key 无效。
+Only a Management API Key works. A standard API key is not accepted.
 
-每个账号模块可以独立勾选是否展示 5 小时 / 7 天配额，以及是否展示对应重置时间。详情页中每个 ZenMux 账号会作为独立模块展示，不再按平台聚合。
+Each account module can independently show or hide the 5-hour / 7-day quotas and their reset times. On the detail page, every ZenMux account stays a separate module; they are not rolled up by vendor.
 
-ZenMux 5 小时或 7 天额度周期刷新时，CodeBar 可发送 macOS 系统通知。同一周期内不会重复提醒，设置界面可开关通知并发送测试通知。
+When a ZenMux 5-hour or 7-day window refreshes, CodeBar can send a macOS notification. The same window is not notified twice. Settings can toggle the notification and send a test notification.
 
-### 小米 MiMo
+### Xiaomi MiMo
 
-在设置界面点击「添加模块」，选择「小米 MiMo」，填入：
+In Settings, click **Add Module**, choose **Xiaomi MiMo**, and fill in:
 
-- **Service Token**：浏览器 Cookie 中的 `api-platform_serviceToken`
-- **User ID**：浏览器 Cookie 中的 `userId`
+- **Service Token**: `api-platform_serviceToken` from the browser cookies
+- **User ID**: `userId` from the browser cookies
 
-获取步骤：
+How to get them:
 
-1. 访问 https://platform.xiaomimimo.com/ 并登录
-2. 打开开发者工具，切到 Application
-3. 在 Cookies 中找到 `platform.xiaomimimo.com`
-4. 复制 `api-platform_serviceToken` 和 `userId`
+1. Sign in at https://platform.xiaomimimo.com/
+2. Open developer tools and go to Application
+3. Under Cookies, select `platform.xiaomimimo.com`
+4. Copy `api-platform_serviceToken` and `userId`
 
 ### Codex
 
-在设置界面点击「添加模块」，选择「Codex」。Codex 不需要在 CodeBar 中配置 token，CodeBar 会自动读取本机 Codex CLI 的 ChatGPT OAuth 文件凭据：`~/.codex/auth.json`。
+In Settings, click **Add Module** and choose **Codex**. Codex does not need a token inside CodeBar. CodeBar reads the Codex CLI ChatGPT OAuth file at `~/.codex/auth.json`.
 
-要求：
+Requirements:
 
-- Codex CLI 已登录 ChatGPT
-- `auth_mode` 为 `chatgpt`
-- OAuth 凭据中存在 `tokens.access_token`
+- Codex CLI is signed in to ChatGPT
+- `auth_mode` is `chatgpt`
+- The OAuth credentials include `tokens.access_token`
 
-CodeBar 请求的官方接口：
+CodeBar calls this official endpoint:
 
 ```text
 GET https://chatgpt.com/backend-api/wham/usage
 ```
 
-请求头与 Codex CLI / cc-switch 对齐：
+Request headers follow Codex CLI / cc-switch:
 
 ```text
 Authorization: Bearer <access_token>
 User-Agent: codex-cli
 Accept: application/json
-ChatGPT-Account-Id: <account_id>   # 如存在
+ChatGPT-Account-Id: <account_id>   # when present
 ```
 
-支持展示：
+What can be shown:
 
-- `plan_type`，例如 `Pro`
-- 主 `rate_limit` 的 5 小时 / 7 天窗口
+- `plan_type`, for example `Pro`
+- the primary `rate_limit` 5-hour / 7-day windows
 - `additional_rate_limits`
 - `credits`
 - `spend_control`
 - `rate_limit_reset_credits.available_count`
 
-如果直连 `chatgpt.com` 不稳定，可以在 Codex 模块中填写代理地址：
+If a direct connection to `chatgpt.com` is unreliable, set a proxy on the Codex module:
 
 ```text
 http://127.0.0.1:7890
 socks5://127.0.0.1:7890
 ```
 
-未填写模块代理时，沿用 macOS 的系统网络配置，不会添加固定代理；系统也未设置代理时直接请求。
+With no module proxy, CodeBar follows the macOS system network settings and does not inject a fixed proxy. If the system also has no proxy, the request goes out directly.
 
 ### Gemini
 
-在设置界面点击「添加模块」，选择「Gemini」。Gemini 不需要在 CodeBar 中配置 token，CodeBar 会自动读取本机 Gemini CLI 的 Google OAuth 文件凭据：`~/.gemini/oauth_creds.json`。
+In Settings, click **Add Module** and choose **Gemini**. Gemini does not need a token inside CodeBar. CodeBar reads the Gemini CLI Google OAuth file at `~/.gemini/oauth_creds.json`.
 
-要求：
+Requirements:
 
-- Gemini CLI 已使用 Google OAuth 登录
-- OAuth 凭据中存在 `access_token`
-- 如果 `access_token` 过期，凭据中需要有 `refresh_token` 用于刷新
+- Gemini CLI is signed in with Google OAuth
+- The OAuth credentials include `access_token`
+- If `access_token` is expired, the file needs a `refresh_token` so CodeBar can refresh it
 
-CodeBar 请求的官方接口与 cc-switch 对齐：
+The official endpoints, aligned with cc-switch:
 
 ```text
 POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist
 POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota
 ```
 
-支持展示：
+What can be shown:
 
 - Gemini Pro
 - Gemini Flash
 - Gemini Flash Lite
 
-如果直连 Google Code Assist 接口不稳定，可以在 Gemini 模块中填写代理地址：
+If a direct connection to the Google Code Assist APIs is unreliable, set a proxy on the Gemini module:
 
 ```text
 http://127.0.0.1:7890
@@ -288,57 +292,59 @@ socks5://127.0.0.1:7890
 
 ### Grok
 
-在设置界面点击「添加模块」，选择「Grok」。默认读取 `~/.grok/`，可选指定其他 Grok 目录。
+In Settings, click **Add Module** and choose **Grok**. The default directory is `~/.grok/`; you can point it at another Grok directory.
 
-- 先在本机 Grok 中完成订阅账号登录；CodeBar 读取 `auth.json`，直接查询订阅用量，不再启动完整 CLI，也不需要手动运行 `/usage`。
-- OAuth 即将到期或订阅接口返回 401 时自动刷新；轮换后的令牌通过凭据锁和原子写入保存到同一个 `auth.json`，权限为 `0600`，不会复制到 CodeBar 配置。
-- 展示周用量百分比、重置时间和同步时间。旧版后台 CLI 开关会被忽略，升级后统一使用 HTTP 查询。
-- 周额度重置后，若接口省略为零的百分比字段，仅在完整的统一周额度数据中显示 0%；不完整或异常响应仍会报错。
-- 订阅接口使用 Grok 登录态，普通 API Key / Management Key 的 API 账单与订阅周额度分开。
-- 此订阅接口来自官方 CLI 的内部调用，接口变化可能需要更新 CodeBar；授权被撤销时需要先在 Grok 重新登录。
+- Sign in to the Grok subscription account on this Mac first. CodeBar reads `auth.json` and queries subscription usage over HTTP. It does not launch the full CLI, and you do not need to run `/usage` by hand.
+- When OAuth is close to expiry, or the subscription endpoint returns 401, CodeBar refreshes the token. The rotated token is written back to the same `auth.json` through a credential lock and an atomic write, with mode `0600`. It is not copied into CodeBar's own config.
+- The UI shows weekly usage percent, reset time, and last sync time. The older background-CLI toggle is ignored; after upgrading, every query goes over HTTP.
+- After a weekly quota reset, if the API omits a percentage field that is zero, CodeBar shows 0% only when the weekly payload is complete and consistent. Incomplete or unexpected responses still error.
+- The subscription endpoint uses the Grok login session. Ordinary API keys / Management keys for API billing are separate from the weekly subscription quota.
+- This subscription endpoint comes from an internal call used by the official CLI. If that API changes, CodeBar may need an update. If authorization is revoked, sign in to Grok again first.
 
-### OpenAI API 计费
+A draft change for more precise Grok usage display and rate-limit handling exists as [PR #9](https://github.com/wayyoungboy/code_bar/pull/9). It is **not merged** and is **not part of the v2.2.10 release**.
 
-在设置界面点击「添加模块」，选择「OpenAI API」，然后使用组织管理账号前往 [Admin keys](https://platform.openai.com/settings/organization/admin-keys) 创建管理密钥并填入「Admin API Key」。普通项目 API Key 和 Codex OAuth 不适用。
+### OpenAI API billing
 
-- 菜单栏和详情显示今日 / 本月费用（USD）；没有账单额度时显示实际金额，不虚构百分比或账户余额。
-- 日期边界为 UTC。费用取自官方 [Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs)，统计当前组织全部项目，可能延迟入账；空费用记录会单独标注。
-- 模块仅通过 Admin Key 调用官方 API。API 赠送 / 预付额度余额及到期日不由 Costs API 返回；目前未通过管理接口取得这类数据，不会将费用 $0.00 当作余额为零。
-- Token 和请求数取自 [Completions Usage API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/completions)，输入 Token 已包含缓存输入，不重复累加；费用包含全部 API 产品，统计范围与 Token 明细不同。
-- 支持独立模块代理、每日 / 每月费用展示选择和配置编辑。Token 明细暂时不可用时，保留已经成功读取的费用数据并说明原因。
-- 管理密钥与其他手动凭据一样保存在本机 `~/.code_bar/` 的权限受限配置文件中，不写入项目或运行日志，仅用于官方 OpenAI 只读计费接口。
+In Settings, click **Add Module**, choose **OpenAI API**, then use an organization admin account to create a key at [Admin keys](https://platform.openai.com/settings/organization/admin-keys) and paste it into **Admin API Key**. A regular project API key and Codex OAuth will not work.
+
+- The menu bar and detail view show today's and this month's cost in USD. When there is no billed quota to express as a percentage, CodeBar shows the actual amount. It does not invent a percentage or an account balance.
+- Day boundaries are UTC. Costs come from the official [Costs API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/costs) and cover every project in the current organization. Ingestion can lag. Empty cost records are labeled as such.
+- The module only calls official APIs with the Admin Key. Gifted / prepaid credit balances and expiry dates are not returned by the Costs API. CodeBar does not currently read those through an admin API, and it will not treat a $0.00 cost as a zero balance.
+- Token and request counts come from the [Completions Usage API](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage/methods/completions). Cached input tokens are already included in input tokens and are not added twice. Cost includes all API products, so its scope is not identical to the token breakdown.
+- Each module can have its own proxy, choose whether to show daily / monthly cost, and be edited later. If the token breakdown is temporarily unavailable, already-fetched cost data is kept and the reason is shown.
+- The Admin Key is stored with other manual credentials in a permission-restricted file under `~/.code_bar/` on this Mac. It is not written into the project or into runtime logs, and it is used only for official read-only OpenAI billing APIs.
 
 ### Antigravity / AGY
 
-在设置界面点击「添加模块」，选择「Antigravity」。
+In Settings, click **Add Module** and choose **Antigravity**.
 
-- 桌面版：启动并登录 Antigravity，CodeBar 自动发现本机 Language Server 的端口和 CSRF Token。
-- CLI：安装并登录官方 `agy`。CodeBar 支持 `agy -p /usage --output-format json`；填写「agy CLI 路径」可优先使用指定 CLI。
-- 默认展示 Gemini 的 5 小时和周额度；详情页展示接口实际返回的全部模型池额度，包括 Claude/GPT 和 Argon。
-- 本地端点和 CSRF Token 为可选高级配置；仅支持本机 HTTP/HTTPS 地址。
+- Desktop: start and sign in to Antigravity. CodeBar discovers the local Language Server port and CSRF token automatically.
+- CLI: install and sign in to the official `agy`. CodeBar supports `agy -p /usage --output-format json`. If you fill in **agy CLI path**, that binary is preferred.
+- The default view shows Gemini 5-hour and weekly quotas. The detail page shows every model-pool quota the API actually returns, including Claude/GPT and Argon.
+- Local endpoint and CSRF token are optional advanced settings. Only local HTTP/HTTPS addresses are accepted.
 
-## 项目结构
+## Project structure
 
-当前可运行的应用是 Swift 菜单栏 app。仓库里还有旧 Go/Wails 残留，**构建时不要用它们**。
+The app you can run today is the Swift menu bar app. The repository still contains leftover Go/Wails files. **Do not use those to build.**
 
 ```text
 code_bar/
-├── CodeBar.xcodeproj/             # 唯一构建入口（不是 SPM）
+├── CodeBar.xcodeproj/             # only supported build entry (not SPM)
 │   ├── project.pbxproj
 │   └── xcshareddata/xcschemes/CodeBar.xcscheme
 ├── CodeBar/
-│   ├── CodeBarApp.swift           # 应用入口、菜单栏和弹窗管理
-│   ├── MenuBarView.swift          # 弹窗 UI
-│   ├── IslandMode.swift           # 刘海 Island 展示
+│   ├── CodeBarApp.swift           # app entry, menu bar, and popover
+│   ├── MenuBarView.swift          # popover UI
+│   ├── IslandMode.swift           # notch Island layout
 │   ├── IslandPanelController.swift
-│   ├── SettingsWindow.swift       # 设置窗口
-│   ├── UsageTracker.swift         # 用量追踪器
+│   ├── SettingsWindow.swift       # Settings window
+│   ├── UsageTracker.swift         # usage tracker
 │   ├── Constants.swift
-│   ├── CodeBarFileStore.swift     # ~/.code_bar 文件存储
+│   ├── CodeBarFileStore.swift     # ~/.code_bar file storage
 │   ├── StatusBarIconRenderer.swift
 │   ├── StatusBarUsagePresentation.swift
 │   ├── UpdateChecker.swift
-│   ├── Info.plist                 # 版本 2.2.10，LSUIElement
+│   ├── Info.plist                 # version 2.2.10, LSUIElement
 │   └── Providers/
 │       ├── PlatformProvider.swift
 │       ├── BailianProvider.swift
@@ -347,27 +353,34 @@ code_bar/
 │       ├── CodexProvider.swift
 │       ├── GeminiProvider.swift
 │       ├── GrokProvider.swift
+│       ├── GrokSubscriptionClient.swift
+│       ├── OpenAIAPIProvider.swift
 │       └── AntigravityProvider.swift
-├── CodeBarTests/                  # Debug 构建期脚本测试，不是 XCTest target
+├── CodeBarTests/                  # Debug-time script tests, not an XCTest target
 │   ├── ModuleBehaviorTests.swift
 │   ├── TestNotifications.swift
 │   ├── UsageProviderTests.swift
 │   └── run_module_behavior_tests.sh
 ├── .github/workflows/
-│   ├── ci.yml                     # macos-15 xcodebuild Debug + 行为测试
-│   └── release.yml                # 推送 v* tag 后打 DMG
-├── build.sh                       # Mac 交互式 Release 打包
+│   ├── ci.yml                     # macos-15 xcodebuild Debug + behavior tests
+│   ├── release.yml                # DMG after a v* tag
+│   └── pages.yml                  # docs site build; deploy only from main or a manual run
+├── build.sh                       # interactive Release packaging on a Mac
 ├── create_dmg.sh
-├── frontend/                      # 遗留：旧 Go/Wails 前端产物，当前 app 不用
-├── internal/tray/                 # 遗留：旧 Go tray，当前 app 不用
-└── docs/
+├── logo/                          # project mark, wordmark, and header
+├── site/                          # source for the GitHub Pages site
+├── frontend/                      # leftover Go/Wails frontend; the current app does not use it
+├── internal/tray/                 # leftover Go tray; the current app does not use it
+└── docs/                          # including docs/archive/ for the pre-update README
 ```
 
-## 开发
+The previous Chinese README is kept in full at [docs/archive/README.before-branding.md](docs/archive/README.before-branding.md).
 
-扩展 Provider 的步骤见 [docs/developer-guide.md](docs/developer-guide.md)。仓库没有 `Package.swift`，不要运行 `swift build` / `swift test`。
+## Development
 
-### 构建验证（Mac + Xcode）
+Steps for adding a provider are in [docs/developer-guide.md](docs/developer-guide.md). There is no `Package.swift`. Do not run `swift build` / `swift test`.
+
+### Build checks (Mac + Xcode)
 
 ```bash
 xcodebuild -project CodeBar.xcodeproj \
@@ -395,60 +408,68 @@ xcodebuild -project CodeBar.xcodeproj \
   build
 ```
 
-单独跑行为测试（同样需要 Mac 上的 `swiftc` / macOS SDK）：
+Run the behavior tests on their own (also needs `swiftc` / the macOS SDK on a Mac):
 
 ```bash
 CONFIGURATION=Debug CodeBarTests/run_module_behavior_tests.sh
 ```
 
-CI 与此相同：`.github/workflows/ci.yml` 在 `macos-15` 上选 Xcode 16.x，关签名后 Debug `xcodebuild`，再跑同一脚本。它**不能**代替真机点开菜单栏。
+CI does the same: `.github/workflows/ci.yml` selects Xcode 16.x on `macos-15`, builds Debug with signing off, then runs that script. **Passing CI is not a substitute for clicking through the menu bar on a real Mac.**
 
-### 发布
+### Unreleased work
 
-1. 同步更新 `CodeBar/Info.plist` 的 `CFBundleShortVersionString` 和 `project.pbxproj` 的 `MARKETING_VERSION`
-2. 提交版本变更
-3. 创建并推送 tag：
+[Draft PR #9](https://github.com/wayyoungboy/code_bar/pull/9) improves Grok subscription usage accuracy and rate-limit handling. macOS CI on that branch has passed, but the work is **not merged** and is **not included in v2.2.10**.
+
+### Release
+
+1. Update `CFBundleShortVersionString` in `CodeBar/Info.plist` and `MARKETING_VERSION` in `project.pbxproj` together
+2. Commit the version change
+3. Create and push a tag:
 
 ```bash
 git tag -a v2.2.10 -m "CodeBar v2.2.10"
 git push origin v2.2.10
 ```
 
-GitHub Actions（`macos-15`）会自动构建、adhoc 签名、创建 DMG 并上传到 GitHub Release。发版 runner 也必须是 Mac；本地 `./build.sh` 只适合自己做安装包。
+GitHub Actions (`macos-15`) then builds, ad-hoc signs, creates the DMG, and uploads it to the GitHub Release. The release runner must also be a Mac. Local `./build.sh` is only for building an installer for yourself.
 
-## 安全性
+## Security
 
-- CodeBar 自身配置存储在 `~/.code_bar/`
-- Codex OAuth 凭据只从 Codex CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
-- Gemini OAuth 凭据只从 Gemini CLI 已存在的位置读取，不复制 token 到 CodeBar 配置
-- Grok 仅访问本机 OAuth 文件、凭据锁及同目录的原子更新临时文件；订阅查询和续期直接通过 HTTPS，不启动 CLI 或扫描工作目录
-- Antigravity 自动探测的 CSRF Token 仅用于访问本机服务
-- Codex 兼容请求通过标准输入传递认证头，不将 token 写入命令行参数
-- 登录凭据仅发往对应供应商的认证或用量接口，不写入请求日志或分享给第三方
-- 默认不写运行期请求、用量或凭据相关日志
+- CodeBar stores its own config under `~/.code_bar/`
+- Codex OAuth credentials are read from the existing Codex CLI location only; the token is not copied into CodeBar config
+- Gemini OAuth credentials are read from the existing Gemini CLI location only; the token is not copied into CodeBar config
+- Grok only touches the local OAuth file, the credential lock, and an atomic-update temp file in the same directory. Subscription queries and refresh go over HTTPS. CodeBar does not launch the CLI or scan a working tree
+- A CSRF token discovered for Antigravity is used only to talk to the local service
+- Compatibility-path Codex requests pass auth headers on standard input, not on the command line
+- Login credentials are sent only to the matching vendor's auth or usage endpoints. They are not written to request logs or shared with third parties
+- Runtime request, usage, and credential logs are off by default
 
-## 商标与 Logo
+## Trademarks and logos
 
-项目中展示的平台 Logo 仅用于标识对应服务，相关商标和 Logo 归各自权利方所有。CodeBar 与阿里云、ZenMux、小米、OpenAI、Google 无官方从属、授权或背书关系。
+Vendor logos in the app identify those services only. The trademarks and logos belong to their respective owners. CodeBar is not affiliated with, endorsed by, or officially authorized by Alibaba Cloud, ZenMux, Xiaomi, OpenAI, Google, or xAI.
 
-- ZenMux Logo 来源：[zenmux.ai](https://zenmux.ai/)
-- Xiaomi / Mi Logo 来源：[mi.com](https://www.mi.com/)
-- OpenAI / ChatGPT Logo 来源：[chatgpt.com/codex](https://chatgpt.com/zh-Hans-CN/codex/)
-- Gemini Logo 来源：[gstatic.com](https://www.gstatic.com/lamda/images/gemini_sparkle_aurora_33f86dc0c0257da337c63.svg)
+- ZenMux logo source: [zenmux.ai](https://zenmux.ai/)
+- Xiaomi / Mi logo source: [mi.com](https://www.mi.com/)
+- OpenAI / ChatGPT logo source: [chatgpt.com/codex](https://chatgpt.com/zh-Hans-CN/codex/)
+- Gemini logo source: [gstatic.com](https://www.gstatic.com/lamda/images/gemini_sparkle_aurora_33f86dc0c0257da337c63.svg)
 
-如相关权利方希望调整或移除展示，请通过 Issue 联系。
+If a rights holder wants a logo display changed or removed, please open an Issue.
 
-## 许可证
+## License
 
-MIT License - 详见 [LICENSE](LICENSE)
+MIT License — see [LICENSE](LICENSE)
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request。请在 **Mac + Xcode 15+** 上按上面的 `xcodebuild` 命令验证 Debug 构建；不要新增 Linux CI。改 UI 后需要在真机菜单栏里点一遍，Actions 编译通过不等于 GUI 可用。
+Issues and pull requests are welcome. Please verify a Debug `xcodebuild` on **Mac + Xcode 15+** with the commands above. Do not add a Linux CI job. After UI changes, click through the menu bar on a real Mac. A green Actions build does not mean the GUI works.
 
-## 致谢
+## Acknowledgments
 
-- [阿里云百炼](https://bailian.console.aliyun.com/) — Code Plan 用量监控
-- [ZenMux](https://zenmux.ai) — AI Coding 平台
-- [小米 MiMo](https://platform.xiaomimimo.com/) — AI 编程平台
-- [OpenAI Codex](https://openai.com/codex/) — Codex CLI / ChatGPT OAuth 用量
+- [Alibaba Cloud BaiLian](https://bailian.console.aliyun.com/) — Coding Plan usage
+- [ZenMux](https://zenmux.ai) — AI coding platform
+- [Xiaomi MiMo](https://platform.xiaomimimo.com/) — AI programming platform
+- [OpenAI Codex](https://openai.com/codex/) — Codex CLI / ChatGPT OAuth usage
+- [OpenAI API](https://platform.openai.com/) — organization admin billing APIs
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli) — Google OAuth / Code Assist quotas
+- [Grok](https://grok.com/) — subscription usage via local OAuth
+- [Antigravity](https://antigravity.google/) — desktop Language Server and `agy` CLI quotas

@@ -46,3 +46,6 @@ claude.txt
 
 # Local Codex workspace metadata
 .codex/
+
+# Generated GitHub Pages output (built in CI)
+site/dist/
