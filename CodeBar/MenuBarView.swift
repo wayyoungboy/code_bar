@@ -346,10 +346,10 @@ struct MenuBarView: View {
         resetDate: Date? = nil,
         compact: Bool = false
     ) -> some View {
-        let displayValue = displayMode.value(for: item)
+        let displayValue = displayMode.amount(for: item)
         let displayPercent = displayMode.percent(for: item)
-        let valueText = item.total > 0
-            ? "\(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.total)) \(item.unit)"
+        let valueText = item.measuredTotal > 0
+            ? "\(displayMode.title) \(formatNumber(displayValue)) / \(formatNumber(item.measuredTotal)) \(item.unit)"
             : UsageStatusFormatting.amountText(for: item)
         let helpText = "\(item.label) \(valueText)"
 
@@ -365,7 +365,7 @@ struct MenuBarView: View {
                         .fontWeight(.medium)
                 }
             }
-            if item.total > 0 {
+            if item.measuredTotal > 0 {
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
                         RoundedRectangle(cornerRadius: 3)
@@ -561,12 +561,19 @@ struct MenuBarView: View {
     }
 
     private func formatNumber(_ number: Int) -> String {
+        formatNumber(Double(number))
+    }
+
+    private func formatNumber(_ number: Double) -> String {
         if number >= 1_000_000 {
-            return String(format: "%.1fM", Double(number) / 1_000_000)
+            return String(format: "%.1fM", number / 1_000_000)
         } else if number >= 1_000 {
-            return String(format: "%.1fK", Double(number) / 1_000)
+            return String(format: "%.1fK", number / 1_000)
         }
-        return "\(number)"
+        if number.isFinite, abs(number - number.rounded()) < 0.05 {
+            return "\(Int(number.rounded()))"
+        }
+        return String(format: "%.1f", number)
     }
 }
 

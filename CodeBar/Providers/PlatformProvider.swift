@@ -32,10 +32,37 @@ struct UsageItem {
     let total: Int
     let unit: String
     let resetDate: Date?
+    /// Precise used quantity when the source value is not an integer.
+    let usedAmount: Double?
+    /// Precise total quantity when the source value is not an integer.
+    let totalAmount: Double?
+
+    init(
+        key: String,
+        label: String,
+        used: Int,
+        total: Int,
+        unit: String,
+        resetDate: Date?,
+        usedAmount: Double? = nil,
+        totalAmount: Double? = nil
+    ) {
+        self.key = key
+        self.label = label
+        self.used = used
+        self.total = total
+        self.unit = unit
+        self.resetDate = resetDate
+        self.usedAmount = usedAmount
+        self.totalAmount = totalAmount
+    }
+
+    var measuredUsed: Double { usedAmount ?? Double(used) }
+    var measuredTotal: Double { totalAmount ?? Double(total) }
 
     var percent: Double {
-        guard total > 0 else { return 0 }
-        return Double(used) / Double(total) * 100
+        guard measuredTotal > 0 else { return 0 }
+        return measuredUsed / measuredTotal * 100
     }
 }
 
@@ -548,17 +575,21 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func value(for item: UsageItem) -> Int {
-        guard item.total > 0 else { return item.used }
+        Int(amount(for: item).rounded())
+    }
+
+    func amount(for item: UsageItem) -> Double {
+        guard item.measuredTotal > 0 else { return item.measuredUsed }
         switch self {
         case .used:
-            return item.used
+            return item.measuredUsed
         case .remaining:
-            return max(item.total - item.used, 0)
+            return max(item.measuredTotal - item.measuredUsed, 0)
         }
     }
 
     func percent(for item: UsageItem) -> Double {
-        guard item.total > 0 else { return 0 }
+        guard item.measuredTotal > 0 else { return 0 }
         switch self {
         case .used:
             return item.percent
@@ -568,7 +599,7 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
     }
 
     func isNearLimit(_ item: UsageItem) -> Bool {
-        guard item.total > 0 else { return false }
+        guard item.measuredTotal > 0 else { return false }
         switch self {
         case .used:
             return item.percent > 80
@@ -580,8 +611,12 @@ enum UsagePercentDisplayMode: String, CaseIterable, Codable, Identifiable {
 
 enum UsageStatusFormatting {
     static func compactPercentText(for item: UsageItem, displayMode: UsagePercentDisplayMode) -> String {
-        if item.total <= 0 { return amountText(for: item) }
-        return String(format: "%.0f%%", displayMode.percent(for: item))
+        if item.measuredTotal <= 0 { return amountText(for: item) }
+        let value = displayMode.percent(for: item)
+        if value.isFinite, abs(value - value.rounded()) < 0.05 {
+            return String(format: "%.0f%%", value.rounded())
+        }
+        return String(format: "%.1f%%", value)
     }
 
     static func amountText(for item: UsageItem) -> String {

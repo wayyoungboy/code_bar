@@ -7,7 +7,7 @@ protocol GrokSubscriptionFetching {
 
 enum GrokSubscriptionError: LocalizedError {
     case loginRequired, credentialsChanged, credentialsBusy, invalidCredentials, invalidResponse
-    case network, http(Int)
+    case network, http(Int), rateLimited(until: Date)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +18,11 @@ enum GrokSubscriptionError: LocalizedError {
         case .invalidResponse: return "Grok 返回的订阅用量数据无效，请稍后重试"
         case .network: return "Grok 网络请求失败，请检查网络或模块代理"
         case .http(let status): return "Grok 订阅请求失败（HTTP \(status)）"
+        case .rateLimited(let until):
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "HH:mm:ss"
+            return "Grok 订阅查询被限流，请在 \(formatter.string(from: until)) 后再试，这不是用量为 0"
         }
     }
 }
@@ -28,11 +33,17 @@ actor GrokSubscriptionClient: GrokSubscriptionFetching {
     typealias Transport = (URLRequest) async throws -> (Data, HTTPURLResponse)
     static let billingURL = URL(string: "https://cli-chat-proxy.grok.com/v1/billing?format=credits")!
     static let tokenURL = URL(string: "https://auth.x.ai/oauth2/token")!
+    /// Public client identifier used by the official Grok CLI (`xai-org/grok-build`).
+    static let tokenAuthHeader = "X-XAI-Token-Auth"
+    static let tokenAuthValue = "xai-grok-cli"
+    static let userIDHeader = "x-userid"
+    static let defaultRateLimitCooldown: TimeInterval = 5 * 60
 
     private let transport: Transport?
     private let now: () -> Date
     private let lockTimeout: TimeInterval
     private var requests: [String: Task<Data, Error>] = [:]
+    private var cooldownUntil: [String: Date] = [:]
 
     init(transport: Transport? = nil, now: @escaping () -> Date = Date.init, lockTimeout: TimeInterval = 35) {
         self.transport = transport
@@ -45,6 +56,9 @@ actor GrokSubscriptionClient: GrokSubscriptionFetching {
         let canonical = authURL.deletingLastPathComponent().resolvingSymlinksInPath()
             .appendingPathComponent(authURL.lastPathComponent)
         let key = canonical.path + "|" + (proxyURL ?? "")
+        if let until = cooldownUntil[key], now() < until {
+            throw GrokSubscriptionError.rateLimited(until: until)
+        }
         if let request = requests[key] { return try await request.value }
         // An individual UI cancellation must not discard an already-rotated refresh token.
         let request = Task { try await self.load(authURL: canonical, proxyURL: proxyURL) }
@@ -58,18 +72,27 @@ actor GrokSubscriptionClient: GrokSubscriptionFetching {
         defer { native?.invalidate() }
         let send: Transport = transport ?? { request in try await native!.send(request) }
         let store = GrokCredentialStore(url: authURL)
-        var credential = try await freshCredential(store: store, rejectedToken: nil, send: send)
-        var result = try await billing(token: credential.accessToken, send: send)
+        let key = authURL.path + "|" + (proxyURL ?? "")
+        if let until = cooldownUntil[key], now() < until {
+            throw GrokSubscriptionError.rateLimited(until: until)
+        }
+        var credential = try await freshCredential(store: store, rejectedToken: nil, send: send, cooldownKey: key)
+        var result = try await billing(token: credential.accessToken, userID: credential.userID, send: send)
         if result.1.statusCode == 401 {
-            credential = try await freshCredential(store: store, rejectedToken: credential.accessToken, send: send)
-            result = try await billing(token: credential.accessToken, send: send)
+            credential = try await freshCredential(store: store, rejectedToken: credential.accessToken, send: send, cooldownKey: key)
+            result = try await billing(token: credential.accessToken, userID: credential.userID, send: send)
         }
         guard result.1.statusCode != 401 else { throw GrokSubscriptionError.loginRequired }
+        if result.1.statusCode == 429 {
+            let until = cooldownEnd(from: result.1)
+            cooldownUntil[key] = until
+            throw GrokSubscriptionError.rateLimited(until: until)
+        }
         try check(result.1.statusCode)
         return result.0
     }
 
-    private func freshCredential(store: GrokCredentialStore, rejectedToken: String?, send: Transport) async throws -> GrokCredential {
+    private func freshCredential(store: GrokCredentialStore, rejectedToken: String?, send: Transport, cooldownKey: String) async throws -> GrokCredential {
         let initial = try store.load()
         if initial.isUsable(at: now()), rejectedToken == nil || initial.accessToken != rejectedToken { return initial }
         let lock = try await GrokCredentialLock.acquire(for: store.url, timeout: lockTimeout)
@@ -91,6 +114,11 @@ actor GrokSubscriptionClient: GrokSubscriptionFetching {
         }.joined(separator: "&").data(using: .utf8)
         let (data, response) = try await send(request)
         if [400, 401, 403].contains(response.statusCode) { throw GrokSubscriptionError.loginRequired }
+        if response.statusCode == 429 {
+            let until = cooldownEnd(from: response)
+            cooldownUntil[cooldownKey] = until
+            throw GrokSubscriptionError.rateLimited(until: until)
+        }
         try check(response.statusCode)
         guard let reply = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let access = reply["access_token"] as? String, GrokCredential.validToken(access) else {
@@ -108,18 +136,55 @@ actor GrokSubscriptionClient: GrokSubscriptionFetching {
         return try store.load()
     }
 
-    private func billing(token: String, send: Transport) async throws -> (Data, HTTPURLResponse) {
+    private func billing(token: String, userID: String?, send: Transport) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: Self.billingURL)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("cli", forHTTPHeaderField: "x-grok-client-mode")
+        request.setValue(Self.tokenAuthValue, forHTTPHeaderField: Self.tokenAuthHeader)
+        if let userID, !userID.isEmpty {
+            request.setValue(userID, forHTTPHeaderField: Self.userIDHeader)
+        }
         return try await send(request)
     }
 
     private func check(_ status: Int) throws {
-        if status == 429 { throw PlatformError.rateLimited }
+        if status == 429 { throw GrokSubscriptionError.rateLimited(until: now().addingTimeInterval(Self.defaultRateLimitCooldown)) }
         guard (200..<300).contains(status) else { throw GrokSubscriptionError.http(status) }
+    }
+
+    private func cooldownEnd(from response: HTTPURLResponse) -> Date {
+        Self.cooldownEnd(header: response.value(forHTTPHeaderField: "Retry-After"), now: now())
+    }
+
+    /// Parses `Retry-After` as delay-seconds or a standard HTTP-date; falls back to the default 5-minute cooldown.
+    static func cooldownEnd(header: String?, now: Date) -> Date {
+        let fallback = now.addingTimeInterval(defaultRateLimitCooldown)
+        guard let raw = header?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
+            return fallback
+        }
+        if let seconds = Double(raw), seconds.isFinite, seconds >= 0 {
+            return now.addingTimeInterval(min(seconds, 60 * 60))
+        }
+        if let date = httpDate(raw) {
+            let delay = date.timeIntervalSince(now)
+            if delay <= 0 { return now }
+            return now.addingTimeInterval(min(delay, 60 * 60))
+        }
+        return fallback
+    }
+
+    static func httpDate(_ raw: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        // RFC 7231 HTTP-date: IMF-fixdate, then the obsolete RFC 850 and asctime forms.
+        for format in ["EEE, dd MMM yyyy HH:mm:ss zzz", "EEEE, dd-MMM-yy HH:mm:ss zzz", "EEE MMM d HH:mm:ss yyyy"] {
+            formatter.dateFormat = format
+            if let date = formatter.date(from: raw) { return date }
+        }
+        return nil
     }
 }
 
@@ -162,6 +227,7 @@ private struct GrokCredential {
     let clientID: String
     let principalType: String?
     let principalID: String?
+    let userID: String?
     let expiration: Date?
 
     func isUsable(at now: Date) -> Bool { expiration.map { $0.timeIntervalSince(now) > 60 } ?? true }
@@ -228,9 +294,12 @@ private struct GrokCredentialStore {
         }
         let refresh = entry["refresh_token"] as? String
         if let refresh, !GrokCredential.validToken(refresh) { throw GrokSubscriptionError.invalidCredentials }
+        let userID = (entry["user_id"] as? String ?? entry["userId"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return GrokCredential(entryID: entryID, accessToken: access, refreshToken: refresh, clientID: clientID,
                               principalType: entry["principal_type"] as? String,
                               principalID: entry["principal_id"] as? String,
+                              userID: (userID?.isEmpty == false) ? userID : nil,
                               expiration: GrokCredential.date(entry["expires_at"] as? String) ?? GrokCredential.jwtExpiration(access))
     }
 

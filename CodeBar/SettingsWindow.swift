@@ -1095,12 +1095,12 @@ struct ModuleEditorView: View {
             }
         case .grok:
             VStack(alignment: .leading, spacing: 6) {
-                Text("直接查询 Grok 订阅额度，OAuth 到期时自动刷新")
+                Text("查询 Grok 订阅共享池用量；不是 xAI API 余额，也不是 Grok Bot 用量。")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 TextField("Grok 目录（可选，默认 ~/.grok）", text: $grokHomeDirectory)
                     .textFieldStyle(.roundedBorder)
-                Text("复用本机 Grok 登录信息；首次使用请先在 Grok 中完成登录。")
+                Text("复用本机 Grok 登录信息；接口来自官方 CLI 同源路径，不是公开稳定 API。首次使用请先在 Grok 中完成登录。")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -1263,7 +1263,7 @@ struct ModuleEditorView: View {
             ]
         case .grok:
             return [
-                ModuleQuotaOption(key: "grok.weekly", label: "周额度", availability: .available),
+                ModuleQuotaOption(key: "grok.weekly", label: "订阅额度", availability: .available),
             ]
         case .antigravity:
             return [
@@ -1659,9 +1659,9 @@ struct HelpWindowView: View {
     private var grokHelpSteps: some View {
         Group {
             HelpStepView(number: 1, title: "登录 Grok", description: "先在本机 Grok 中完成订阅账号登录，无需手动复制令牌", icon: "terminal")
-            HelpStepView(number: 2, title: "直接查询订阅额度", description: "CodeBar 直接访问订阅接口，展示周用量百分比与重置时间", icon: "chart.bar")
+            HelpStepView(number: 2, title: "查询订阅共享池", description: "展示已用百分比与重置时间；有数据时才显示产品拆分和额外预付余额。这不是 xAI API 余额，也不是 Grok Bot 用量。", icon: "chart.bar")
             HelpStepView(number: 3, title: "自动续期登录", description: "读取 ~/.grok/auth.json；OAuth 到期时自动刷新并安全保存，保持与 Grok 共用登录", icon: "lock.shield")
-            HelpStepView(number: 4, title: "后台自动刷新", description: "按设置的刷新周期查询；不会启动完整 Grok CLI，也无需扫描工作目录", icon: "arrow.clockwise")
+            HelpStepView(number: 4, title: "后台自动刷新", description: "按设置的刷新周期查询；遇到限流会冷却后再试。数据来自官方 CLI 同源接口，不是公开稳定 API。", icon: "arrow.clockwise")
         }
     }
 

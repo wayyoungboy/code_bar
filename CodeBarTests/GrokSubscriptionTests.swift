@@ -12,7 +12,15 @@ enum GrokSubscriptionTests {
         if !value() { fatalError(message) }
     }
 
-    static func auth(at url: URL, expired: Bool = true, refresh: Bool = true) throws {
+    static func httpRetryAfterDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return formatter.string(from: date)
+    }
+
+    static func auth(at url: URL, expired: Bool = true, refresh: Bool = true, userID: String? = nil) throws {
         var entry: [String: Any] = [
             "key": "fixture-access-old", "auth_mode": "oidc",
             "oidc_issuer": issuer, "oidc_client_id": clientID,
@@ -20,6 +28,7 @@ enum GrokSubscriptionTests {
             "expires_at": ISO8601DateFormatter().string(from: now.addingTimeInterval(expired ? -10 : 3600)),
             "preserved_metadata": "keep-me",
         ]
+        if let userID { entry["user_id"] = userID }
         if refresh { entry["refresh_token"] = "fixture-refresh+&=secret" }
         let document: [String: Any] = [entryID: entry, "another-login": ["key": "unrelated-key"]]
         try JSONSerialization.data(withJSONObject: document).write(to: url)
@@ -153,24 +162,125 @@ enum GrokSubscriptionTests {
             let unusedCounts = await unused.counts()
             expect(unusedCounts == [0, 0], "Unsupported credentials must never be sent to a remote endpoint")
         }
+        try auth(at: url, expired: false, userID: "fixture-user-id")
+        let identified = GrokHTTPFixture(acceptOld: true)
+        _ = try await GrokSubscriptionClient(transport: { try await identified.send($0) }, now: { now }).fetch(authURL: url, proxyURL: nil)
+        let identifiedHeaders = await identified.billingHeaders()
+        expect(identifiedHeaders["Authorization"] == "Bearer fixture-access-old", "Billing must still use the access token")
+        expect(identifiedHeaders["X-XAI-Token-Auth"] == "xai-grok-cli", "Billing must send the official CLI token-auth header")
+        expect(identifiedHeaders["x-userid"] == "fixture-user-id", "Billing may send x-userid only when auth.json already has user_id")
+        expect(identifiedHeaders["x-grok-client-mode"] == "cli", "Billing should keep the existing client mode header")
+
+        try auth(at: url, expired: false)
+        let anonymous = GrokHTTPFixture(acceptOld: true)
+        _ = try await GrokSubscriptionClient(transport: { try await anonymous.send($0) }, now: { now }).fetch(authURL: url, proxyURL: nil)
+        let anonymousHeaders = await anonymous.billingHeaders()
+        expect(anonymousHeaders["X-XAI-Token-Auth"] == "xai-grok-cli", "The official token-auth header does not require a user id")
+        expect(anonymousHeaders["x-userid"] == nil, "x-userid must not be invented when auth.json has no user_id")
+
+        try auth(at: url, expired: false)
+        let clock = GrokTestClock(now)
+        let limited = GrokHTTPFixture(acceptOld: true, billingStatus: 429, retryAfter: "120")
+        let limitedClient = GrokSubscriptionClient(transport: { try await limited.send($0) }, now: { clock.now })
+        do {
+            _ = try await limitedClient.fetch(authURL: url, proxyURL: nil)
+            fatalError("A billing 429 must surface a rate-limit error")
+        } catch {
+            expect(error.localizedDescription.contains("限流") && error.localizedDescription.contains("不是用量为 0"), "Rate limiting must be explained as a query failure, not zero usage")
+        }
+        let limitedCounts = await limited.counts()
+        expect(limitedCounts == [0, 1], "The first rate-limited query should send exactly one billing request")
+        do {
+            _ = try await limitedClient.fetch(authURL: url, proxyURL: nil)
+            fatalError("A cooldown must be served without another billing request")
+        } catch {
+            expect(error.localizedDescription.contains("限流"), "Cooldown should keep returning the rate-limit error")
+        }
+        let cooledCounts = await limited.counts()
+        expect(cooledCounts == [0, 1], "Cooldown must not send another billing request")
+        clock.now = now.addingTimeInterval(121)
+        do {
+            _ = try await limitedClient.fetch(authURL: url, proxyURL: nil)
+            fatalError("A billing 429 after cooldown should still fail the query")
+        } catch {
+            expect(error.localizedDescription.contains("限流"), "A later 429 should remain a rate-limit error")
+        }
+        let retriedCounts = await limited.counts()
+        expect(retriedCounts == [0, 2], "After the cooldown expires the client may query billing again")
+
+        let httpDate = httpRetryAfterDate(now.addingTimeInterval(180))
+        expect(abs(GrokSubscriptionClient.cooldownEnd(header: httpDate, now: now).timeIntervalSince(now) - 180) < 1, "Retry-After HTTP-date should schedule the cooldown from the timestamp")
+        expect(GrokSubscriptionClient.cooldownEnd(header: nil, now: now) == now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown), "A missing Retry-After should use the default 5-minute cooldown")
+        expect(GrokSubscriptionClient.cooldownEnd(header: "not-a-date", now: now) == now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown), "An unparsable Retry-After should use the default 5-minute cooldown")
+
+        try auth(at: url, expired: false)
+        let dateClock = GrokTestClock(now)
+        let dated = GrokHTTPFixture(acceptOld: true, billingStatus: 429, retryAfter: httpDate)
+        let datedClient = GrokSubscriptionClient(transport: { try await dated.send($0) }, now: { dateClock.now })
+        do { _ = try await datedClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await dated.counts()) == [0, 1], "The first HTTP-date 429 should send one billing request")
+        do { _ = try await datedClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await dated.counts()) == [0, 1], "An HTTP-date cooldown must not send another billing request")
+        dateClock.now = now.addingTimeInterval(181)
+        do { _ = try await datedClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await dated.counts()) == [0, 2], "After the HTTP-date cooldown the client may query billing again")
+
+        try auth(at: url, expired: false)
+        let defaultClock = GrokTestClock(now)
+        let defaulted = GrokHTTPFixture(acceptOld: true, billingStatus: 429)
+        let defaultClient = GrokSubscriptionClient(transport: { try await defaulted.send($0) }, now: { defaultClock.now })
+        do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await defaulted.counts()) == [0, 1], "A billing 429 without Retry-After should use the default cooldown")
+        defaultClock.now = now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown - 1)
+        do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await defaulted.counts()) == [0, 1], "Default cooldown should still be active just before 5 minutes")
+        defaultClock.now = now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown + 1)
+        do { _ = try await defaultClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await defaulted.counts()) == [0, 2], "Default 5-minute cooldown should expire afterwards")
+
+        try auth(at: url) // expired token, so the first request is a refresh
+        let tokenClock = GrokTestClock(now)
+        let tokenLimited = GrokHTTPFixture(tokenStatus: 429)
+        let tokenClient = GrokSubscriptionClient(transport: { try await tokenLimited.send($0) }, now: { tokenClock.now })
+        do { _ = try await tokenClient.fetch(authURL: url, proxyURL: nil) } catch {
+            expect(error.localizedDescription.contains("限流"), "A token-endpoint 429 must surface as a rate limit, not zero usage")
+        }
+        expect((await tokenLimited.counts()) == [1, 0], "A token 429 should not continue to the billing request")
+        do { _ = try await tokenClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await tokenLimited.counts()) == [1, 0], "A token 429 must start the same account cooldown")
+        tokenClock.now = now.addingTimeInterval(GrokSubscriptionClient.defaultRateLimitCooldown + 1)
+        do { _ = try await tokenClient.fetch(authURL: url, proxyURL: nil) } catch { }
+        expect((await tokenLimited.counts()) == [2, 0], "After the default cooldown the client may refresh the token again")
+
         print("Grok subscription OAuth tests passed")
     }
+}
+
+final class GrokTestClock: @unchecked Sendable {
+    var now: Date
+    init(_ now: Date) { self.now = now }
 }
 
 private actor GrokHTTPFixture {
     var tokens = 0
     var billings = 0
+    var lastBillingHeaders: [String: String] = [:]
     let acceptOld: Bool
     let alwaysUnauthorized: Bool
     let tokenStatus: Int
+    let billingStatus: Int
+    let retryAfter: String?
     let delay: Bool
     let beforeTokenResponse: (() throws -> Void)?
 
-    init(acceptOld: Bool = false, alwaysUnauthorized: Bool = false, tokenStatus: Int = 200, delay: Bool = false, beforeTokenResponse: (() throws -> Void)? = nil) {
+    init(acceptOld: Bool = false, alwaysUnauthorized: Bool = false, tokenStatus: Int = 200, billingStatus: Int = 200, retryAfter: String? = nil, delay: Bool = false, beforeTokenResponse: (() throws -> Void)? = nil) {
         self.acceptOld = acceptOld; self.alwaysUnauthorized = alwaysUnauthorized
-        self.tokenStatus = tokenStatus; self.delay = delay; self.beforeTokenResponse = beforeTokenResponse
+        self.tokenStatus = tokenStatus; self.billingStatus = billingStatus
+        self.retryAfter = retryAfter; self.delay = delay; self.beforeTokenResponse = beforeTokenResponse
     }
     func counts() -> [Int] { [tokens, billings] }
+    func billingHeaders() -> [String: String] { lastBillingHeaders.filter { !$0.value.isEmpty } }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = request.url!
@@ -195,10 +305,24 @@ private actor GrokHTTPFixture {
         } else {
             billings += 1
             GrokSubscriptionTests.expect(url.absoluteString == "https://cli-chat-proxy.grok.com/v1/billing?format=credits" && request.httpMethod == "GET", "Quota queries must use the fixed first-party subscription billing route")
+            lastBillingHeaders = [
+                "Authorization": request.value(forHTTPHeaderField: "Authorization") ?? "",
+                "X-XAI-Token-Auth": request.value(forHTTPHeaderField: "X-XAI-Token-Auth") ?? "",
+                "x-userid": request.value(forHTTPHeaderField: "x-userid") ?? "",
+                "x-grok-client-mode": request.value(forHTTPHeaderField: "x-grok-client-mode") ?? "",
+            ]
             let token = request.value(forHTTPHeaderField: "Authorization")
-            status = alwaysUnauthorized || (!acceptOld && token != "Bearer fixture-access-new") ? 401 : 200
-            data = status == 200 ? GrokSubscriptionTests.billing : Data(#"{"error":"unauthorized"}"#.utf8)
+            if alwaysUnauthorized || (!acceptOld && token != "Bearer fixture-access-new") {
+                status = 401
+            } else {
+                status = billingStatus
+            }
+            data = status == 200 ? GrokSubscriptionTests.billing : Data(#"{"error":"unavailable"}"#.utf8)
         }
-        return (data, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        var headers: [String: String] = [:]
+        if status == 429, let retryAfter {
+            headers["Retry-After"] = retryAfter
+        }
+        return (data, HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: headers)!)
     }
 }

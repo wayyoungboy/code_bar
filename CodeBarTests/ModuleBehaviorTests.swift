@@ -726,9 +726,15 @@ private struct ModuleBehaviorTests {
         let grokUsage = try! GrokProvider.testUsage(from: grokJSON)
         expect(grokUsage.platformName == "Grok" && grokUsage.planType == "SuperGrok", "Subscription billing should map to the signed-in Grok plan")
         expect(grokUsage.items.map(\.key) == ["grok.weekly"], "Grok should preserve the existing quota key")
-        expect(grokUsage.items.map(\.used) == [6], "Grok should round the subscription usage percentage")
+        expect(grokUsage.items.first?.label == "当前周期额度", "Legacy payloads without a period type must not be labeled as a weekly quota")
+        expect(abs((grokUsage.items.first?.percent ?? -1) - 6.4) < 0.0001 && abs((grokUsage.items.first?.usedAmount ?? -1) - 6.4) < 0.0001, "Grok should preserve the fractional subscription usage percentage")
+        expect(abs(UsagePercentDisplayMode.remaining.percent(for: grokUsage.items[0]) - 93.6) < 0.0001, "Remaining percent must be computed from the exact used value")
+        expect(UsageStatusFormatting.compactPercentText(for: grokUsage.items[0], displayMode: .used) == "6.4%", "Menu-bar text should keep one decimal when needed")
         expect(grokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-09-01T12:22:17Z"), "Subscription reset timestamps should support fractional seconds")
         expect(grokUsage.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "Grok details should confirm a direct subscription refresh")
+        expect(grokUsage.extraInfo.contains { $0.label == "额度范围" && $0.value.contains("不是 xAI API 余额") && $0.value.contains("Grok Bot") }, "Details must distinguish the subscription pool from API credits and Grok Bot usage")
+        expect(grokUsage.extraInfo.contains { $0.label == "数据来源" && $0.value.contains("非公开稳定 API") }, "Details must state that the billing route is not a public stable API")
+        expect(!grokUsage.extraInfo.contains { $0.label.hasPrefix("产品用量") || $0.label == "额外预付余额" || $0.label == "按需用量" }, "Optional product, prepaid, and on-demand rows must not be invented")
 
         // A real credits response after the weekly reset omits the proto3 zero scalar.
         let zeroGrokConfig: [String: Any] = [
@@ -741,9 +747,27 @@ private struct ModuleBehaviorTests {
         let zeroGrokUsage: PlatformUsageData
         do { zeroGrokUsage = try GrokProvider.testUsage(from: zeroGrokData) }
         catch { fatalError("A complete zero-usage weekly credits response must not fail when the server omits creditUsagePercent: \(error)") }
-        expect(zeroGrokUsage.items.map(\.used) == [0] && zeroGrokUsage.items.map(\.key) == ["grok.weekly"], "An omitted proto3 zero must display a fresh 0% weekly quota")
+        expect(zeroGrokUsage.items.first?.usedAmount == 0 && zeroGrokUsage.items.first?.percent == 0 && zeroGrokUsage.items.map(\.key) == ["grok.weekly"], "An omitted proto3 zero must display a fresh 0% weekly quota")
+        expect(zeroGrokUsage.items.first?.label == "周额度", "A weekly currentPeriod must be labeled as a weekly quota")
         expect(zeroGrokUsage.items.first?.resetDate == ISO8601DateFormatter().date(from: "2026-11-10T12:22:17Z"), "A zero-usage week should retain its new reset time")
-        expect(zeroGrokUsage.extraInfo.contains { $0.label == "用量说明" && $0.value.contains("0%") }, "Inferred zero usage should explain why the interface has no explicit percentage")
+        expect(zeroGrokUsage.extraInfo.contains { $0.label == "用量说明" && $0.value.contains("0%") && $0.value.contains("查询成功") }, "Inferred zero usage should be explained as a successful empty period, not a failure")
+        expect(!zeroGrokUsage.extraInfo.contains { $0.label == "额外预付余额" || $0.label == "按需用量" }, "A zero prepaid or on-demand object must not be shown as extra credit")
+
+        var monthlyZero = zeroGrokConfig
+        monthlyZero["currentPeriod"] = ["type": "USAGE_PERIOD_TYPE_MONTHLY", "start": "2026-11-03T12:22:17Z", "end": "2026-12-03T12:22:17Z"]
+        monthlyZero.removeValue(forKey: "prepaidBalance")
+        monthlyZero.removeValue(forKey: "isUnifiedBillingUser")
+        let monthlyZeroUsage = try! GrokProvider.testUsage(from: JSONSerialization.data(withJSONObject: ["config": monthlyZero]))
+        expect(monthlyZeroUsage.items.first?.label == "月额度" && monthlyZeroUsage.items.first?.percent == 0, "A complete monthly period that omits the zero percent must display 0% monthly usage")
+
+        let weeklyTyped = Data(#"{"config":{"creditUsagePercent":12.5,"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","start":"2026-11-03T12:22:17Z","end":"2026-11-10T12:22:17Z"},"productUsage":[{"product":"GrokChat","usagePercent":8.2},{"product":"GrokBuild"},{"product":""}],"prepaidBalance":{"val":1250},"onDemandUsed":{"val":200},"onDemandCap":{"val":5000}}}"#.utf8)
+        let weeklyTypedUsage = try! GrokProvider.testUsage(from: weeklyTyped)
+        expect(weeklyTypedUsage.items.first?.label == "周额度" && weeklyTypedUsage.items.first?.percent == 12.5, "A typed weekly period should keep its weekly label and exact percentage")
+        expect(weeklyTypedUsage.extraInfo.contains { $0.label == "产品用量 · Grok Chat" && $0.value == "8.2%" }, "Named product slices should be shown with one decimal when needed")
+        expect(weeklyTypedUsage.extraInfo.contains { $0.label == "产品用量 · Grok Build" && $0.value == "无数据" }, "A named product without usagePercent must not invent 0%")
+        expect(weeklyTypedUsage.extraInfo.filter { $0.label.hasPrefix("产品用量") }.count == 2, "Unnamed product rows must be ignored")
+        expect(weeklyTypedUsage.extraInfo.contains { $0.label == "额外预付余额" && $0.value == "$12.50" }, "Positive prepaid balance should be shown as USD")
+        expect(weeklyTypedUsage.extraInfo.contains { $0.label == "按需用量" && $0.value.contains("$2.00") && $0.value.contains("$50.00") }, "On-demand used/cap should be shown only when a positive amount exists")
 
         var invalidGrokData = [#"{"config":{}}"#, #"{"config":{"creditUsagePercent":true}}"#, "not json"].map { Data($0.utf8) }
         for invalidPercent: Any in [NSNull(), true, "0", [:] as [String: Any]] {
@@ -751,7 +775,7 @@ private struct ModuleBehaviorTests {
             malformed["creditUsagePercent"] = invalidPercent
             invalidGrokData.append(try! JSONSerialization.data(withJSONObject: ["config": malformed]))
         }
-        for missingField in ["currentPeriod", "prepaidBalance", "isUnifiedBillingUser"] {
+        for missingField in ["currentPeriod"] {
             var incomplete = zeroGrokConfig
             incomplete.removeValue(forKey: missingField)
             invalidGrokData.append(try! JSONSerialization.data(withJSONObject: ["config": incomplete]))
@@ -759,7 +783,7 @@ private struct ModuleBehaviorTests {
         for period in [
             ["type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "invalid", "end": "2026-11-10T12:22:17Z"],
             ["type": "USAGE_PERIOD_TYPE_WEEKLY", "start": "2026-11-10T12:22:17Z", "end": "2026-11-03T12:22:17Z"],
-            ["type": "USAGE_PERIOD_TYPE_MONTHLY", "start": "2026-11-03T12:22:17Z", "end": "2026-12-03T12:22:17Z"],
+            ["type": "USAGE_PERIOD_TYPE_UNKNOWN", "start": "2026-11-03T12:22:17Z", "end": "2026-11-10T12:22:17Z"],
         ] {
             var malformed = zeroGrokConfig
             malformed["currentPeriod"] = period
@@ -831,9 +855,137 @@ private struct ModuleBehaviorTests {
         expect(antigravityUsage.items[3].label == "Claude/GPT 5小时", "3p-5h should map to Claude/GPT 5小时")
         let directGrok = GrokProvider(client: FixtureGrokSubscriptionClient(payload: GrokSubscriptionTests.billing))
         let directUsage = try! await directGrok.fetchUsage()
-        expect(directUsage.items.first?.used == 24, "Default Grok monitoring must query subscription HTTP without launching a CLI or requiring a log")
+        expect(abs((directUsage.items.first?.percent ?? -1) - 23.6) < 0.0001, "Default Grok monitoring must query subscription HTTP without launching a CLI or requiring a log")
+        let previous = try! GrokProvider.testUsage(from: weeklyTyped)
+        let stale = GrokUsageStatus.retainedFailureMessage(
+            base: "Grok 网络请求失败，请检查网络或模块代理",
+            previous: previous,
+            now: ISO8601DateFormatter().date(from: "2026-11-11T00:00:00Z")!
+        )
+        expect(stale.contains("已保留上次成功结果") && stale.contains("上次周期已结束"), "A failed refresh after reset must not present the cached period as current usage")
+        expect(previous.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "A successful fetch should still say the subscription was updated")
+        let retained = GrokUsageStatus.markAsLastSuccessCache(previous)
+        expect(retained.extraInfo.contains { $0.label == "刷新状态" && $0.value == GrokUsageStatus.lastSuccessRefreshValue }, "A retained cache must be labeled as last-success, not a fresh update")
+        expect(!retained.extraInfo.contains { $0.label == "刷新状态" && $0.value == "订阅用量已更新" }, "The stale cache must not keep the successful refresh status")
+        expect(retained.extraInfo.contains { $0.label == "Grok 同步时间" }, "The last successful sync time should be kept")
+        expect(retained.items.first?.label == previous.items.first?.label && abs((retained.items.first?.percent ?? -1) - (previous.items.first?.percent ?? -2)) < 0.0001, "Retaining a cache must not rewrite the last successful quota")
+        try! UsageCacheRoundTripTests.run()
         try! await GrokSubscriptionTests.run()
         try! await ModuleProxyTests.run()
         try! await UsageProviderTests.run()
+    }
+}
+
+enum UsageCacheRoundTripTests {
+    static func run() throws {
+        let reset = ISO8601DateFormatter().date(from: "2026-11-10T12:22:17Z")
+        let fresh = UsageItem(
+            key: "grok.weekly",
+            label: "周额度",
+            used: 6,
+            total: 100,
+            unit: "%",
+            resetDate: reset,
+            usedAmount: 6.4,
+            totalAmount: 100
+        )
+        let usage = PlatformUsageData(
+            platformName: "Grok",
+            planType: "SuperGrok",
+            items: [fresh],
+            extraInfo: [
+                (label: "计费周期", value: "周"),
+                (label: "产品用量 · Grok Chat", value: "8.2%"),
+                (label: "额外预付余额", value: "$12.50"),
+                (label: "刷新状态", value: "订阅用量已更新"),
+            ]
+        )
+
+        let encoded = UsageCacheCodec.usageDictionary(usage)
+        let direct = UsageCacheCodec.usage(from: encoded)
+        GrokSubscriptionTests.expect(direct != nil, "In-memory cache dictionaries should decode")
+        try assertPreserved(direct!, original: usage, label: "in-memory")
+
+        let suite = "codebar.usage-cache." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(["Grok": encoded], forKey: "usage-cache")
+        guard let stored = defaults.dictionary(forKey: "usage-cache"),
+              let payload = stored["Grok"] as? [String: Any],
+              let fromDefaults = UsageCacheCodec.usage(from: payload) else {
+            fatalError("UserDefaults should round-trip the same dictionary shape UsageTracker persists")
+        }
+        try assertPreserved(fromDefaults, original: usage, label: "UserDefaults")
+        defaults.removePersistentDomain(forName: suite)
+
+        // JSONSerialization is not the production cache path (Date is a plist type),
+        // but it is the documented Foundation boxing path for numbers. Verify the
+        // numeric fields still decode as NSNumber and that the current NSNumber-only
+        // helpers accept that representation.
+        let numeric: [String: Any] = [
+            "used": 6,
+            "total": 100,
+            "usedAmount": 6.4,
+            "totalAmount": 100,
+        ]
+        let jsonData = try JSONSerialization.data(withJSONObject: numeric)
+        let jsonObject = try JSONSerialization.jsonObject(with: jsonData)
+        guard let json = jsonObject as? [String: Any] else {
+            fatalError("JSONSerialization should return a dictionary")
+        }
+        for key in ["used", "total", "usedAmount", "totalAmount"] {
+            GrokSubscriptionTests.expect(json[key] is NSNumber, "JSONSerialization should box \(key) as NSNumber")
+        }
+        GrokSubscriptionTests.expect(UsageCacheCodec.intValue(json["used"]) == 6, "intValue should accept JSONSerialization NSNumber integers")
+        GrokSubscriptionTests.expect(UsageCacheCodec.intValue(json["total"]) == 100, "intValue should accept JSONSerialization NSNumber totals")
+        GrokSubscriptionTests.expect(abs((UsageCacheCodec.doubleValue(json["usedAmount"]) ?? -1) - 6.4) < 0.0001, "doubleValue should accept JSONSerialization NSNumber floats")
+        GrokSubscriptionTests.expect(UsageCacheCodec.doubleValue(json["totalAmount"]) == 100, "doubleValue should accept JSONSerialization NSNumber totals")
+
+        // In-memory Swift integers used by usageItemDictionary, before any plist/JSON boxing.
+        let rawItem = UsageCacheCodec.itemDictionary(fresh)
+        GrokSubscriptionTests.expect(UsageCacheCodec.intValue(rawItem["used"]) == 6, "intValue should accept the in-memory used field written by the encoder")
+        GrokSubscriptionTests.expect(abs((UsageCacheCodec.doubleValue(rawItem["usedAmount"]) ?? -1) - 6.4) < 0.0001, "doubleValue should accept the in-memory usedAmount field written by the encoder")
+
+        // Legacy cache payload: integer used/total only, no usedAmount.
+        let legacy: [String: Any] = [
+            "platformName": "Grok",
+            "planType": "SuperGrok",
+            "items": [[
+                "key": "grok.weekly",
+                "label": "当前周期额度",
+                "used": 6,
+                "total": 100,
+                "unit": "%",
+                "resetDate": reset as Any,
+            ]],
+            "extraInfo": [["label": "计费周期", "value": "未返回周期类型，按当前周期显示"]],
+            "accountBreakdowns": [] as [Any],
+        ]
+        defaults.set(["Grok": legacy], forKey: "usage-cache")
+        guard let legacyStored = defaults.dictionary(forKey: "usage-cache"),
+              let legacyPayload = legacyStored["Grok"] as? [String: Any],
+              let legacyUsage = UsageCacheCodec.usage(from: legacyPayload),
+              let legacyItem = legacyUsage.items.first else {
+            fatalError("A pre-float cache payload must still decode after UserDefaults")
+        }
+        GrokSubscriptionTests.expect(legacyItem.used == 6 && legacyItem.total == 100, "Legacy integer used/total must be restored")
+        GrokSubscriptionTests.expect(legacyItem.usedAmount == nil && abs(legacyItem.percent - 6) < 0.0001, "Legacy payloads without usedAmount should fall back to integer percent")
+        GrokSubscriptionTests.expect(legacyItem.label == "当前周期额度" && legacyItem.resetDate == reset, "Legacy period label and reset time must not be dropped")
+        GrokSubscriptionTests.expect(legacyUsage.extraInfo.contains { $0.label == "计费周期" && $0.value.contains("当前周期") }, "Legacy extraInfo must survive UserDefaults")
+        defaults.removePersistentDomain(forName: suite)
+        print("Usage cache round-trip tests passed")
+    }
+
+    private static func assertPreserved(_ decoded: PlatformUsageData, original: PlatformUsageData, label: String) throws {
+        GrokSubscriptionTests.expect(decoded.platformName == original.platformName && decoded.planType == original.planType, "\(label) should keep platform and plan")
+        GrokSubscriptionTests.expect(decoded.items.count == 1, "\(label) should keep the Grok item")
+        let item = decoded.items[0]
+        let originalItem = original.items[0]
+        GrokSubscriptionTests.expect(item.key == originalItem.key && item.label == originalItem.label, "\(label) should keep the period label and stable key")
+        GrokSubscriptionTests.expect(abs((item.usedAmount ?? -1) - 6.4) < 0.0001 && item.totalAmount == 100, "\(label) should keep the exact float percentage")
+        GrokSubscriptionTests.expect(item.resetDate == originalItem.resetDate, "\(label) should keep the reset date")
+        GrokSubscriptionTests.expect(decoded.extraInfo.contains { $0.label == "计费周期" && $0.value == "周" }, "\(label) should keep the period extraInfo")
+        GrokSubscriptionTests.expect(decoded.extraInfo.contains { $0.label == "产品用量 · Grok Chat" && $0.value == "8.2%" }, "\(label) should keep optional product rows")
+        GrokSubscriptionTests.expect(decoded.extraInfo.contains { $0.label == "额外预付余额" && $0.value == "$12.50" }, "\(label) should keep optional prepaid rows")
     }
 }
